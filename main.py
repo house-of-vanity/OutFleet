@@ -47,7 +47,7 @@ def update_state():
 
     if config:
         HOSTNAME = config.get('ui_hostname', 'my-own-ssl-ENABLED-domain.com')
-        servers = config.get('servers', list())
+        servers = config.get('servers', dict())
         for server_id, server_config in servers.items():
             try:
                 server = Server(url=server_config["url"], cert=server_config["cert"], comment=server_config["comment"])
@@ -56,7 +56,7 @@ def update_state():
             except Exception as e:
                 log.warning("Can't access server: %s - %s", server_config["url"], e)
 
-        CLIENTS = config.get('clients', list())
+        CLIENTS = config.get('clients', dict())
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -105,28 +105,28 @@ def clients():
 
 @app.route('/add_server', methods=['POST'])
 def add_server():
-    if request.method == 'post':
-        with open("config.yaml", "r") as file:
-            config = yaml.safe_load(file) or {}
-
-        servers = config.get('servers', dict())
-
+    if request.method == 'POST':
         try:
-            new_server = Server(url=request.form['url'], cert=request.form['cert'], comment=request.form['comment'])
-        except:
-            return redirect(url_for('index', nt="Couldn't access Outline VPN Server", nl="error"))
+            with open("config.yaml", "r") as file:
+                config = yaml.safe_load(file) or {}
 
-        servers[new_server.data["server_id"]] = {
-            'name': new_server.data["name"],
-            'url': new_server.data["url"],
-            'comment': new_server.data["comment"],
-            'cert': request.form['cert']
-        }
-        config["servers"] = servers
-        with open("config.yaml", "w") as file:
-            yaml.safe_dump(config, file)
-        update_state()
-        return redirect(url_for('index', nt="Added Outline VPN Server"))
+            servers = config.get('servers', dict())
+
+            new_server = Server(url=request.form['url'], cert=request.form['cert'], comment=request.form['comment'])
+
+            servers[new_server.data["server_id"]] = {
+                'name': new_server.data["name"],
+                'url': new_server.data["url"],
+                'comment': new_server.data["comment"],
+                'cert': request.form['cert']
+            }
+            config["servers"] = servers
+            with open("config.yaml", "w") as file:
+                yaml.safe_dump(config, file)
+            update_state()
+            return redirect(url_for('index', nt="Added Outline VPN Server"))
+        except Exception as e:
+            return redirect(url_for('index', nt=f"Couldn't access Outline VPN Server: {e}", nl="error"))
 
 
 @app.route('/add_client', methods=['POST'])
