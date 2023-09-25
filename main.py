@@ -17,7 +17,7 @@ log = logging.getLogger('OutFleet')
 
 SERVERS = list()
 CLIENTS = dict()
-HOSTNAME = 'test.local:5000'
+HOSTNAME = ''
 app = Flask(__name__)
 CORS(app)
 
@@ -25,7 +25,7 @@ def format_timestamp(ts):
     return datetime.fromtimestamp(ts // 1000).strftime('%Y-%m-%d %H:%M:%S')
 
 
-def random_string(length=12):
+def random_string(length=64):
     letters = string.ascii_letters + string.digits
 
     return ''.join(random.choice(letters) for i in range(length))
@@ -34,6 +34,7 @@ def random_string(length=12):
 def update_state():
     global SERVERS
     global CLIENTS
+    global HOSTNAME
     SERVERS = list()
     CLIENTS = dict()
     config = dict()
@@ -45,11 +46,15 @@ def update_state():
             pass
 
     if config:
+        HOSTNAME = config.get('ui_hostname', 'my-own-ssl-ENABLED-domain.com')
         servers = config.get('servers', list())
         for server_id, server_config in servers.items():
-            server = Server(url=server_config["url"], cert=server_config["cert"], comment=server_config["comment"])
-            SERVERS.append(server)
-            log.info("Server found: %s", server.info()["name"])
+            try:
+                server = Server(url=server_config["url"], cert=server_config["cert"], comment=server_config["comment"])
+                SERVERS.append(server)
+                log.info("Server found: %s", server.info()["name"])
+            except Exception as e:
+                log.warning("Can't access server: %s - %s", server_config["url"], e)
 
         CLIENTS = config.get('clients', list())
 
@@ -194,15 +199,10 @@ def dynamic(server_name, client_id):
               "server": server.data["hostname_for_access_keys"],
               "server_port": key.port,
               "password": key.password,
-              "method": key.method
+              "method": key.method,
+              "info": "Managed by OutFleet [github.com/house-of-vanity/OutFleet/]"
             }
-
-    log.info("CLIENT: %s", client)
-    log.info("SERVER: %s", server.data)
-
-
-
-    return f"{server_name}, {client_id}"
+    return "Hey buddy, i think you got the wrong door the leather-club is two blocks down"
 
 if __name__ == '__main__':
     update_state()

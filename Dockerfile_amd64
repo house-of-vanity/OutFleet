@@ -1,4 +1,4 @@
-FROM arm64v8/python:3-alpine
+FROM python:3-alpine
 
 WORKDIR /app
 
@@ -10,4 +10,5 @@ COPY lib.py .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
+EXPOSE 5000
 CMD ["python", "main.py"]

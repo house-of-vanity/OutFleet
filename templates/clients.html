@@ -94,7 +94,7 @@
                           </div>
 
                 </div>
-                <button type="submit" class="pure-button pure-input-1 pure-button-primary">Save</button>
+                <button type="submit" class="pure-button pure-input-1 pure-button-primary">Save and apply</button>
             </fieldset>
         </form>
 
@@ -123,7 +123,7 @@
             </tbody>
         </table>
     </div>
-    <div class="pure-u-1 pure-u-md-1">
+    <div class="pure-u-1">
         <h3>Dynamic Access Keys</h3>
         <table class="pure-table">
             <thead>
@@ -138,7 +138,7 @@
                 <tr>
                     <td>{{ server.info()['name'] }}</td>
                     <td>
-                        <pre style="font-size: 10pt">{% for key in server.data["keys"] %}{% if key.name == client['name'] %}ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}{% endif %}{% endfor %}</pre>
+                        <p style="font-size: 10pt">{% for key in server.data["keys"] %}{% if key.name == client['name'] %}ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}{% endif %}{% endfor %}</p>
                     </td>
                 </tr>
                 {% endif %}
