@@ -68,3 +68,6 @@ class Server:
             with open("config.yaml", "w") as file:
                 yaml.safe_dump(config_file, file)
             log.info("Changed %s comment to '%s'", self.data["server_id"], config.get("comment"))
+
+    def create_key(self, key_name):
+        return self.client.create_key(key_name)

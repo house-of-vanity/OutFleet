@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-  {% block title %}Dashboard{% endblock %}
+
+  <title>{% block title %}Dashboard{% endblock %}</title>
   <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='pure.css') }}">
   <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='layout.css') }}">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,7 +20,7 @@
             <div class="pure-menu custom-restricted-width">
                 <ul class="pure-menu-list">
                     <li class="pure-menu-item"><a href="/" class="pure-menu-link">Servers</a></li>
-                    <li class="pure-menu-item"><a href="#" class="pure-menu-link">Clients</a></li>
+                    <li class="pure-menu-item"><a href="/clients" class="pure-menu-link">Clients</a></li>
                 </ul>
             </div>
         </div>
