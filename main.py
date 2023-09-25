@@ -5,7 +5,7 @@ import random
 import string
 
 from flask import Flask, render_template, request, url_for, redirect
-
+from flask_cors import CORS
 from lib import Server
 
 logging.basicConfig(
@@ -16,9 +16,10 @@ logging.basicConfig(
 log = logging.getLogger('OutFleet')
 
 SERVERS = list()
-CLIENTS = list()
+CLIENTS = dict()
+HOSTNAME = 'test.local:5000'
 app = Flask(__name__)
-
+CORS(app)
 
 def format_timestamp(ts):
     return datetime.fromtimestamp(ts // 1000).strftime('%Y-%m-%d %H:%M:%S')
@@ -34,7 +35,7 @@ def update_state():
     global SERVERS
     global CLIENTS
     SERVERS = list()
-    CLIENTS = list()
+    CLIENTS = dict()
     config = dict()
     try:
         with open("config.yaml", "r") as file:
@@ -85,7 +86,9 @@ def clients():
             nl=request.args.get('nl'),
             selected_client=request.args.get('selected_client'),
             add_client=request.args.get('add_client', None),
-            format_timestamp=format_timestamp)
+            format_timestamp=format_timestamp,
+            dynamic_hostname=HOSTNAME,
+        )
     else:
         server = request.form['server_id']
         server = next((item for item in SERVERS if item.info()["server_id"] == server), None)
@@ -177,6 +180,29 @@ def del_client():
     update_state()
     return redirect(url_for('clients', nt="User has been deleted"))
 
+
+@app.route('/dynamic/<server_name>/<client_id>', methods=['GET'])
+def dynamic(server_name, client_id):
+    client = next((keys for client, keys in CLIENTS.items() if client == client_id), None)
+    server = next((item for item in SERVERS if item.info()["name"] == server_name), None)
+    key = next((item for item in server.data["keys"] if item.name == client["name"]), None)
+    if server and client and key:
+        if server.data["server_id"] in client["servers"]:
+            log.info("Dynamic config for %s requested by '%s'", server.data["name"], client["name"])
+
+            return {
+              "server": server.data["hostname_for_access_keys"],
+              "server_port": key.port,
+              "password": key.password,
+              "method": key.method
+            }
+
+    log.info("CLIENT: %s", client)
+    log.info("SERVER: %s", server.data)
+
+
+
+    return f"{server_name}, {client_id}"
 
 if __name__ == '__main__':
     update_state()
