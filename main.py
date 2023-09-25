@@ -12,7 +12,8 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%d-%m-%Y %H:%M:%S')
-log = logging.getLogger('OutlineFleet')
+
+log = logging.getLogger('OutFleet')
 
 SERVERS = list()
 CLIENTS = list()
@@ -140,11 +141,43 @@ def add_client():
 
         for server in SERVERS:
             if server.data["server_id"] in request.form.getlist('servers'):
-                log.info("%s", server.create_key(request.form.get('name')))
+                client = next((item for item in server.data["keys"] if item.name == request.form.get('old_name')), None)
+                if client:
+                    if client.name == request.form.get('name'):
+                        pass
+                    else:
+                        server.rename_key(client.key_id, request.form.get('name'))
+                else:
+                    server.create_key(request.form.get('name'))
+            else:
+                client = next((item for item in server.data["keys"] if item.name == request.form.get('old_name')), None)
+                if client:
+                    server.delete_key(client.key_id)
         update_state()
-        return redirect(url_for('index', nt="User has been added"))
+        return redirect(url_for('clients', nt="Clients updated", selected_client=request.form.get('user_id')))
+
+
+@app.route('/del_client', methods=['POST'])
+def del_client():
+    if request.method == 'POST':
+        with open("config.yaml", "r") as file:
+            config = yaml.safe_load(file) or {}
+
+        clients = config.get('clients', dict())
+        user_id = request.form.get('user_id')
+        if user_id in clients:
+            for server in SERVERS:
+                client = next((item for item in server.data["keys"] if item.name == request.form.get('name')), None)
+                if client:
+                    server.delete_key(client.key_id)
+
+        config["clients"].pop(user_id)
+        with open("config.yaml", "w") as file:
+            yaml.safe_dump(config, file)
+    update_state()
+    return redirect(url_for('clients', nt="User has been deleted"))
 
 
 if __name__ == '__main__':
     update_state()
-    app.run()
+    app.run(host='0.0.0.0')

@@ -7,7 +7,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%d-%m-%Y %H:%M:%S')
-log = logging.getLogger('OutlineFleet.lib')
+
 
 
 class ServerDict(TypedDict):
@@ -44,6 +44,7 @@ class Server:
             'hostname_for_access_keys': self.client.get_server_information()["hostnameForAccessKeys"],
             'keys': self.client.get_keys()
         }
+        self.log = logging.getLogger(f'OutFleet.server[{self.data["name"]}]')
 
     def info(self) -> ServerDict:
         return self.data
@@ -51,23 +52,32 @@ class Server:
     def apply_config(self, config):
         if config.get("name"):
             self.client.set_server_name(config.get("name"))
-            log.info("Changed %s name to '%s'", self.data["server_id"], config.get("name"))
+            self.log.info("Changed %s name to '%s'", self.data["server_id"], config.get("name"))
         if config.get("metrics"):
             self.client.set_metrics_status(True if config.get("metrics") == 'True' else False)
-            log.info("Changed %s metrics status to '%s'", self.data["server_id"], config.get("metrics"))
+            self.log.info("Changed %s metrics status to '%s'", self.data["server_id"], config.get("metrics"))
         if config.get("port_for_new_access_keys"):
             self.client.set_port_new_for_access_keys(int(config.get("port_for_new_access_keys")))
-            log.info("Changed %s port_for_new_access_keys to '%s'", self.data["server_id"], config.get("port_for_new_access_keys"))
+            self.log.info("Changed %s port_for_new_access_keys to '%s'", self.data["server_id"], config.get("port_for_new_access_keys"))
         if config.get("hostname_for_access_keys"):
             self.client.set_hostname(config.get("hostname_for_access_keys"))
-            log.info("Changed %s hostname_for_access_keys to '%s'", self.data["server_id"], config.get("hostname_for_access_keys"))
+            self.log.info("Changed %s hostname_for_access_keys to '%s'", self.data["server_id"], config.get("hostname_for_access_keys"))
         if config.get("comment"):
             with open("config.yaml", "r") as file:
                 config_file = yaml.safe_load(file) or {}
             config_file["servers"][self.data['server_id']]['comment'] = config.get("comment")
             with open("config.yaml", "w") as file:
                 yaml.safe_dump(config_file, file)
-            log.info("Changed %s comment to '%s'", self.data["server_id"], config.get("comment"))
+            self.log.info("Changed %s comment to '%s'", self.data["server_id"], config.get("comment"))
 
     def create_key(self, key_name):
+        self.log.info("New key created: %s", key_name)
         return self.client.create_key(key_name)
+
+    def rename_key(self, key_id, new_name):
+        self.log.info("Key %s renamed: %s", key_id, new_name)
+        return self.client.rename_key(key_id, new_name)
+
+    def delete_key(self, key_id):
+        self.log.info("Key %s deleted", key_id)
+        return self.client.delete_key(key_id)
