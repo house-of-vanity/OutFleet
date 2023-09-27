@@ -8,6 +8,9 @@ from flask import Flask, render_template, request, url_for, redirect
 from flask_cors import CORS
 from lib import Server
 
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
+
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -52,7 +55,7 @@ def update_state():
             try:
                 server = Server(url=server_config["url"], cert=server_config["cert"], comment=server_config["comment"])
                 SERVERS.append(server)
-                log.info("Server found: %s", server.info()["name"])
+                log.info("Server state updated: %s", server.info()["name"])
             except Exception as e:
                 log.warning("Can't access server: %s - %s", server_config["url"], e)
 
@@ -94,13 +97,13 @@ def clients():
             format_timestamp=format_timestamp,
             dynamic_hostname=HOSTNAME,
         )
-    else:
-        server = request.form['server_id']
-        server = next((item for item in SERVERS if item.info()["server_id"] == server), None)
-        server.apply_config(request.form)
-        update_state()
-        return redirect(
-            url_for('index', nt="Updated Outline VPN Server", selected_server=request.args.get('selected_server')))
+    # else:
+    #     server = request.form['server_id']
+    #     server = next((item for item in SERVERS if item.info()["server_id"] == server), None)
+    #     server.apply_config(request.form)
+    #     update_state()
+    #     return redirect(
+    #         url_for('index', nt="Updated Outline VPN Server", selected_server=request.args.get('selected_server')))
 
 
 @app.route('/add_server', methods=['POST'])
@@ -123,6 +126,7 @@ def add_server():
             config["servers"] = servers
             with open("config.yaml", "w") as file:
                 yaml.safe_dump(config, file)
+            log.info("Added server: %s", new_server.data["name"])
             update_state()
             return redirect(url_for('index', nt="Added Outline VPN Server"))
         except Exception as e:
@@ -146,6 +150,7 @@ def add_client():
         config["clients"] = clients
         with open("config.yaml", "w") as file:
             yaml.safe_dump(config, file)
+        log.info("Client %s updated", request.form.get('name'))
 
         for server in SERVERS:
             if server.data["server_id"] in request.form.getlist('servers'):
@@ -155,14 +160,22 @@ def add_client():
                         pass
                     else:
                         server.rename_key(client.key_id, request.form.get('name'))
+                        log.info("Renaming key %s to %s on server %s",
+                                 request.form.get('old_name'),
+                                 request.form.get('name'),
+                                 server.data["name"])
                 else:
                     server.create_key(request.form.get('name'))
+                    log.info("Creating key %s on server %s", request.form.get('name'), server.data["name"])
             else:
                 client = next((item for item in server.data["keys"] if item.name == request.form.get('old_name')), None)
                 if client:
                     server.delete_key(client.key_id)
+                    log.info("Deleting key %s on server %s", request.form.get('name'), server.data["name"])
         update_state()
         return redirect(url_for('clients', nt="Clients updated", selected_client=request.form.get('user_id')))
+    else:
+        return redirect(url_for('index'))
 
 
 @app.route('/del_client', methods=['POST'])
@@ -182,6 +195,7 @@ def del_client():
         config["clients"].pop(user_id)
         with open("config.yaml", "w") as file:
             yaml.safe_dump(config, file)
+        log.info("Deleting client %s", request.form.get('name'))
     update_state()
     return redirect(url_for('clients', nt="User has been deleted"))
 
@@ -194,8 +208,7 @@ def dynamic(server_name, client_id):
         key = next((item for item in server.data["keys"] if item.name == client["name"]), None)
         if server and client and key:
             if server.data["server_id"] in client["servers"]:
-                log.info("Dynamic config for %s requested by '%s'", server.data["name"], client["name"])
-
+                log.info("Client %s wants ssconf for %s", client["name"], server.data["name"])
                 return {
                   "server": server.data["hostname_for_access_keys"],
                   "server_port": key.port,
@@ -203,7 +216,11 @@ def dynamic(server_name, client_id):
                   "method": key.method,
                   "info": "Managed by OutFleet [github.com/house-of-vanity/OutFleet/]"
                 }
+        else:
+            log.warning("Hack attempt! Client %s denied by ACL on %s", client["name"], server.data["name"])
+            return "Hey buddy, i think you got the wrong door the leather-club is two blocks down"
     except:
+        log.warning("Hack attempt! Client or server doesn't exist. SCAM")
         return "Hey buddy, i think you got the wrong door the leather-club is two blocks down"
 
 if __name__ == '__main__':
