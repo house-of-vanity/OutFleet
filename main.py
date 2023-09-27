@@ -188,21 +188,23 @@ def del_client():
 
 @app.route('/dynamic/<server_name>/<client_id>', methods=['GET'])
 def dynamic(server_name, client_id):
-    client = next((keys for client, keys in CLIENTS.items() if client == client_id), None)
-    server = next((item for item in SERVERS if item.info()["name"] == server_name), None)
-    key = next((item for item in server.data["keys"] if item.name == client["name"]), None)
-    if server and client and key:
-        if server.data["server_id"] in client["servers"]:
-            log.info("Dynamic config for %s requested by '%s'", server.data["name"], client["name"])
+    try:
+        client = next((keys for client, keys in CLIENTS.items() if client == client_id), None)
+        server = next((item for item in SERVERS if item.info()["name"] == server_name), None)
+        key = next((item for item in server.data["keys"] if item.name == client["name"]), None)
+        if server and client and key:
+            if server.data["server_id"] in client["servers"]:
+                log.info("Dynamic config for %s requested by '%s'", server.data["name"], client["name"])
 
-            return {
-              "server": server.data["hostname_for_access_keys"],
-              "server_port": key.port,
-              "password": key.password,
-              "method": key.method,
-              "info": "Managed by OutFleet [github.com/house-of-vanity/OutFleet/]"
-            }
-    return "Hey buddy, i think you got the wrong door the leather-club is two blocks down"
+                return {
+                  "server": server.data["hostname_for_access_keys"],
+                  "server_port": key.port,
+                  "password": key.password,
+                  "method": key.method,
+                  "info": "Managed by OutFleet [github.com/house-of-vanity/OutFleet/]"
+                }
+    except:
+        return "Hey buddy, i think you got the wrong door the leather-club is two blocks down"
 
 if __name__ == '__main__':
     update_state()
