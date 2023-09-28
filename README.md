@@ -1,6 +1,5 @@
-<br/>
 <p align="center">
-  <h3 align="center">OutFleet: Master Your OutLine VPN</h3>
+  <h1 align="center">OutFleet: Master Your OutLine VPN</h1>
 
   <p align="center">
     Streamline OutLine VPN experience. OutFleet offers centralized key control for many servers and always-updated Dynamic Access Keys instead of ss:// links
