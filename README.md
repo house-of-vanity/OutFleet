@@ -37,6 +37,7 @@ Docker deploy is easy:
 ```
 docker run --restart always -p 5000:5000 -d --name OutFleet --mount type=bind,source=/etc/outfleet/config.yaml,target=/app/config.yaml ultradesu/outfleet:0.0.4
 ```
+Keep in mind that all user keys are stored in a single **config.yaml** file. If this file is lost, user keys will remain on the servers, but OutFleet will lose the ability to manage them. Handle with extreme caution and use backups.
 
 ## Authors
 
