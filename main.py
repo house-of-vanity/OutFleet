@@ -10,7 +10,7 @@ from lib import Server
 
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
-CFG_PATH = '/usr/local/etc/outfleet'
+CFG_PATH = '/usr/local/etc/outfleet/config.yaml'
 
 logging.basicConfig(
     level=logging.INFO,
