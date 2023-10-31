@@ -10,6 +10,7 @@ from lib import Server
 
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
+CFG_PATH = '/usr/local/etc/outfleet'
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,10 +43,10 @@ def update_state():
     CLIENTS = dict()
     config = dict()
     try:
-        with open("config.yaml", "r") as file:
+        with open(CFG_PATH, "r") as file:
             config = yaml.safe_load(file)
     except:
-        with open("config.yaml", "w"):
+        with open(CFG_PATH, "w"):
             pass
 
     if config:
@@ -110,7 +111,7 @@ def clients():
 def add_server():
     if request.method == 'POST':
         try:
-            with open("config.yaml", "r") as file:
+            with open(CFG_PATH, "r") as file:
                 config = yaml.safe_load(file) or {}
 
             servers = config.get('servers', dict())
@@ -124,7 +125,7 @@ def add_server():
                 'cert': request.form['cert']
             }
             config["servers"] = servers
-            with open("config.yaml", "w") as file:
+            with open(CFG_PATH, "w") as file:
                 yaml.safe_dump(config, file)
             log.info("Added server: %s", new_server.data["name"])
             update_state()
@@ -136,7 +137,7 @@ def add_server():
 @app.route('/add_client', methods=['POST'])
 def add_client():
     if request.method == 'POST':
-        with open("config.yaml", "r") as file:
+        with open(CFG_PATH, "r") as file:
             config = yaml.safe_load(file) or {}
 
         clients = config.get('clients', dict())
@@ -148,7 +149,7 @@ def add_client():
             'servers': request.form.getlist('servers')
         }
         config["clients"] = clients
-        with open("config.yaml", "w") as file:
+        with open(CFG_PATH, "w") as file:
             yaml.safe_dump(config, file)
         log.info("Client %s updated", request.form.get('name'))
 
@@ -181,7 +182,7 @@ def add_client():
 @app.route('/del_client', methods=['POST'])
 def del_client():
     if request.method == 'POST':
-        with open("config.yaml", "r") as file:
+        with open(CFG_PATH, "r") as file:
             config = yaml.safe_load(file) or {}
 
         clients = config.get('clients', dict())
@@ -193,7 +194,7 @@ def del_client():
                     server.delete_key(client.key_id)
 
         config["clients"].pop(user_id)
-        with open("config.yaml", "w") as file:
+        with open(CFG_PATH, "w") as file:
             yaml.safe_dump(config, file)
         log.info("Deleting client %s", request.form.get('name'))
     update_state()
