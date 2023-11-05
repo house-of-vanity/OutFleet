@@ -46,8 +46,11 @@ def update_state():
         with open(CFG_PATH, "r") as file:
             config = yaml.safe_load(file)
     except:
-        with open(CFG_PATH, "w"):
-            pass
+        try:
+            with open(CFG_PATH, "w"):
+                pass
+        except Exception as exp:
+            log.error(f"Couldn't create config. {exp}")
 
     if config:
         HOSTNAME = config.get('ui_hostname', 'my-own-ssl-ENABLED-domain.com')
