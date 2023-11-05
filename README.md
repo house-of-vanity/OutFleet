@@ -34,7 +34,7 @@ Python, Flask and offer hassle-free deployment.
 
 Docker deploy is easy:
 ```
-docker run --restart always -p 5000:5000 -d --name OutFleet --mount type=bind,source=/etc/outfleet/config.yaml,target=/usr/local/etc/outfleet/config.yaml ultradesu/outfleet:latest
+docker run --restart always -p 5000:5000 -d --name outfleet --mount type=bind,source=/etc/outfleet/config.yaml,target=/usr/local/etc/outfleet/config.yaml ultradesu/outfleet:latest
 ```
 #### Use reverse proxy to secure ALL path of OutFleet except of `/dynamic/*`
 ```nginx
