@@ -81,8 +81,15 @@
     <!--            </div>-->
             </div>
 
+            {% set ns = namespace(total_bytes=0) %}
+              {% for key in SERVERS[selected_server|int].data["keys"] %}
+                {% if key.used_bytes %}
+                  {% set ns.total_bytes = ns.total_bytes + key.used_bytes %}
+                {% endif %}
+              {% endfor %}
             <div class="server-content-body">
                 <h3>Clients: {{ server.info()['keys']|length }}</h3>
+                <h3>Total traffic: {{ ns.total_bytes | filesizeformat }}</h3>
     <form class="pure-form pure-form-stacked" method="POST">
         <fieldset>
             <div class="pure-g">

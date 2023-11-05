@@ -83,8 +83,9 @@
                     <input type="hidden" class="pure-u-1" name="user_id" value="{{selected_client}}"/>
 
                             <div class="pure-checkbox">
+                                <p>Allow access to:</p>
                                 {% for server in SERVERS %}
-                                <label class="pure-checkbox" for="option{{loop.index0}}">{{server.info()["name"]}}
+                                <label class="pure-checkbox" for="option{{loop.index0}}">{{server.info()["name"]}}{% if server.info()['server_id'] in client['servers'] %} ( Used {% for key in server.data["keys"] %}{% if key.name == client['name'] %}{{ (key.used_bytes if key.used_bytes else 0) | filesizeformat }}{% endif %}{% endfor %}){%endif%}
                                 <input
                                         {% if server.info()['server_id'] in client['servers'] %}checked{%endif%}
                                         type="checkbox" id="option{{loop.index0}}" name="servers" value="{{server.info()['server_id']}}"></label>
@@ -100,13 +101,15 @@
 
         <div>
             <h3>Invite text</h3><hr>
-            <p>Install OutLine VPN. Copy and paste below keys to OutLine client.</p>
-            {% for server in SERVERS %}
-                {% if server.info()['server_id'] in client['servers'] %}
-            <b>{{server.info()['name']}}</b></br>
-            <code>{% for key in server.data["keys"] %}{% if key.name == client['name'] %}ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}{% endif %}{% endfor %}</code></br></br>
-            {% endif %}
-            {% endfor %}
+            <textarea style="width: 100%; rows=10">
+Install OutLine VPN. Copy and paste below keys to OutLine client.
+{% for server in SERVERS -%}
+
+{% if server.info()['server_id'] in client['servers'] %}
+{{server.info()['name']}}
+```{% for key in server.data["keys"] %}{% if key.name == client['name'] %}ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}{% endif %}{% endfor %}```
+{% endif %}
+{%- endfor -%}</textarea>
         </div>
             <hr>
 <div style="padding-top: 15px; padding-bottom: 15px">
@@ -164,7 +167,6 @@
             <button type="submit" class="pure-button button-error pure-input-1 ">Delete</button>
          </form>
     </div>
-
     </div>
 {% endif %}
 

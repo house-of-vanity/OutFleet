@@ -75,13 +75,16 @@ def index():
             add_server=request.args.get('add_server', None),
             format_timestamp=format_timestamp,
         )
-    else:
+    elif request.method == 'POST':
         server = request.form['server_id']
         server = next((item for item in SERVERS if item.info()["server_id"] == server), None)
         server.apply_config(request.form)
         update_state()
         return redirect(
             url_for('index', nt="Updated Outline VPN Server", selected_server=request.args.get('selected_server')))
+    else:
+        return redirect(
+            url_for('index'))
 
 
 @app.route('/clients', methods=['GET', 'POST'])
@@ -176,7 +179,7 @@ def add_client():
         update_state()
         return redirect(url_for('clients', nt="Clients updated", selected_client=request.form.get('user_id')))
     else:
-        return redirect(url_for('index'))
+        return redirect(url_for('clients'))
 
 
 @app.route('/del_client', methods=['POST'])
