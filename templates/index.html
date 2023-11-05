@@ -7,12 +7,19 @@
         <h1 class="server-content-title">Servers</h1>
     </div>
     {% for server in SERVERS %}
+        {% set list_ns = namespace(total_bytes=0) %}
+        {% for key in server.data["keys"] %}
+            {% if key.used_bytes %}
+              {% set list_ns.total_bytes = list_ns.total_bytes + key.used_bytes %}
+            {% endif %}
+        {% endfor %}
     <div class="server-item server-item-{% if loop.index0 == selected_server|int %}unread{% else %}selected{% endif %} pure-g">
         <div class="pure-u-3-4" onclick="location.href='/?selected_server={{loop.index0}}';">
             <h5 class="server-name">{{ server.info()["name"] }}</h5>
             <h4 class="server-info">{{ '/'.join(server.info()["url"].split('/')[0:-1]) }}</h4>
             <h4 class="server-info">Port {{ server.info()["port_for_new_access_keys"] }}</h4>
             <h4 class="server-info">Hostname {{ server.info()["hostname_for_access_keys"] }}</h4>
+            <h4 class="server-info">Traffic: {{ list_ns.total_bytes | filesizeformat }}</h4>
             <h4 class="server-info">v.{{ server.info()["version"] }}</h4>
             <p class="server-comment">
                 {{ server.info()["comment"] }}
