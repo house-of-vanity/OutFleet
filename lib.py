@@ -8,6 +8,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%d-%m-%Y %H:%M:%S')
 
+CFG_PATH = '/usr/local/etc/outfleet/config.yaml'
 
 
 class ServerDict(TypedDict):
@@ -63,10 +64,10 @@ class Server:
             self.client.set_hostname(config.get("hostname_for_access_keys"))
             self.log.info("Changed %s hostname_for_access_keys to '%s'", self.data["server_id"], config.get("hostname_for_access_keys"))
         if config.get("comment"):
-            with open("config.yaml", "r") as file:
+            with open(CFG_PATH, "r") as file:
                 config_file = yaml.safe_load(file) or {}
             config_file["servers"][self.data['server_id']]['comment'] = config.get("comment")
-            with open("config.yaml", "w") as file:
+            with open(CFG_PATH, "w") as file:
                 yaml.safe_dump(config_file, file)
             self.log.info("Changed %s comment to '%s'", self.data["server_id"], config.get("comment"))
 
