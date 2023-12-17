@@ -77,7 +77,7 @@
                 <div class="pure-u-1-2">
                     <h1 class="server-content-title">{{server.info()["name"]}}</h1>
                     <p class="server-content-subtitle">
-                        <span>v.{{server.info()["version"]}} {{server.info()["server_id"]}}</span>
+                        <span>v.{{server.info()["version"]}} {{server.info()["local_server_id"]}}</span>
                     </p>
                 </div>
 
@@ -128,7 +128,7 @@
                     <label for="created_timestamp_ms">Created</label>
                     <input type="text" readonly id="created_timestamp_ms" class="pure-u-23-24" name="created_timestamp_ms" value="{{format_timestamp(server.info()['created_timestamp_ms']) }}"/>
                 </div>
-                <input type="hidden" readonly id="server_id" class="pure-u-23-24" name="server_id" value="{{server.info()['server_id']}}"/>
+                <input type="hidden" readonly id="server_id" class="pure-u-23-24" name="server_id" value="{{server.info()['local_server_id']}}"/>
             </div>
             <p>Share anonymous metrics</p>
             <label for="metrics_enabled" class="pure-radio">

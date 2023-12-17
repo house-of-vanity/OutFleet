@@ -1,2 +1,5 @@
 config.yaml
 __pycache__/
+sync.log
+main.py
+.vscode/launch.json

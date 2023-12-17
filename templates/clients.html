@@ -42,7 +42,7 @@
                             <div class="pure-checkbox">
                                 {% for server in SERVERS %}
                                 <label class="pure-checkbox" for="option{{loop.index0}}">{{server.info()["name"]}}
-                                <input type="checkbox" id="option{{loop.index0}}" name="servers" value="{{server.info()['server_id']}}"></label>
+                                <input type="checkbox" id="option{{loop.index0}}" name="servers" value="{{server.info()['local_server_id']}}"></label>
 
                                 {% endfor %}
 
@@ -85,10 +85,10 @@
                             <div class="pure-checkbox">
                                 <p>Allow access to:</p>
                                 {% for server in SERVERS %}
-                                <label class="pure-checkbox" for="option{{loop.index0}}">{{server.info()["name"]}}{% if server.info()['server_id'] in client['servers'] %} ( Used {% for key in server.data["keys"] %}{% if key.name == client['name'] %}{{ (key.used_bytes if key.used_bytes else 0) | filesizeformat }}{% endif %}{% endfor %}){%endif%}
+                                <label class="pure-checkbox" for="option{{loop.index0}}">{{server.info()["name"]}}{% if server.info()['local_server_id'] in client['servers'] %} ( Used {% for key in server.data["keys"] %}{% if key.name == client['name'] %}{{ (key.used_bytes if key.used_bytes else 0) | filesizeformat }}{% endif %}{% endfor %}){%endif%}
                                 <input
-                                        {% if server.info()['server_id'] in client['servers'] %}checked{%endif%}
-                                        type="checkbox" id="option{{loop.index0}}" name="servers" value="{{server.info()['server_id']}}"></label>
+                                        {% if server.info()['local_server_id'] in client['servers'] %}checked{%endif%}
+                                        type="checkbox" id="option{{loop.index0}}" name="servers" value="{{server.info()['local_server_id']}}"></label>
 
                                 {% endfor %}
 
@@ -106,7 +106,7 @@ Install OutLine VPN. Copy and paste below keys to OutLine client.
 Same keys will work simultaneously on many devices.
 {% for server in SERVERS -%}
 
-{% if server.info()['server_id'] in client['servers'] %}
+{% if server.info()['local_server_id'] in client['servers'] %}
 {{server.info()['name']}}
 ```{% for key in server.data["keys"] %}{% if key.name == client['name'] %}ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}{% endif %}{% endfor %}```
 {% endif %}
@@ -125,7 +125,7 @@ Same keys will work simultaneously on many devices.
             </thead>
             <tbody>
             {% for server in SERVERS %}
-                {% if server.info()['server_id'] in client['servers'] %}
+                {% if server.info()['local_server_id'] in client['servers'] %}
                 <tr>
                     <td>{{ server.info()['name'] }}</td>
                     <td>
@@ -148,7 +148,7 @@ Same keys will work simultaneously on many devices.
             </thead>
             <tbody>
             {% for server in SERVERS %}
-                {% if server.info()['server_id'] in client['servers'] %}
+                {% if server.info()['local_server_id'] in client['servers'] %}
                 <tr>
                     <td>{{ server.info()['name'] }}</td>
                     <td>

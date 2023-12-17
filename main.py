@@ -3,14 +3,18 @@ import logging
 from datetime import datetime
 import random
 import string
+import argparse
+import uuid
 
 from flask import Flask, render_template, request, url_for, redirect
 from flask_cors import CORS
 from lib import Server
 
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
-
-CFG_PATH = '/usr/local/etc/outfleet/config.yaml'
+parser = argparse.ArgumentParser()
+parser.add_argument("-c", "--config", default="/usr/local/etc/outfleet/config.yaml", help="Config file location")
+args = parser.parse_args()
+CFG_PATH = args.config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,11 +59,11 @@ def update_state():
     if config:
         HOSTNAME = config.get('ui_hostname', 'my-own-SSL-ENABLED-domain.com')
         servers = config.get('servers', dict())
-        for server_id, server_config in servers.items():
+        for local_server_id, server_config in servers.items():
             try:
-                server = Server(url=server_config["url"], cert=server_config["cert"], comment=server_config["comment"])
+                server = Server(url=server_config["url"], cert=server_config["cert"], comment=server_config["comment"], local_server_id=local_server_id)
                 SERVERS.append(server)
-                log.info("Server state updated: %s", server.info()["name"])
+                log.info("Server state updated: %s, [%s]", server.info()["name"], local_server_id)
             except Exception as e:
                 log.warning("Can't access server: %s - %s", server_config["url"], e)
 
@@ -81,7 +85,7 @@ def index():
     elif request.method == 'POST':
         server = request.form['server_id']
         server = next((item for item in SERVERS if item.info()["server_id"] == server), None)
-        server.apply_config(request.form)
+        server.apply_config(request.form, CFG_PATH)
         update_state()
         return redirect(
             url_for('index', nt="Updated Outline VPN Server", selected_server=request.args.get('selected_server')))
@@ -128,10 +132,11 @@ def add_server():
                 config = yaml.safe_load(file) or {}
 
             servers = config.get('servers', dict())
+            local_server_id = uuid.uuid4()
 
-            new_server = Server(url=request.form['url'], cert=request.form['cert'], comment=request.form['comment'])
+            new_server = Server(url=request.form['url'], cert=request.form['cert'], comment=request.form['comment'], local_server_id=local_server_id)
 
-            servers[new_server.data["server_id"]] = {
+            servers[new_server.data["local_server_id"]] = {
                 'name': new_server.data["name"],
                 'url': new_server.data["url"],
                 'comment': new_server.data["comment"],
@@ -167,7 +172,7 @@ def add_client():
         log.info("Client %s updated", request.form.get('name'))
 
         for server in SERVERS:
-            if server.data["server_id"] in request.form.getlist('servers'):
+            if server.data["local_server_id"] in request.form.getlist('servers'):
                 client = next((item for item in server.data["keys"] if item.name == request.form.get('old_name')), None)
                 if client:
                     if client.name == request.form.get('name'):
@@ -214,14 +219,14 @@ def del_client():
     return redirect(url_for('clients', nt="User has been deleted"))
 
 
-@app.route('/dynamic/<server_name>/<client_id>', methods=['GET'])
+@app.route('/dynamic/<server_name>/<client_id>', methods=['GET'], strict_slashes=False)
 def dynamic(server_name, client_id):
     try:
         client = next((keys for client, keys in CLIENTS.items() if client == client_id), None)
         server = next((item for item in SERVERS if item.info()["name"] == server_name), None)
         key = next((item for item in server.data["keys"] if item.name == client["name"]), None)
         if server and client and key:
-            if server.data["server_id"] in client["servers"]:
+            if server.data["local_server_id"] in client["servers"]:
                 log.info("Client %s wants ssconf for %s", client["name"], server.data["name"])
                 return {
                   "server": server.data["hostname_for_access_keys"],
@@ -236,46 +241,49 @@ def dynamic(server_name, client_id):
     except:
         log.warning("Hack attempt! Client or server doesn't exist. SCAM")
         return "Hey buddy, i think you got the wrong door the leather-club is two blocks down"
+    
 
+@app.route('/dynamic/', methods=['GET'], strict_slashes=False)
+def _dynamic():
+    log.warning("Hack attempt! Client or server doesn't exist. SCAM")
+    return "Hey buddy, i think you got the wrong door the leather-club is two blocks down"
 
 @app.route('/sync', methods=['GET', 'POST'])
 def sync():
-    # {% for server in SERVERS %}
-    #   {% for key in server.data["keys"] %}
-    #     {% if key.name == client['name'] %}
-    #       ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}
-    #     {% endif %}
-    #   {% endfor %}
-    # {% endfor %}
-    log.info(f"{SERVERS[0]}")
-    # clients_status = []
-    # for c_id, c_data in CLIENTS:
-    #     servers_status = []
-    #     for server in c_data["servers"]:
-    #         for server in SERVERS:
-    #             if server.data["name"] == 
-    #         for key in server.data["keys"]:
-    #             if key.name == c_data["name"]:
-    #                 servers_status.append{
+    if request.method == 'GET':
+        with open('sync.log', 'r') as file:
+            lines = file.readlines()
+        return render_template(
+            'sync.html',
+            SERVERS=SERVERS,
+            CLIENTS=CLIENTS,
+            lines=lines,
+        )
+    if request.method == 'POST':
+        log = logging.getLogger('sync')
+        file_handler = logging.FileHandler('sync.log')
+        file_handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        log.addHandler(file_handler)
 
-    #                 }
-    #         client = {
-    #             "id": c_id,
-    #             "name": data["name"],
-    #             "servers_status": 
-    #         }
-    # if request.method == 'GET':
-    #     return render_template(
-    #         'sync.html',
-    #         SERVERS=SERVERS,
-    #         CLIENTS=CLIENTS,
-    #         nt=request.args.get('nt'),
-    #         nl=request.args.get('nl'),
-    #         selected_client=request.args.get('selected_client'),
-    #         add_client=request.args.get('add_client', None),
-    #         format_timestamp=format_timestamp,
-    #         dynamic_hostname=HOSTNAME,
-    #     )
+        server_hash = {}
+        for server in SERVERS:
+            server_hash[server.data['local_server_id']] = server
+        for key, client in CLIENTS.items():
+            log.info(f"Sync client `{client['name']}`")
+            for u_server_id in client['servers']:
+                if u_server_id in server_hash:                
+                    if not server_hash[u_server_id].check_client(client['name']):
+                        log.warning(f"Client `{client['name']}` absent on `{server_hash[u_server_id].data['name']}`")
+                        server_hash[u_server_id].create_key(client['name'])
+                    else:
+                        log.info(f"Client `{client['name']}` presented on `{server_hash[u_server_id].data['name']}`")
+                else:
+                    log.info(f"Client `{client['name']}` incorrect server_id `{u_server_id}`")
+        update_state()
+        return redirect(url_for('sync'))
+
 
 
 if __name__ == '__main__':
