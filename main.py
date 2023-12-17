@@ -53,7 +53,7 @@ def update_state():
             log.error(f"Couldn't create config. {exp}")
 
     if config:
-        HOSTNAME = config.get('ui_hostname', 'my-own-ssl-ENABLED-domain.com')
+        HOSTNAME = config.get('ui_hostname', 'my-own-SSL-ENABLED-domain.com')
         servers = config.get('servers', dict())
         for server_id, server_config in servers.items():
             try:
@@ -92,6 +92,13 @@ def index():
 
 @app.route('/clients', methods=['GET', 'POST'])
 def clients():
+    # {% for server in SERVERS %}
+    #   {% for key in server.data["keys"] %}
+    #     {% if key.name == client['name'] %}
+    #       ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}
+    #     {% endif %}
+    #   {% endfor %}
+    # {% endfor %}
     if request.method == 'GET':
         return render_template(
             'clients.html',
@@ -229,6 +236,47 @@ def dynamic(server_name, client_id):
     except:
         log.warning("Hack attempt! Client or server doesn't exist. SCAM")
         return "Hey buddy, i think you got the wrong door the leather-club is two blocks down"
+
+
+@app.route('/sync', methods=['GET', 'POST'])
+def sync():
+    # {% for server in SERVERS %}
+    #   {% for key in server.data["keys"] %}
+    #     {% if key.name == client['name'] %}
+    #       ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}
+    #     {% endif %}
+    #   {% endfor %}
+    # {% endfor %}
+    log.info(f"{SERVERS[0]}")
+    # clients_status = []
+    # for c_id, c_data in CLIENTS:
+    #     servers_status = []
+    #     for server in c_data["servers"]:
+    #         for server in SERVERS:
+    #             if server.data["name"] == 
+    #         for key in server.data["keys"]:
+    #             if key.name == c_data["name"]:
+    #                 servers_status.append{
+
+    #                 }
+    #         client = {
+    #             "id": c_id,
+    #             "name": data["name"],
+    #             "servers_status": 
+    #         }
+    # if request.method == 'GET':
+    #     return render_template(
+    #         'sync.html',
+    #         SERVERS=SERVERS,
+    #         CLIENTS=CLIENTS,
+    #         nt=request.args.get('nt'),
+    #         nl=request.args.get('nl'),
+    #         selected_client=request.args.get('selected_client'),
+    #         add_client=request.args.get('add_client', None),
+    #         format_timestamp=format_timestamp,
+    #         dynamic_hostname=HOSTNAME,
+    #     )
+
 
 if __name__ == '__main__':
     update_state()
