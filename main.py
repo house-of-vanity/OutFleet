@@ -251,8 +251,11 @@ def _dynamic():
 @app.route('/sync', methods=['GET', 'POST'])
 def sync():
     if request.method == 'GET':
-        with open('sync.log', 'r') as file:
-            lines = file.readlines()
+        try:
+            with open('sync.log', 'r') as file:
+                lines = file.readlines()
+        except:
+            lines = []
         return render_template(
             'sync.html',
             SERVERS=SERVERS,
