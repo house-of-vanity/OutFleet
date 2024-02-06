@@ -369,7 +369,7 @@ def sync():
                         server_hash[u_server_id].create_key(client["name"])
                     else:
                         log.info(
-                            f"Client `{client['name']}` presented on `{server_hash[u_server_id].data['name']}`"
+                            f"Client `{client['name']}` already present on `{server_hash[u_server_id].data['name']}`"
                         )
                 else:
                     log.info(
