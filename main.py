@@ -170,15 +170,15 @@ def add_server():
                 "cert": request.form["cert"],
             }
             config["servers"] = servers
-             try:
-               with open(CFG_PATH, "w") as file:
+            try:
+                with open(CFG_PATH, "w") as file:
                    yaml.safe_dump(config, file)
-             except Exception as e:
-                 return redirect(
-                     url_for(
-                         "index", nt=f"Couldn't write Outfleet config: {e}", nl="error"
-                     )
-                 )
+            except Exception as e:
+                return redirect(
+                    url_for(
+                        "index", nt=f"Couldn't write Outfleet config: {e}", nl="error"
+                    )
+                )
  
             log.info("Added server: %s", new_server.data["name"])
             update_state()
