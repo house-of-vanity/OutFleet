@@ -154,7 +154,7 @@ def add_server():
                 config = yaml.safe_load(file) or {}
 
             servers = config.get("servers", dict())
-            local_server_id = uuid.uuid4()
+            local_server_id = str(uuid.uuid4())
 
             new_server = Server(
                 url=request.form["url"],
@@ -170,8 +170,16 @@ def add_server():
                 "cert": request.form["cert"],
             }
             config["servers"] = servers
-            with open(CFG_PATH, "w") as file:
-                yaml.safe_dump(config, file)
+             try:
+               with open(CFG_PATH, "w") as file:
+                   yaml.safe_dump(config, file)
+             except Exception as e:
+                 return redirect(
+                     url_for(
+                         "index", nt=f"Couldn't write Outfleet config: {e}", nl="error"
+                     )
+                 )
+ 
             log.info("Added server: %s", new_server.data["name"])
             update_state()
             return redirect(url_for("index", nt="Added Outline VPN Server"))
