@@ -101,7 +101,11 @@ def index():
     elif request.method == "POST":
         server = request.form["server_id"]
         server = next(
-            (item for item in SERVERS if item.info()["server_id"] == server), None
+            (item for item in SERVERS if item.info()["local_server_id"] == server), None
+        )
+        log.info(
+            "Hui-pizda: %s",
+            SERVERS[0].info(),
         )
         server.apply_config(request.form, CFG_PATH)
         update_state()
