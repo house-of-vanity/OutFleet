@@ -305,7 +305,7 @@ def dynamic(server_name, client_id):
             (item for item in SERVERS if item.info()["name"] == server_name), None
         )
         key = next(
-            (item for item in server.data["keys"] if item.name == client["name"]), None
+            (item for item in server.data["keys"] if item.key_id == client["name"]), None
         )
         if server and client and key:
             if server.data["local_server_id"] in client["servers"]:

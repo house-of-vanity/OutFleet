@@ -64,7 +64,7 @@ class Server:
         # Looking for any users with provided name. len(result) != 1 is a problem.
         result = []
         for key in self.client.get_keys():
-            if key.name == name:
+            if key.key_id == name:
                 result.append(name)
                 self.log.info(f"check_client found client `{name}` config is correct.")
         if len(result) != 1:

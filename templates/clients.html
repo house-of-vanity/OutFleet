@@ -108,7 +108,7 @@ Same keys will work simultaneously on many devices.
 
 {% if server.info()['local_server_id'] in client['servers'] %}
 {{server.info()['name']}}
-```{% for key in server.data["keys"] %}{% if key.name == client['name'] %}ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}{% endif %}{% endfor %}```
+```{% for key in server.data["keys"] %}{% if key.key_id == client['name'] %}ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}{% endif %}{% endfor %}```
 {% endif %}
 {%- endfor -%}</textarea>
         </div>
@@ -129,7 +129,7 @@ Same keys will work simultaneously on many devices.
                 <tr>
                     <td>{{ server.info()['name'] }}</td>
                     <td>
-                        <p style="font-size: 10pt">{% for key in server.data["keys"] %}{% if key.name == client['name'] %}ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}{% endif %}{% endfor %}</p>
+                        <p style="font-size: 10pt">{% for key in server.data["keys"] %}{% if key.key_id == client['name'] %}ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}{% endif %}{% endfor %}</p>
                     </td>
                 </tr>
                 {% endif %}
@@ -152,7 +152,7 @@ Same keys will work simultaneously on many devices.
                 <tr>
                     <td>{{ server.info()['name'] }}</td>
                     <td>
-                        <pre style="font-size: 10pt">{% for key in server.data["keys"] %}{% if key.name == client['name'] %}{{ key.access_url }}{% endif %}{% endfor %}</pre>
+                        <pre style="font-size: 10pt">{% for key in server.data["keys"] %}{% if key.key_id == client['name'] %}{{ key.access_url }}{% endif %}{% endfor %}</pre>
                     </td>
                 </tr>
                 {% endif %}
