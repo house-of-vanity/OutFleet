@@ -31,6 +31,7 @@ log = logging.getLogger("OutFleet")
 
 SERVERS = list()
 CLIENTS = dict()
+VERSION = '1'
 HOSTNAME = ""
 app = Flask(__name__)
 CORS(app)
@@ -92,6 +93,7 @@ def index():
         return render_template(
             "index.html",
             SERVERS=SERVERS,
+            VERSION=VERSION,
             nt=request.args.get("nt"),
             nl=request.args.get("nl"),
             selected_server=request.args.get("selected_server"),
