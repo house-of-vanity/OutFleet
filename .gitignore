@@ -3,3 +3,6 @@ __pycache__/
 sync.log
 main.py
 .vscode/launch.json
+*.swp
+*.swo
+*.swn

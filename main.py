@@ -31,7 +31,7 @@ log = logging.getLogger("OutFleet")
 
 SERVERS = list()
 CLIENTS = dict()
-VERSION = '1'
+VERSION = '2'
 HOSTNAME = ""
 app = Flask(__name__)
 CORS(app)
@@ -132,6 +132,7 @@ def clients():
             "clients.html",
             SERVERS=SERVERS,
             CLIENTS=CLIENTS,
+            VERSION=VERSION,
             nt=request.args.get("nt"),
             nl=request.args.get("nl"),
             selected_client=request.args.get("selected_client"),
@@ -199,8 +200,9 @@ def del_server():
             config = yaml.safe_load(file) or {}
 
         local_server_id = request.form.get("local_server_id")
+        server_name = None
         try:
-            config["servers"].pop(local_server_id)
+            server_name = config["servers"].pop(local_server_id)["name"]
         except KeyError as e:
                 pass
         for client_id, client_config in config["clients"].items():
@@ -211,9 +213,9 @@ def del_server():
 
         with open(CFG_PATH, "w") as file:
             yaml.safe_dump(config, file)
-        log.info("Deleting server %s", request.form.get("local_server_id"))
+        log.info("Deleting server %s [%s]", server_name, request.form.get("local_server_id"))
     update_state()
-    return redirect(url_for("index", nt="server has been deleted"))
+    return redirect(url_for("index", nt=f"Server {server_name} has been deleted"))
 
 
 @app.route("/add_client", methods=["POST"])
@@ -380,6 +382,11 @@ def sync():
         )
     if request.method == "POST":
         log = logging.getLogger("sync")
+        if request.form.get("wipe") == 'all':
+            for server in SERVERS:
+                log.info("Wiping all keys on [%s]", server.data["name"])
+                for client in server.data['keys']:
+                    server.delete_key(client.key_id)
         file_handler = logging.FileHandler("sync.log")
         file_handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
@@ -392,21 +399,20 @@ def sync():
         for server in SERVERS:
             server_hash[server.data["local_server_id"]] = server
         for key, client in CLIENTS.items():
-            log.info(f"Sync client `{client['name']}`")
             for u_server_id in client["servers"]:
                 if u_server_id in server_hash:
                     if not server_hash[u_server_id].check_client(client["name"]):
                         log.warning(
-                            f"Client `{client['name']}` absent on `{server_hash[u_server_id].data['name']}`"
+                            f"Client {client['name']} absent on {server_hash[u_server_id].data['name']}"
                         )
                         server_hash[u_server_id].create_key(client["name"])
                     else:
                         log.info(
-                            f"Client `{client['name']}` already present on `{server_hash[u_server_id].data['name']}`"
+                            f"Client {client['name']} already present on {server_hash[u_server_id].data['name']}"
                         )
                 else:
                     log.info(
-                        f"Client `{client['name']}` incorrect server_id `{u_server_id}`"
+                        f"Client {client['name']} incorrect server_id {u_server_id}"
                     )
         update_state()
         return redirect(url_for("sync"))

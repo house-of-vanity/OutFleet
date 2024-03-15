@@ -1,5 +1,12 @@
 <h1>Last sync log</h1>
 <form action="/sync" class="pure-form pure-form-stacked" method="POST">
+            <p>Wape ALL keys on ALL servers</p>
+            <label for="no_wipe" class="pure-radio">
+                <input type="radio" id="no_wipe" name="wipe" value="no_wipe" checked /> No
+            </label>
+            <label for="do_wipe" class="pure-radio">
+                <input type="radio" id="do_wipe" name="wipe" value="all" /> Yes
+            </label>
     <button type="submit" class="pure-button button-error pure-input-1 ">Sync now</button>
  </form>
 

@@ -56,6 +56,9 @@ class Server:
             "keys": self.client.get_keys(),
         }
         self.log = logging.getLogger(f'OutFleet.server[{self.data["name"]}]')
+#       self.log.info(f"KEY ON {self.data['name']} {self.data['keys'][0]}")
+#       for key in self.data['keys']:
+#           print(key)
 
     def info(self) -> ServerDict:
         return self.data
@@ -121,8 +124,9 @@ class Server:
             )
 
     def create_key(self, key_name):
+        self.client.create_key(key_id=key_name, name=key_name)
         self.log.info("New key created: %s", key_name)
-        return self.client.create_key(name=key_name)
+        return True
 
     def rename_key(self, key_id, new_name):
         self.log.info("Key %s renamed: %s", key_id, new_name)
