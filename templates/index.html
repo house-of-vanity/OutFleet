@@ -81,11 +81,6 @@
                     </p>
                 </div>
 
-    <!--            <div class="server-content-controls pure-u-1-2">-->
-    <!--                <button class="secondary-button pure-button">Reply</button>-->
-    <!--                <button class="secondary-button pure-button">Forward</button>-->
-    <!--                <button class="secondary-button pure-button">Move to</button>-->
-    <!--            </div>-->
             </div>
 
             {% set ns = namespace(total_bytes=0) %}
@@ -137,10 +132,14 @@
             <label for="metrics_disabled" class="pure-radio">
                 <input type="radio" id="metrics_disabled" name="metrics" value="False" {% if server.info()['metrics_enabled'] == False %}checked{% endif %} /> Disable
             </label>
-
-            <button type="submit" class="pure-button pure-button-primary">Save and apply</button>
+            <button type="submit" class="pure-button pure-button-primary button">Save and apply</button>
         </fieldset>
     </form>
+    <form action="/del_server" method="post">
+        <input type="hidden" name="local_server_id" value="{{ server.info()["local_server_id"] }}">
+        <button type="submit" class="pure-button pure-button-primary delete-button button">Delete Server</button>
+    </form>
+    
             </div>
         </div>
     </div>

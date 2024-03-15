@@ -192,6 +192,29 @@ def add_server():
                 )
             )
 
+@app.route("/del_server", methods=["POST"])
+def del_server():
+    if request.method == "POST":
+        with open(CFG_PATH, "r") as file:
+            config = yaml.safe_load(file) or {}
+
+        local_server_id = request.form.get("local_server_id")
+        try:
+            config["servers"].pop(local_server_id)
+        except KeyError as e:
+                pass
+        for client_id, client_config in config["clients"].items():
+            try:
+                client_config["servers"].remove(local_server_id)
+            except ValueError as e:
+                pass
+
+        with open(CFG_PATH, "w") as file:
+            yaml.safe_dump(config, file)
+        log.info("Deleting server %s", request.form.get("local_server_id"))
+    update_state()
+    return redirect(url_for("index", nt="server has been deleted"))
+
 
 @app.route("/add_client", methods=["POST"])
 def add_client():
