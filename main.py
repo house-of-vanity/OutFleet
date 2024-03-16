@@ -11,6 +11,22 @@ from flask_cors import CORS
 from lib import Server
 
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%d-%m-%Y %H:%M:%S",
+)
+
+log = logging.getLogger("OutFleet")
+file_handler = logging.FileHandler("sync.log")
+file_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+file_handler.setFormatter(formatter)
+log.addHandler(file_handler)
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "-c",
@@ -20,14 +36,6 @@ parser.add_argument(
 )
 args = parser.parse_args()
 CFG_PATH = args.config
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%d-%m-%Y %H:%M:%S",
-)
-
-log = logging.getLogger("OutFleet")
 
 SERVERS = list()
 CLIENTS = dict()
@@ -382,11 +390,6 @@ def sync():
         )
     if request.method == "POST":
         log = logging.getLogger("sync")
-        if request.form.get("wipe") == 'all':
-            for server in SERVERS:
-                log.info("Wiping all keys on [%s]", server.data["name"])
-                for client in server.data['keys']:
-                    server.delete_key(client.key_id)
         file_handler = logging.FileHandler("sync.log")
         file_handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
@@ -394,6 +397,11 @@ def sync():
         )
         file_handler.setFormatter(formatter)
         log.addHandler(file_handler)
+        if request.form.get("wipe") == 'all':
+            for server in SERVERS:
+                log.info("Wiping all keys on [%s]", server.data["name"])
+                for client in server.data['keys']:
+                    server.delete_key(client.key_id)
 
         server_hash = {}
         for server in SERVERS:

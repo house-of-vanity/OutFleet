@@ -56,9 +56,13 @@ class Server:
             "keys": self.client.get_keys(),
         }
         self.log = logging.getLogger(f'OutFleet.server[{self.data["name"]}]')
-#       self.log.info(f"KEY ON {self.data['name']} {self.data['keys'][0]}")
-#       for key in self.data['keys']:
-#           print(key)
+        file_handler = logging.FileHandler("sync.log")
+        file_handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        file_handler.setFormatter(formatter)
+        self.log.addHandler(file_handler)
 
     def info(self) -> ServerDict:
         return self.data
