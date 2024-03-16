@@ -138,6 +138,7 @@
     <form action="/del_server" method="post">
         <input type="hidden" name="local_server_id" value="{{ server.info()["local_server_id"] }}">
         <button type="submit" class="pure-button pure-button-primary delete-button button">Delete Server</button>
+        <input type="checkbox" id="agree" name="agree" required>
     </form>
     
             </div>
