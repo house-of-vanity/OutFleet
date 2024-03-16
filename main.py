@@ -39,7 +39,7 @@ CFG_PATH = args.config
 
 SERVERS = list()
 CLIENTS = dict()
-VERSION = '2'
+VERSION = '3'
 HOSTNAME = ""
 app = Flask(__name__)
 CORS(app)
