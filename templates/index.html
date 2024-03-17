@@ -1,150 +1,167 @@
 {% extends "base.html" %}
 
 {% block content %}
-
-<div id="list" class="pure-u-1-3" xmlns="http://www.w3.org/1999/html">
-    <div class="server-item pure-g">
-        <h1 class="server-content-title">Servers</h1>
-    </div>
-    {% for server in SERVERS %}
+<div class="pure-g">
+    <div class="pure-u-4-24">
+        <div class="server-item ">
+            <h1 class="server-content-title">Servers</h1>
+        </div>
+        {% for server in SERVERS %}
         {% set list_ns = namespace(total_bytes=0) %}
         {% for key in server.data["keys"] %}
-            {% if key.used_bytes %}
-              {% set list_ns.total_bytes = list_ns.total_bytes + key.used_bytes %}
-            {% endif %}
+        {% if key.used_bytes %}
+        {% set list_ns.total_bytes = list_ns.total_bytes + key.used_bytes %}
+        {% endif %}
         {% endfor %}
-    <div class="server-item server-item-{% if loop.index0 == selected_server|int %}unread{% else %}selected{% endif %} pure-g">
-        <div class="pure-u-3-4" onclick="location.href='/?selected_server={{loop.index0}}';">
-            <h5 class="server-name">{{ server.info()["name"] }}</h5>
-            <h4 class="server-info">{{ '/'.join(server.info()["url"].split('/')[0:-1]) }}</h4>
-            <h4 class="server-info">Port {{ server.info()["port_for_new_access_keys"] }}</h4>
-            <h4 class="server-info">Hostname {{ server.info()["hostname_for_access_keys"] }}</h4>
-            <h4 class="server-info">Traffic: {{ list_ns.total_bytes | filesizeformat }}</h4>
-            <h4 class="server-info">v.{{ server.info()["version"] }}</h4>
-            <p class="server-comment">
-                {{ server.info()["comment"] }}
-            </p>
+        <div
+            class="server-item server-item-{% if loop.index0 == selected_server|int %}unread{% else %}selected{% endif %} ">
+            <div onclick="location.href='/?selected_server={{loop.index0}}';">
+                <h5 class="server-name">{{ server.info()["name"] }}</h5>
+                <h4 class="server-info">API {{ '/'.join(server.info()["url"].split('/')[0:-1]).split("://")[1] }}</h4>
+                <h4 class="server-info">Client Port: {{ server.info()["port_for_new_access_keys"] }}</h4>
+                <h4 class="server-info">Hostname: {{ server.info()["hostname_for_access_keys"] }}</h4>
+                <h4 class="server-info">Traffic: {{ list_ns.total_bytes | filesizeformat }}</h4>
+                <h4 class="server-info">Version: {{ server.info()["version"] }}</h4>
+                <p class="server-comment">
+                    {{ server.info()["comment"] }}
+                </p>
+            </div>
         </div>
-    </div>
-    {% endfor %}
-    <div onclick="location.href='/?add_server=True';" class="server-item server-add pure-g">
-            <div class="pure-u-1">
+        {% endfor %}
+        <div onclick="location.href='/?add_server=True';" class="server-item server-add ">
+            <div class="">
                 +
             </div>
+        </div>
     </div>
 
-</div>
-
-{% if add_server %}
-    <div class="pure-u-1-3">
-        <div class="server-content-header pure-g">
-            <div class="pure-u-1-2">
+    <div class="pure-u-19-24">
+        {% if add_server %}
+        <div class="server-content-header">
+            <div class="">
                 <h1 class="server-content-title">Add new server</h1>
             </div>
         </div>
         <div class="server-content-body">
-        <form action="/add_server" class="pure-form pure-form-stacked" method="POST">
-            <fieldset>
-                <div class="pure-g">
-                    <div class="pure-u-1 pure-u-md-1-3">
-                        <input type="text" class="pure-u-23-24" name="url" placeholder="Server management URL"/>
+            <form action="/add_server" class="pure-form pure-form-stacked" method="POST">
+                <fieldset>
+                    <div class="">
+                        <div class="form-field">
+                            <input type="text" class="form-field" name="url" placeholder="Server management URL" />
+                        </div>
+                        <div class="form-field">
+                            <input type="text" class="form-field" name="cert" placeholder="Certificate" />
+                        </div>
+                        <div class="form-field">
+                            <input type="text" class="form-field" name="comment" placeholder="Comment" />
+                        </div>
                     </div>
-                    <div class="pure-u-1 pure-u-md-1-3">
-                        <input type="text"class="pure-u-23-24" name="cert" placeholder="Certificate"/>
-                    </div>
-                    <div class="pure-u-1 pure-u-md-1-3">
-                        <input type="text" class="pure-u-23-24" name="comment"  placeholder="Comment"/>
-                    </div>
-                </div>
-                <button type="submit" class="pure-button pure-input-1 pure-button-primary">Add</button>
-            </fieldset>
-        </form>
+                    <button type="submit" class="pure-button pure-button-primary button">Add server</button>
+                </fieldset>
+            </form>
+        </div>
     </div>
-    </div>
-{% endif %}
 
+    {% endif %}
 
-{% if SERVERS|length != 0 and not add_server %}
+    {% if SERVERS|length != 0 and not add_server %}
 
     {% if selected_server is none %}
-      {% set server = SERVERS[0] %}
+    {% set server = SERVERS[0] %}
     {% else %}
-      {% set server = SERVERS[selected_server|int] %}
+    {% set server = SERVERS[selected_server|int] %}
     {% endif %}
-    <div id="main" class="pure-u-1">
-        <div class="server-content">
-            <div class="server-content-header pure-g">
-                <div class="pure-u-1-2">
-                    <h1 class="server-content-title">{{server.info()["name"]}}</h1>
-                    <p class="server-content-subtitle">
-                        <span>v.{{server.info()["version"]}} {{server.info()["local_server_id"]}}</span>
-                    </p>
+    <div class="pure-u-19-24">
+        <div class="">
+            <div class="server-content">
+                <div class="server-content-header ">
+                    <div class="">
+                        <h1 class="server-content-title">{{server.info()["name"]}}</h1>
+                        <p class="server-content-subtitle">
+                            <span>v.{{server.info()["version"]}} {{server.info()["local_server_id"]}}</span>
+                        </p>
+                    </div>
+
                 </div>
 
-            </div>
-
-            {% set ns = namespace(total_bytes=0) %}
-              {% for key in SERVERS[selected_server|int].data["keys"] %}
+                {% set ns = namespace(total_bytes=0) %}
+                {% for key in SERVERS[selected_server|int].data["keys"] %}
                 {% if key.used_bytes %}
-                  {% set ns.total_bytes = ns.total_bytes + key.used_bytes %}
+                {% set ns.total_bytes = ns.total_bytes + key.used_bytes %}
                 {% endif %}
-              {% endfor %}
-            <div class="server-content-body">
-                <h3>Clients: {{ server.info()['keys']|length }}</h3>
-                <h3>Total traffic: {{ ns.total_bytes | filesizeformat }}</h3>
-    <form class="pure-form pure-form-stacked" method="POST">
-        <fieldset>
-            <div class="pure-g">
-                <div class="pure-u-1 pure-u-md-1-3">
-                    <label for="name">Server Name</br> Note that this will not be reflected on the devices of the users that you invited to connect to it.</label>
-                    <input type="text" id="name" class="pure-u-23-24" name="name" value="{{server.info()['name']}}"/>
+                {% endfor %}
+                <div class="server-content-body">
+                    <h3>Clients: {{ server.info()['keys']|length }}</h3>
+                    <h3>Total traffic: {{ ns.total_bytes | filesizeformat }}</h3>
+                    <form class="pure-form pure-form-aligned" method="POST">
+                        <fieldset>
+                            <div class="">
+                                <div class="">
+                                    <label for="name">Server Name</br>Must be unique. Used for Dynamic Link
+                                        generation.</label>
+                                    <input class="form-field" type="text" id="name" class="" name="name"
+                                        value="{{server.info()['name']}}" />
+                                </div>
+                                <div class="">
+                                    <label for="comment">Comment</br>Will be used as "Server name" in client
+                                        app.</label>
+                                    <input class="form-field" type="text" id="comment" class="" name="comment"
+                                        value="{{server.info()['comment']}}" />
+                                </div>
+                                <div class="">
+                                    <label for="port_for_new_access_keys">Port For New Access Keys</label>
+                                    <input class="form-field" type="text" id="port_for_new_access_keys" class=""
+                                        name="port_for_new_access_keys"
+                                        value="{{server.info()['port_for_new_access_keys']}}" />
+                                </div>
+                                <div class="">
+                                    <label for="hostname_for_access_keys">Hostname For Access Keys</label>
+                                    <input class="form-field" type="text" id="hostname_for_access_keys" class=""
+                                        name="hostname_for_access_keys"
+                                        value="{{server.info()['hostname_for_access_keys']}}" />
+                                </div>
+                                <div class="">
+                                    <label for="url">Server URL</label>
+                                    <input class="form-field" type="text" readonly id="url" class="" name="url"
+                                        value="{{server.info()['url']}}" />
+                                </div>
+                                <div class="">
+                                    <label for="cert">Server Access Certificate</label>
+                                    <input class="form-field" type="text" readonly id="cert" class="" name="cert"
+                                        value="{{server.info()['cert']}}" />
+                                </div>
+                                <div class="">
+                                    Created {{format_timestamp(server.info()['created_timestamp_ms']) }}
+                                </div>
+                                <input class="form-field" type="hidden" readonly id="server_id" class="" name="server_id"
+                                    value="{{server.info()['local_server_id']}}" />
+                            </div>
+                            <p>Share anonymous metrics</p>
+                            <label for="metrics_enabled" class="pure-radio">
+                                <input type="radio" id="metrics_enabled" name="metrics" value="True" {% if
+                                    server.info()['metrics_enabled']==True %}checked{% endif %} /> Enable
+                            </label>
+                            <label for="metrics_disabled" class="pure-radio">
+                                <input type="radio" id="metrics_disabled" name="metrics" value="False" {% if
+                                    server.info()['metrics_enabled']==False %}checked{% endif %} /> Disable
+                            </label>
+                            <button type="submit" class="pure-button pure-button-primary button">Save and apply</button>
+                        </fieldset>
+                    </form>
+                    <form action="/del_server" method="post">
+
+                        <input type="hidden" id="really" value="{{ server.info()[" local_server_id"] }}">
+                        <label for="really" class="pure-radio">
+                            <button type="submit" class="pure-button pure-button-primary delete-button button">Delete
+                                Server 🔒<input type="checkbox" id="agree" name="agree" required></button></label>
+                        
+                    </form>
+
                 </div>
-                <div class="pure-u-1 pure-u-md-1-3">
-                    <label for="comment">Comment</br>This value will be used as "Server name" in client app.</label>
-                    <input type="text" id="comment" class="pure-u-23-24" name="comment" value="{{server.info()['comment']}}"/>
-                </div>
-                <div class="pure-u-1 pure-u-md-1-3">
-                    <label for="port_for_new_access_keys">Port For New Access Keys</label>
-                    <input type="text" id="port_for_new_access_keys" class="pure-u-23-24" name="port_for_new_access_keys" value="{{server.info()['port_for_new_access_keys']}}"/>
-                </div>
-                <div class="pure-u-1 pure-u-md-1-3">
-                    <label for="hostname_for_access_keys">Hostname For Access Keys</label>
-                    <input type="text" id="hostname_for_access_keys" class="pure-u-23-24" name="hostname_for_access_keys" value="{{server.info()['hostname_for_access_keys']}}"/>
-                </div>
-                <div class="pure-u-1 pure-u-md-1-3">
-                    <label for="url">Server URL</label>
-                    <input type="text" readonly id="url" class="pure-u-23-24" name="url" value="{{server.info()['url']}}"/>
-                </div>
-                <div class="pure-u-1 pure-u-md-1-3">
-                    <label for="cert">Server Access Certificate</label>
-                    <input type="text" readonly id="cert" class="pure-u-23-24" name="cert" value="{{server.info()['cert']}}"/>
-                </div>
-                <div class="pure-u-1 pure-u-md-1-3">
-                    <label for="created_timestamp_ms">Created</label>
-                    <input type="text" readonly id="created_timestamp_ms" class="pure-u-23-24" name="created_timestamp_ms" value="{{format_timestamp(server.info()['created_timestamp_ms']) }}"/>
-                </div>
-                <input type="hidden" readonly id="server_id" class="pure-u-23-24" name="server_id" value="{{server.info()['local_server_id']}}"/>
-            </div>
-            <p>Share anonymous metrics</p>
-            <label for="metrics_enabled" class="pure-radio">
-                <input type="radio" id="metrics_enabled" name="metrics" value="True" {% if server.info()['metrics_enabled'] == True %}checked{% endif %} /> Enable
-            </label>
-            <label for="metrics_disabled" class="pure-radio">
-                <input type="radio" id="metrics_disabled" name="metrics" value="False" {% if server.info()['metrics_enabled'] == False %}checked{% endif %} /> Disable
-            </label>
-            <button type="submit" class="pure-button pure-button-primary button">Save and apply</button>
-        </fieldset>
-    </form>
-    <form action="/del_server" method="post">
-        <input type="hidden" name="local_server_id" value="{{ server.info()["local_server_id"] }}">
-        <button type="submit" class="pure-button pure-button-primary delete-button button">Delete Server</button>
-        <input type="checkbox" id="agree" name="agree" required>
-    </form>
-    
             </div>
         </div>
     </div>
 
-{% endif %}
-
+    {% endif %}
+</div>
 {% endblock %}

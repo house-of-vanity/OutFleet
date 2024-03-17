@@ -1,4 +1,4 @@
-/*
+/* 
  * -- BASE STYLES --
  * Most of these are inherited from Base, but I want to change a few.
  */
@@ -19,11 +19,11 @@ a {
  * Over-riding some of the .pure-button styles to make my buttons look unique
  */
 .button {
-    border-radius: 6px;
+    border-radius: 4px;
 }
 .delete-button {
     background: #a20c0c;
-    border: 1px solid #010101;
+    border: 2px solid #310404;
     color: #ffffff;
 }
 
@@ -153,10 +153,13 @@ a {
     }
 
 .server-item-selected {
-    background: #eee;
+    background: #eeeeee;
 }
 .server-item-unread {
     border-left: 6px solid #1b98f8;
+}
+.server-item:hover {
+    background: #d1d0d0;
 }
 
 /* server Content Styles */
@@ -201,7 +204,7 @@ a {
 
     /* Move the layout over so we can fit the nav + list in on the left */
     #layout {
-        padding-left:500px; /* "left col (nav + list)" width */
+        padding-left:500px;
         position: relative;
     }
 
@@ -213,7 +216,7 @@ a {
         overflow: auto;
     }
     #nav {
-        margin-left:-500px; /* "left col (nav + list)" width */
+        margin-left:-500px;
         width:150px;
         height: 100%;
     }
