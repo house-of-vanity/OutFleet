@@ -23,7 +23,9 @@ parser.add_argument(
 
 args = parser.parse_args()
 def get_config():
-    if not k8s.NAMESPACE:
+    if k8s.CONFIG:
+        return k8s.CONFIG
+    else:
         try:
             with open(args.config, "r") as file:
                 config = yaml.safe_load(file)
@@ -35,18 +37,16 @@ def get_config():
                 log.error(f"Couldn't create config. {exp}")
                 return None
         return config
-    else:
-        return k8s.CONFIG
     
 def write_config(config):
-    if not k8s.NAMESPACE:
+    if k8s.CONFIG:
+        k8s.write_config(config)
+    else:
         try:
             with open(args.config, "w") as file:
                 yaml.safe_dump(config, file)
         except Exception as e:
             log.error(f"Couldn't write Outfleet config: {e}")
-    else:
-        k8s.write_config(config)
 
 
 class ServerDict(TypedDict):

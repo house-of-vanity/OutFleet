@@ -2,7 +2,7 @@ import base64
 import json
 import yaml
 import logging
-from kubernetes import client, config
+from kubernetes import client, config as kube_config
 from kubernetes.client.rest import ApiException
 
 logging.basicConfig(
@@ -51,25 +51,28 @@ CONFIG = None
 V1 = None
 
 try:
-    config.load_incluster_config()
+    kube_config.load_incluster_config()
     V1 = client.CoreV1Api()
-    with open("/var/run/secrets/kubernetes.io/serviceaccount/namespace") as f:
-        NAMESPACE = f.read().strip()
-    log.info(f"Found Kubernetes environment. Deployed to namespace '{NAMESPACE}'")
-    CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
-    log.info(f"ConfigMap config.yaml loaded from Kubernetes API. Servers: {len(CONFIG['servers'])}, Clients: {len(CONFIG['clients'])}")
-
+    try:
+        with open("/var/run/secrets/kubernetes.io/serviceaccount/namespace") as f:
+            NAMESPACE = f.read().strip()
+        log.info(f"Found Kubernetes environment. Deployed to namespace '{NAMESPACE}'")
+        try:
+            CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
+            log.info(f"ConfigMap loaded from Kubernetes API. Servers: {len(CONFIG['servers'])}, Clients: {len(CONFIG['clients'])}")
+        except Exception as e:
+            log.error("ConfigMap not found. {e}")
+    except:
+        pass
 except:
     log.info("Kubernetes environment not detected")
 
-try:
-    CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
-    log.info(f"ConfigMap config.yaml loaded from Kubernetes API. Servers: {len(CONFIG['servers'])}, Clients: {len(CONFIG['clients'])}")
-except ApiException as e:
-    log.warning(f"ConfigMap not found. Fisrt run?")
 
-if not CONFIG:
-    log.info(f"Creating new ConfigMap [config-outfleet]")
-    write_config({"clients": [], "servers": [], "ui_hostname": "accessible-address.com"})
-    CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
+try:
+    if not CONFIG:
+        log.info(f"Creating new ConfigMap [config-outfleet]")
+        write_config({"clients": [], "servers": [], "ui_hostname": "accessible-address.com"})
+        CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
+except:
+    pass
 
