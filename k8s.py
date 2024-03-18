@@ -2,6 +2,8 @@ import base64
 import json
 import yaml
 import logging
+import threading
+import time
 from kubernetes import client, config as kube_config
 from kubernetes.client.rest import ApiException
 
@@ -45,11 +47,18 @@ def write_config(config):
         )
     log.info("Updated config in Kubernetes ConfigMap [config-outfleet]")
 
-
 NAMESPACE = False
 SERVERS = list()
 CONFIG = None
 V1 = None
+
+def reload_config():
+    global CONFIG
+    while True:
+        CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
+        log.debug(f"Synced system config with ConfigMap [config-outfleet].")
+        time.sleep(30)
+
 
 try:
     kube_config.load_incluster_config()
@@ -60,15 +69,18 @@ try:
         log.info(f"Found Kubernetes environment. Deployed to namespace '{NAMESPACE}'")
         try:
             CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
-            log.info(f"ConfigMap loaded from Kubernetes API. Servers: {len(CONFIG['servers'])}, Clients: {len(CONFIG['clients'])}")
+            log.info(f"ConfigMap loaded from Kubernetes API. Servers: {len(CONFIG['servers'])}, Clients: {len(CONFIG['clients'])}. Started monitoring for changes every minute.")
         except Exception as e:
             try:
                 write_config({"clients": [], "servers": {}, "ui_hostname": "accessible-address.com"})
                 CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
-                log.info("Created new ConfigMap [config-outfleet]")
+                log.info("Created new ConfigMap [config-outfleet]. Started monitoring for changes every minute.")
             except Exception as e:
                 log.info(f"Failed to create new ConfigMap [config-outfleet] {e}")
+        thread = threading.Thread(target=reload_config)
+        thread.start()
     except:
         log.info("Kubernetes environment not detected")
 except:
     log.info("Kubernetes environment not detected")
+
