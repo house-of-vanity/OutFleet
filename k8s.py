@@ -61,18 +61,13 @@ try:
             CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
             log.info(f"ConfigMap loaded from Kubernetes API. Servers: {len(CONFIG['servers'])}, Clients: {len(CONFIG['clients'])}")
         except Exception as e:
-            log.error("ConfigMap not found. {e}")
+            write_config({"clients": [], "servers": [], "ui_hostname": "accessible-address.com"})
+            try:
+                CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
+                log.info("Created new ConfigMap [config-outfleet]")
+            except Exception as e:
+                log.info("Failed to create new ConfigMap [config-outfleet] {e}")
     except:
         pass
 except:
     log.info("Kubernetes environment not detected")
-
-
-try:
-    if not CONFIG:
-        log.info(f"Creating new ConfigMap [config-outfleet]")
-        write_config({"clients": [], "servers": [], "ui_hostname": "accessible-address.com"})
-        CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
-except:
-    pass
-
