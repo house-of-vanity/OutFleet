@@ -43,6 +43,7 @@ def write_config(config):
             namespace=NAMESPACE,
             body=config_map,
         )
+    log.info("Updated config in Kubernetes ConfigMap [config-outfleet]")
 
 
 NAMESPACE = False
@@ -61,13 +62,13 @@ try:
             CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
             log.info(f"ConfigMap loaded from Kubernetes API. Servers: {len(CONFIG['servers'])}, Clients: {len(CONFIG['clients'])}")
         except Exception as e:
-            write_config({"clients": [], "servers": [], "ui_hostname": "accessible-address.com"})
             try:
+                write_config({"clients": [], "servers": {}, "ui_hostname": "accessible-address.com"})
                 CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
                 log.info("Created new ConfigMap [config-outfleet]")
             except Exception as e:
                 log.info("Failed to create new ConfigMap [config-outfleet] {e}")
     except:
-        pass
+        log.info("Kubernetes environment not detected")
 except:
     log.info("Kubernetes environment not detected")
