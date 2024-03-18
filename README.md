@@ -86,4 +86,6 @@ Keep in mind that all user keys are stored in a single **config.yaml** file. If 
 
 ## Authors
 
-* **UltraDesu** - *Humble amateur developer* - [UltraDesu](https://github.com/house-of-vanity) - *All the work*
+* **UltraDesu** - *Humble amateur developer* - [UltraDesu](https://github.com/house-of-vanity) - *Author*
+* **Contributors**
+* * @Sanapach
