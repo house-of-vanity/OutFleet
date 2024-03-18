@@ -1,32 +1,17 @@
-{% extends "base.html" %}
-
-{% block content %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-
-<!-- and it's easy to individually load additional languages -->
-<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script> -->
-
-<script>hljs.highlightAll();</script>
-
-
-<h1>Last logs</h1>
+<h1>Last sync log</h1>
 <form action="/sync" class="pure-form pure-form-stacked" method="POST">
-    <button type="submit" class="pure-button pure-button-primary button">Sync now</button>
-    <p>Also wipe ALL keys on ALL servers? Use in case of inconsistency.</p>
-    <label for="no_wipe" class="pure-radio">
-        <input type="radio" id="no_wipe" name="wipe" value="no_wipe" checked /> No
-    </label>
-    <label for="do_wipe" class="pure-radio">
-        <input type="radio" id="do_wipe" name="wipe" value="all" /> Yes
-    </label>
-    
-</form>
+            <p>Wipe ALL keys on ALL servers?</p>
+            <label for="no_wipe" class="pure-radio">
+                <input type="radio" id="no_wipe" name="wipe" value="no_wipe" checked /> No
+            </label>
+            <label for="do_wipe" class="pure-radio">
+                <input type="radio" id="do_wipe" name="wipe" value="all" /> Yes
+            </label>
+    <button type="submit" class="pure-button button-error pure-input-1 ">Sync now</button>
+ </form>
 
-<pre style="height: 600px; overflow: scroll;">
-    <code class="language-c">
+<pre>
+    <code>
 {% for line in lines %}{{ line }}{% endfor %}
     </code>
 </pre>
-
-{% endblock %}
