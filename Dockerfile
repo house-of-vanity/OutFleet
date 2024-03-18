@@ -5,8 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 COPY static static
 COPY templates templates
-COPY main.py .
-COPY lib.py .
+COPY *.py .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
