@@ -1,13 +1,52 @@
+import argparse
 import logging
 from typing import TypedDict, List
 from outline_vpn.outline_vpn import OutlineKey, OutlineVPN
 import yaml
+import k8s
+
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     datefmt="%d-%m-%Y %H:%M:%S",
 )
+
+log = logging.getLogger(f'OutFleet.lib')
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "-c",
+    "--config",
+    default="/usr/local/etc/outfleet/config.yaml",
+    help="Config file location",
+)
+
+args = parser.parse_args()
+def get_config():
+    if not k8s.NAMESPACE:
+        try:
+            with open(args.config, "r") as file:
+                config = yaml.safe_load(file)
+        except:
+            try:
+                with open(args.config, "w"):
+                    pass
+            except Exception as exp:
+                log.error(f"Couldn't create config. {exp}")
+                return None
+        return config
+    else:
+        return k8s.CONFIG
+    
+def write_config(config):
+    if not k8s.NAMESPACE:
+        try:
+            with open(args.config, "w") as file:
+                yaml.safe_dump(config, file)
+        except Exception as e:
+            log.error(f"Couldn't write Outfleet config: {e}")
+    else:
+        k8s.write_config(config)
 
 
 class ServerDict(TypedDict):
@@ -114,13 +153,11 @@ class Server:
                 config.get("hostname_for_access_keys"),
             )
         if config.get("comment"):
-            with open(CFG_PATH, "r") as file:
-                config_file = yaml.safe_load(file) or {}
+            config_file = get_config()
             config_file["servers"][self.data["local_server_id"]]["comment"] = config.get(
                 "comment"
             )
-            with open(CFG_PATH, "w") as file:
-                yaml.safe_dump(config_file, file)
+            write_config(config_file)
             self.log.info(
                 "Changed %s comment to '%s'",
                 self.data["local_server_id"],

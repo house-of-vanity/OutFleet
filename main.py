@@ -10,7 +10,7 @@ import uuid
 import k8s
 from flask import Flask, render_template, request, url_for, redirect
 from flask_cors import CORS
-from lib import Server
+from lib import Server, write_config, get_config, args
 
 
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
@@ -30,22 +30,9 @@ formatter = logging.Formatter(
 file_handler.setFormatter(formatter)
 log.addHandler(file_handler)
 
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "-c",
-    "--config",
-    default="/usr/local/etc/outfleet/config.yaml",
-    help="Config file location",
-)
-parser.add_argument(
-    "--k8s",
-    default=False,
-    action="store_true",
-    help="Kubernetes Outline server discovery",
-)
-args = parser.parse_args()
-CFG_PATH = args.config
 
+CFG_PATH = args.config
+NAMESPACE = k8s.NAMESPACE
 SERVERS = list()
 BROKEN_SERVERS = list()
 CLIENTS = dict()
@@ -64,20 +51,6 @@ def random_string(length=64):
 
     return "".join(random.choice(letters) for i in range(length))
 
-def get_config():
-    if not args.k8s:
-        try:
-            with open(CFG_PATH, "r") as file:
-                config = yaml.safe_load(file)
-        except:
-            try:
-                with open(CFG_PATH, "w"):
-                    pass
-            except Exception as exp:
-                log.error(f"Couldn't create config. {exp}")
-    else:
-        pass
-
 
 
 def update_state():
@@ -89,16 +62,8 @@ def update_state():
     SERVERS = list()
     BROKEN_SERVERS = list()
     CLIENTS = dict()
-    config = dict()
-    try:
-        with open(CFG_PATH, "r") as file:
-            config = yaml.safe_load(file)
-    except:
-        try:
-            with open(CFG_PATH, "w"):
-                pass
-        except Exception as exp:
-            log.error(f"Couldn't create config. {exp}")
+    config = get_config()
+
 
     if config:
         HOSTNAME = config.get("ui_hostname", "my-own-SSL-ENABLED-domain.com")
@@ -164,13 +129,6 @@ def index():
 
 @app.route("/clients", methods=["GET", "POST"])
 def clients():
-    # {% for server in SERVERS %}
-    #   {% for key in server.data["keys"] %}
-    #     {% if key.name == client['name'] %}
-    #       ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}
-    #     {% endif %}
-    #   {% endfor %}
-    # {% endfor %}
     if request.method == "GET":
         return render_template(
             "clients.html",
@@ -184,22 +142,13 @@ def clients():
             format_timestamp=format_timestamp,
             dynamic_hostname=HOSTNAME,
         )
-    # else:
-    #     server = request.form['server_id']
-    #     server = next((item for item in SERVERS if item.info()["server_id"] == server), None)
-    #     server.apply_config(request.form)
-    #     update_state()
-    #     return redirect(
-    #         url_for('index', nt="Updated Outline VPN Server", selected_server=request.args.get('selected_server')))
 
 
 @app.route("/add_server", methods=["POST"])
 def add_server():
     if request.method == "POST":
         try:
-            with open(CFG_PATH, "r") as file:
-                config = yaml.safe_load(file) or {}
-
+            config = get_config()
             servers = config.get("servers", dict())
             local_server_id = str(uuid.uuid4())
 
@@ -217,16 +166,7 @@ def add_server():
                 "cert": request.form["cert"],
             }
             config["servers"] = servers
-            try:
-                with open(CFG_PATH, "w") as file:
-                   yaml.safe_dump(config, file)
-            except Exception as e:
-                return redirect(
-                    url_for(
-                        "index", nt=f"Couldn't write Outfleet config: {e}", nl="error"
-                    )
-                )
- 
+            write_config(config)
             log.info("Added server: %s", new_server.data["name"])
             update_state()
             return redirect(url_for("index", nt="Added Outline VPN Server"))
@@ -240,8 +180,7 @@ def add_server():
 @app.route("/del_server", methods=["POST"])
 def del_server():
     if request.method == "POST":
-        with open(CFG_PATH, "r") as file:
-            config = yaml.safe_load(file) or {}
+        config = get_config()
 
         local_server_id = request.form.get("local_server_id")
         server_name = None
@@ -254,9 +193,7 @@ def del_server():
                 client_config["servers"].remove(local_server_id)
             except ValueError as e:
                 pass
-
-        with open(CFG_PATH, "w") as file:
-            yaml.safe_dump(config, file)
+        write_config(config)
         log.info("Deleting server %s [%s]", server_name, request.form.get("local_server_id"))
     update_state()
     return redirect(url_for("index", nt=f"Server {server_name} has been deleted"))
@@ -265,8 +202,7 @@ def del_server():
 @app.route("/add_client", methods=["POST"])
 def add_client():
     if request.method == "POST":
-        with open(CFG_PATH, "r") as file:
-            config = yaml.safe_load(file) or {}
+        config = get_config()
 
         clients = config.get("clients", dict())
         user_id = request.form.get("user_id", random_string())
@@ -277,8 +213,7 @@ def add_client():
             "servers": request.form.getlist("servers"),
         }
         config["clients"] = clients
-        with open(CFG_PATH, "w") as file:
-            yaml.safe_dump(config, file)
+        write_config(config)
         log.info("Client %s updated", request.form.get("name"))
 
         for server in SERVERS:
@@ -340,9 +275,7 @@ def add_client():
 @app.route("/del_client", methods=["POST"])
 def del_client():
     if request.method == "POST":
-        with open(CFG_PATH, "r") as file:
-            config = yaml.safe_load(file) or {}
-
+        config = get_config()
         clients = config.get("clients", dict())
         user_id = request.form.get("user_id")
         if user_id in clients:
@@ -359,8 +292,7 @@ def del_client():
                     server.delete_key(client.key_id)
 
         config["clients"].pop(user_id)
-        with open(CFG_PATH, "w") as file:
-            yaml.safe_dump(config, file)
+        write_config(config)
         log.info("Deleting client %s", request.form.get("name"))
     update_state()
     return redirect(url_for("clients", nt="User has been deleted"))
