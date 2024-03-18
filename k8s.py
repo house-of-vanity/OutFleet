@@ -33,12 +33,12 @@ def write_config(config):
         data={"config.yaml": yaml.dump(config)}
     )
     try:
-        api_response = v1.create_namespaced_config_map(
+        api_response = V1.create_namespaced_config_map(
             namespace=NAMESPACE,
             body=config_map,
         )
     except ApiException as e:
-        api_response = v1.patch_namespaced_config_map(
+        api_response = V1.patch_namespaced_config_map(
             name="config-outfleet",
             namespace=NAMESPACE,
             body=config_map,
@@ -48,18 +48,22 @@ def write_config(config):
 NAMESPACE = False
 SERVERS = list()
 CONFIG = None
+V1 = None
 
 try:
     config.load_incluster_config()
-    v1 = client.CoreV1Api()
+    V1 = client.CoreV1Api()
     with open("/var/run/secrets/kubernetes.io/serviceaccount/namespace") as f:
         NAMESPACE = f.read().strip()
     log.info(f"Found Kubernetes environment. Deployed to namespace '{NAMESPACE}'")
+    CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
+    log.info(f"ConfigMap config.yaml loaded from Kubernetes API. Servers: {len(CONFIG['servers'])}, Clients: {len(CONFIG['clients'])}")
+
 except:
     log.info("Kubernetes environment not detected")
 
 try:
-    CONFIG = yaml.safe_load(v1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
+    CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
     log.info(f"ConfigMap config.yaml loaded from Kubernetes API. Servers: {len(CONFIG['servers'])}, Clients: {len(CONFIG['clients'])}")
 except ApiException as e:
     log.warning(f"ConfigMap not found. Fisrt run?")
@@ -67,5 +71,5 @@ except ApiException as e:
 if not CONFIG:
     log.info(f"Creating new ConfigMap [config-outfleet]")
     write_config({"clients": [], "servers": [], "ui_hostname": "accessible-address.com"})
-    CONFIG = yaml.safe_load(v1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
+    CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
 
