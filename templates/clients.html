@@ -2,190 +2,173 @@
 
 {% block content %}
 
-<div class="pure-u-3-24">
-    <div class="server-item">
+<div id="list" class="pure-u-1-3" xmlns="http://www.w3.org/1999/html" xmlns="http://www.w3.org/1999/html">
+    <div class="server-item pure-g">
         <h1 class="server-content-title">Clients</h1>
     </div>
-    <div onclick="location.href='/clients?add_client=True';" class="server-item server-add ">
-        <div class="">
-            +
-        </div>
-    </div>
     {% for client, values in CLIENTS.items() %}
-    <div onclick="location.href='/clients?selected_client={{ client }}';"
-        class="server-item server-item-{% if client == selected_client %}unread{% else %}selected{% endif %} ">
-        <div class="">
+    <div class="server-item server-item-{% if client == selected_client %}unread{% else %}selected{% endif %} pure-g">
+        <div class="pure-u-3-4" onclick="location.href='/clients?selected_client={{ client }}';">
             <h5 class="server-name">{{ values["name"] }}</h5>
-            <h4 class="server-info">Allowed {{ values["servers"]|length }} server{% if values["servers"]|length >1
-                %}s{%endif%}</h4>
+            <h4 class="server-info">Allowed {{ values["servers"]|length }} server{% if values["servers"]|length >1 %}s{%endif%}</h4>
         </div>
     </div>
     {% endfor %}
-
+    <div onclick="location.href='/clients?add_client=True';" class="server-item server-add pure-g">
+            <div class="pure-u-1">
+                +
+            </div>
+    </div>
 
 </div>
-<div class="pure-u-20-24">
-    {% if add_client %}
 
-    <div class="server-content-header">
-        <div class="">
-            <h1 class="server-content-title">Add new client</h1>
+{% if add_client %}
+    <div class="pure-u-1-3">
+        <div class="server-content-header pure-g">
+            <div class="pure-u-1-2">
+                <h1 class="server-content-title">Add new client</h1>
+            </div>
         </div>
-    </div>
-    <div class="server-content-body">
+        <div class="server-content-body">
         <form action="/add_client" class="pure-form pure-form-stacked" method="POST">
             <fieldset>
-                <input type="text" class="form-field pure-u-8-24" name="name" required placeholder="Name" />
-                <input type="text" class="form-field pure-u-8-24" name="comment" placeholder="Comment" />
-                {% for server in SERVERS %}
-                <label class="pure-checkbox" for="option{{loop.index0}}">
-                    <input type="checkbox" id="option{{loop.index0}}" name="servers"
-                        value="{{server.info()['local_server_id']}}">{{server.info()["name"]}}</label>
-                {% endfor %}
-                <button type="submit" class="pure-button pure-button-primary button">Add client</button>
+                <div class="pure-g">
+                    <div class="pure-u-1 pure-u-md-1-3">
+                        <input type="text" class="pure-u-23-24" name="name" required placeholder="Name"/>
+                    </div>
+                    <div class="pure-u-1 pure-u-md-1-3">
+                        <input type="text" class="pure-u-23-24" name="comment"  placeholder="Comment"/>
+                    </div>
+                            <div class="pure-checkbox">
+                                {% for server in SERVERS %}
+                                <label class="pure-checkbox" for="option{{loop.index0}}">{{server.info()["name"]}}
+                                <input type="checkbox" id="option{{loop.index0}}" name="servers" value="{{server.info()['local_server_id']}}"></label>
+
+                                {% endfor %}
+
+                          </div>
+
+                </div>
+                <button type="submit" class="pure-button pure-input-1 pure-button-primary">Add</button>
             </fieldset>
         </form>
     </div>
-    {% endif %}
-
-    {% if selected_client and not add_client %}
-    {% set client = CLIENTS[selected_client] %}
-    <div class="pure-g">
-        <div class="pure-u-1">
-            <div class="server-content-header">
-                <div class="">
-                    <h1 class="server-content-title">{{client['name']}}</h1>
-                    <h4 class="server-info">{{ selected_client }}</h4>
-                    {% if client['comment'] != "" %}<h4 class="server-info">{{ client['comment'] }}</h4>{% endif %}
-                </div>
-            </div>
-        </div>
     </div>
-    <div class="pure-g">
-        <div class="pure-u-6-24">
+{% endif %}
 
-            <div class="server-content-body">
-                <form action="/add_client" class="pure-form pure-form-aligned" method="POST">
-                    <fieldset>
 
-                        <div class="">
-                            <input type="text" class="form-field" name="name" required value="{{client['name']}}" />
-                            <input type="hidden" class="form-field" name="old_name" required
-                                value="{{client['name']}}" />
-                        </div>
-                        <div class="">
-                            <input type="text" class="form-field" name="comment" value="{{client['comment']}}" />
-                        </div>
-                        <input type="hidden" class="form-field" name="user_id" value="{{selected_client}}" />
+{% if selected_client and not add_client %}
+    {% set client = CLIENTS[selected_client] %}
 
-                        <div class="pure-checkbox">
-                            <p>Allow access to:</p>
-                            {% for server in SERVERS %}
-                            <label class="pure-checkbox" for="option{{loop.index0}}">
-                                <input {% if server.info()['local_server_id'] in client['servers'] %}checked{%endif%}
-                                    type="checkbox" id="option{{loop.index0}}" name="servers"
-                                    value="{{server.info()['local_server_id']}}">{{server.info()["name"]}}
-                                {% if server.info()['local_server_id'] in client['servers'] %} ( Used {% for key in
-                                server.data["keys"] %}{% if key.name == client['name'] %}{{ (key.used_bytes if
-                                key.used_bytes else 0) | filesizeformat }}{% endif %}{% endfor %}){%endif%}</label>
+    <div class="pure-u-1-2">
+        <div class="server-content-header pure-g">
+            <div class="pure-u-1-2">
+                <h1 class="server-content-title">{{client['name']}}</h1>
+                <h4 class="server-info">{{ client['comment'] }}</h4>
+                <h4 class="server-info">id {{ selected_client }}</h4>
 
-                            {% endfor %}
-
-                        </div>
-                        <button type="submit" class="pure-button pure-button-primary button">Save and Apply</button>
-                    </fieldset>
-                </form>
-                <form action="/del_client" class="pure-form pure-form-stacked" method="POST">
-                    <input type="hidden" name="name" required value="{{client['name']}}" />
-                    <input type="hidden" name="user_id" value="{{selected_client}}" />
-
-                    <label for="really" class="pure-radio">
-                        <button type="submit" id="really"
-                            class="pure-button pure-button-primary delete-button button">Delete Client 🔒<input
-                                type="checkbox" id="agree" name="agree" required></button></label>
-                </form>
             </div>
         </div>
-        <div style="" class="pure-u-18-24">
-            <div class="pure-u-9-24">
-                <div>
-                    <h3>Invite text</h3>
+        <div class="server-content-body">
+        <form action="/add_client" class="pure-form pure-form-stacked" method="POST">
+            <fieldset>
+                <div class="pure-g">
+                    <div class="pure-u-1 pure-u-md-1-3">
+                        <input type="text" class="pure-u-1" name="name" required value="{{client['name']}}"/>
+                        <input type="hidden" class="pure-u-1" name="old_name" required value="{{client['name']}}"/>
+                    </div>
+                    <div class="pure-u-1 pure-u-md-1-3">
+                        <input type="text" class="pure-u-1" name="comment" value="{{client['comment']}}"/>
+                    </div>
+                    <input type="hidden" class="pure-u-1" name="user_id" value="{{selected_client}}"/>
 
-                    <textarea style="width: 96%; height: 360px; resize:none" disabled>
+                            <div class="pure-checkbox">
+                                <p>Allow access to:</p>
+                                {% for server in SERVERS %}
+                                <label class="pure-checkbox" for="option{{loop.index0}}">{{server.info()["name"]}}{% if server.info()['local_server_id'] in client['servers'] %} ( Used {% for key in server.data["keys"] %}{% if key.name == client['name'] %}{{ (key.used_bytes if key.used_bytes else 0) | filesizeformat }}{% endif %}{% endfor %}){%endif%}
+                                <input
+                                        {% if server.info()['local_server_id'] in client['servers'] %}checked{%endif%}
+                                        type="checkbox" id="option{{loop.index0}}" name="servers" value="{{server.info()['local_server_id']}}"></label>
+
+                                {% endfor %}
+
+                          </div>
+
+                </div>
+                <button type="submit" class="pure-button pure-input-1 pure-button-primary">Save and apply</button>
+            </fieldset>
+        </form>
+
+        <div>
+            <h3>Invite text</h3><hr>
+            <textarea style="width: 100%; rows=10">
 Install OutLine VPN. Copy and paste below keys to OutLine client.
 Same keys will work simultaneously on many devices.
 {% for server in SERVERS -%}
 
 {% if server.info()['local_server_id'] in client['servers'] %}
 {{server.info()['name']}}
-```{% for key in server.data["keys"] %}{% if key.key_id == client['name'] %}ssconf://{{
-dynamic_hostname
-}}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}{% endif %}{%
-endfor %}```
+```{% for key in server.data["keys"] %}{% if key.key_id == client['name'] %}ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}{% endif %}{% endfor %}```
 {% endif %}
-{%- endfor -%}
-                        </textarea>
-
-                </div>
-            </div>
-            <div class="pure-u-14-24">
-
-            </div>
-
+{%- endfor -%}</textarea>
         </div>
+            <hr>
+<div style="padding-top: 15px; padding-bottom: 15px">
+    <div class="pure-u-1">
+        <h3>Dynamic Access Keys</h3>
+        <table class="pure-table">
+            <thead>
+                <tr>
+                    <th>Server</th>
+                    <th>Dynamic</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for server in SERVERS %}
+                {% if server.info()['local_server_id'] in client['servers'] %}
+                <tr>
+                    <td>{{ server.info()['name'] }}</td>
+                    <td>
+                        <p style="font-size: 10pt">{% for key in server.data["keys"] %}{% if key.key_id == client['name'] %}ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}{% endif %}{% endfor %}</p>
+                    </td>
+                </tr>
+                {% endif %}
+            {% endfor %}
+            </tbody>
+        </table>
     </div>
-    <div class="pure-g">
-        <div class="pure-u-1 content">
-            <h3>Dynamic Access Keys</h3>
-            <table class="pure-table" style="width: 100%">
-                <thead>
-                    <tr>
-                        <th>Server</th>
-                        <th>Dynamic</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for server in SERVERS %}
-                    {% if server.info()['local_server_id'] in client['servers'] %}
-                    <tr>
-                        <td>{{ server.info()['name'] }}</td>
-                        <td style="font-size: 10pt">
-                            {% for key in server.data["keys"] %}{% if key.key_id == client['name'] %}ssconf://{{
-                            dynamic_hostname
-                            }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}{%
-                            endif %}{% endfor %}
-                        </td>
-                    </tr>
-                    {% endif %}
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <div class="pure-u-1 content">
-            <h3>SS Links</h3>
-            <table class="pure-table" style="width: 100%">
-                <thead>
-                    <tr>
-                        <th>Server</th>
-                        <th>SSlink</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for server in SERVERS %}
-                    {% if server.info()['local_server_id'] in client['servers'] %}
-                    <tr>
-                        <td>{{ server.info()['name'] }}</td>
-                        <td style="font-size: 10pt">
-                            {% for key in server.data["keys"] %}{% if key.key_id == client['name'] %}{{
-                            key.access_url }}{% endif %}{% endfor %}
-                        </td>
-                    </tr>
-                    {% endif %}
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+    <div class="pure-u-1 pure-u-md-1">
+        <h3>SS Links</h3>
+        <table class="pure-table">
+            <thead>
+                <tr>
+                    <th>Server</th>
+                    <th>SSlink</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for server in SERVERS %}
+                {% if server.info()['local_server_id'] in client['servers'] %}
+                <tr>
+                    <td>{{ server.info()['name'] }}</td>
+                    <td>
+                        <pre style="font-size: 10pt">{% for key in server.data["keys"] %}{% if key.key_id == client['name'] %}{{ key.access_url }}{% endif %}{% endfor %}</pre>
+                    </td>
+                </tr>
+                {% endif %}
+            {% endfor %}
+            </tbody>
+        </table>
     </div>
-    {% endif %}
-</div>
+    <hr>
+    </div>
+         <form action="/del_client" class="pure-form pure-form-stacked" method="POST">
+            <input type="hidden" class="pure-u-1" name="name" required value="{{client['name']}}"/>
+            <input type="hidden" class="pure-u-1" name="user_id" value="{{selected_client}}"/>
+            <button type="submit" class="pure-button button-error pure-input-1 ">Delete</button>
+         </form>
+    </div>
+    </div>
+{% endif %}
+
 {% endblock %}
