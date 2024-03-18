@@ -44,31 +44,25 @@ def write_config(config):
             body=config_map,
         )
 
-config.load_incluster_config()
-
-v1 = client.CoreV1Api()
 
 NAMESPACE = False
 SERVERS = list()
 CONFIG = None
 
-log.info("Checking for Kubernetes environment")
 try:
+    config.load_incluster_config()
+    v1 = client.CoreV1Api()
     with open("/var/run/secrets/kubernetes.io/serviceaccount/namespace") as f:
         NAMESPACE = f.read().strip()
-        log.info(f"Found Kubernetes environment. Namespace {NAMESPACE}")
-except IOError:
+    log.info(f"Found Kubernetes environment. Deployed to namespace '{NAMESPACE}'")
+except:
     log.info("Kubernetes environment not detected")
-    pass
 
-# config = v1.list_namespaced_config_map(NAMESPACE, label_selector="app=outfleet").items["data"]["config.yaml"]
 try:
     CONFIG = yaml.safe_load(v1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
     log.info(f"ConfigMap config.yaml loaded from Kubernetes API. Servers: {len(CONFIG['servers'])}, Clients: {len(CONFIG['clients'])}")
 except ApiException as e:
     log.warning(f"ConfigMap not found. Fisrt run?")
-
-#servers = v1.list_namespaced_secret(NAMESPACE, label_selector="app=shadowbox")
 
 if not CONFIG:
     log.info(f"Creating new ConfigMap [config-outfleet]")
