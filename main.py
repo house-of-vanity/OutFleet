@@ -36,7 +36,7 @@ NAMESPACE = k8s.NAMESPACE
 SERVERS = list()
 BROKEN_SERVERS = list()
 CLIENTS = dict()
-VERSION = '3'
+VERSION = '4'
 HOSTNAME = ""
 app = Flask(__name__)
 CORS(app)
@@ -63,7 +63,6 @@ def update_state():
     BROKEN_SERVERS = list()
     CLIENTS = dict()
     config = get_config()
-
 
     if config:
         HOSTNAME = config.get("ui_hostname", "my-own-SSL-ENABLED-domain.com")
@@ -101,6 +100,7 @@ def index():
             "index.html",
             SERVERS=SERVERS,
             VERSION=VERSION,
+            K8S_NAMESPACE=k8s.NAMESPACE,
             BROKEN_SERVERS=BROKEN_SERVERS,
             nt=request.args.get("nt"),
             nl=request.args.get("nl"),
@@ -135,6 +135,7 @@ def clients():
             SERVERS=SERVERS,
             CLIENTS=CLIENTS,
             VERSION=VERSION,
+            K8S_NAMESPACE=k8s.NAMESPACE,
             nt=request.args.get("nt"),
             nl=request.args.get("nl"),
             selected_client=request.args.get("selected_client"),

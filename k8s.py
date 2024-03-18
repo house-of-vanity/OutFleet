@@ -67,7 +67,7 @@ try:
                 CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
                 log.info("Created new ConfigMap [config-outfleet]")
             except Exception as e:
-                log.info("Failed to create new ConfigMap [config-outfleet] {e}")
+                log.info(f"Failed to create new ConfigMap [config-outfleet] {e}")
     except:
         log.info("Kubernetes environment not detected")
 except:
