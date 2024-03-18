@@ -72,7 +72,7 @@ def write_config(config):
         api_version="v1",
         kind="ConfigMap",
         metadata=client.V1ObjectMeta(
-            name=f"config-outfleet-bkp",
+            name=f"config-outfleet",
             labels={
                 "app": "outfleet",
             }
@@ -86,11 +86,11 @@ def write_config(config):
         )
     except ApiException as e:
         api_response = V1.patch_namespaced_config_map(
-            name="config-outfleet-bkp",
+            name="config-outfleet",
             namespace=NAMESPACE,
             body=config_map,
         )
-    log.info("Updated config in Kubernetes ConfigMap [config-outfleet-bkp]")
+    log.info("Updated config in Kubernetes ConfigMap [config-outfleet]")
 
 NAMESPACE = False
 SERVERS = list()
@@ -100,8 +100,8 @@ V1 = None
 def reload_config():
     global CONFIG
     while True:
-        CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet-bkp", namespace=NAMESPACE).data['config.yaml'])
-        log.debug(f"Synced system config with ConfigMap [config-outfleet-bkp].")
+        CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
+        log.debug(f"Synced system config with ConfigMap [config-outfleet].")
         time.sleep(30)
 
 
@@ -113,15 +113,15 @@ try:
             NAMESPACE = f.read().strip()
         log.info(f"Found Kubernetes environment. Deployed to namespace '{NAMESPACE}'")
         try:
-            CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet-bkp", namespace=NAMESPACE).data['config.yaml'])
+            CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
             log.info(f"ConfigMap loaded from Kubernetes API. Servers: {len(CONFIG['servers'])}, Clients: {len(CONFIG['clients'])}. Started monitoring for changes every minute.")
         except Exception as e:
             try:
                 write_config({"clients": [], "servers": {}, "ui_hostname": "accessible-address.com"})
-                CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet-bkp", namespace=NAMESPACE).data['config.yaml'])
-                log.info("Created new ConfigMap [config-outfleet-bkp]. Started monitoring for changes every minute.")
+                CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
+                log.info("Created new ConfigMap [config-outfleet]. Started monitoring for changes every minute.")
             except Exception as e:
-                log.info(f"Failed to create new ConfigMap [config-outfleet-bkp] {e}")
+                log.info(f"Failed to create new ConfigMap [config-outfleet] {e}")
         thread = threading.Thread(target=reload_config)
         thread.start()
         
