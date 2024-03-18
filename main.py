@@ -12,7 +12,7 @@ import uuid
 import k8s
 from flask import Flask, render_template, request, url_for, redirect
 from flask_cors import CORS
-from lib import Server, write_config, get_config, args
+from lib import Server, write_config, get_config, args, lock
 
 
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
@@ -31,7 +31,6 @@ formatter = logging.Formatter(
 )
 file_handler.setFormatter(formatter)
 log.addHandler(file_handler)
-
 
 CFG_PATH = args.config
 NAMESPACE = k8s.NAMESPACE
@@ -57,42 +56,43 @@ def random_string(length=64):
 
 def update_state():
     while True:
-        global SERVERS
-        global CLIENTS
-        global BROKEN_SERVERS
-        global HOSTNAME
+        with lock:
+            global SERVERS
+            global CLIENTS
+            global BROKEN_SERVERS
+            global HOSTNAME
 
-        SERVERS = list()
-        BROKEN_SERVERS = list()
-        CLIENTS = dict()
-        config = get_config()
+            SERVERS = list()
+            BROKEN_SERVERS = list()
+            CLIENTS = dict()
+            config = get_config()
 
-        if config:
-            HOSTNAME = config.get("ui_hostname", "my-own-SSL-ENABLED-domain.com")
-            servers = config.get("servers", dict())
-            for local_server_id, server_config in servers.items():
-                try:
-                    server = Server(
-                        url=server_config["url"],
-                        cert=server_config["cert"],
-                        comment=server_config["comment"],
-                        local_server_id=local_server_id,
-                    )
-                    SERVERS.append(server)
-                    log.debug(
-                        "Server state updated: %s, [%s]",
-                        server.info()["name"],
-                        local_server_id,
-                    )
-                except Exception as e:
-                    BROKEN_SERVERS.append({
-                        "config": server_config,
-                        "error": e,
-                        "id": local_server_id
-                    })
-                    log.warning("Can't access server: %s - %s", server_config["url"], e)
+            if config:
+                HOSTNAME = config.get("ui_hostname", "my-own-SSL-ENABLED-domain.com")
+                servers = config.get("servers", dict())
+                for local_server_id, server_config in servers.items():
+                    try:
+                        server = Server(
+                            url=server_config["url"],
+                            cert=server_config["cert"],
+                            comment=server_config.get("comment", ''),
+                            local_server_id=local_server_id,
+                        )
+                        SERVERS.append(server)
+                        log.info(
+                            "Server state updated: %s, [%s]",
+                            server.info()["name"],
+                            local_server_id,
+                        )
+                    except Exception as e:
+                        BROKEN_SERVERS.append({
+                            "config": server_config,
+                            "error": e,
+                            "id": local_server_id
+                        })
+                        log.warning("Can't access server: %s - %s", server_config["url"], e)
 
-            CLIENTS = config.get("clients", dict())
+                CLIENTS = config.get("clients", dict())
         time.sleep(40)
 
 
@@ -400,6 +400,9 @@ def sync():
 
 
 if __name__ == "__main__":
-    thread = threading.Thread(target=update_state)
-    thread.start()
+    update_state_thread = threading.Thread(target=update_state)
+    update_state_thread.start()
+    discovery_servers_thread = threading.Thread(target=k8s.discovery_servers)
+    discovery_servers_thread.start()
+    
     app.run(host="0.0.0.0")

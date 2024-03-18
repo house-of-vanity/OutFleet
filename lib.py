@@ -1,5 +1,6 @@
 import argparse
 import logging
+import threading
 from typing import TypedDict, List
 from outline_vpn.outline_vpn import OutlineKey, OutlineVPN
 import yaml
@@ -20,6 +21,9 @@ parser.add_argument(
     default="/usr/local/etc/outfleet/config.yaml",
     help="Config file location",
 )
+
+lock = threading.Lock()
+
 
 args = parser.parse_args()
 def get_config():
