@@ -15,11 +15,13 @@
         .content {
             padding: 10px;
         }
+
         .form-field {
             margin: 5px;
             width: 100%;
         }
     </style>
+
     <!-- Script to make the Menu link work -->
     <!-- Just stripped down version of the js/ui.js script for the side-menu layout -->
     <script>
@@ -56,20 +58,20 @@
             toggleClass(elements.menu, active);
         }
 
-        function handleEvent(e) {
-            var elements = getElements();
+        // function handleEvent(e) {
+        //     var elements = getElements();
 
-            if (e.target.id === elements.menuLink.id) {
-                toggleMenu();
-                e.preventDefault();
-            } else if (elements.menu.className.indexOf('active') !== -1) {
-                toggleMenu();
-            }
-        }
+        //     if (e.target.id === elements.menuLink.id) {
+        //         toggleMenu();
+        //         e.preventDefault();
+        //     } else if (elements.menu.className.indexOf('active') !== -1) {
+        //         toggleMenu();
+        //     }
+        // }
 
-        document.addEventListener('DOMContentLoaded', function () {
-            document.addEventListener('click', handleEvent);
-        });
+        // document.addEventListener('DOMContentLoaded', function () {
+        //     document.addEventListener('click', handleEvent);
+        // });
     </script>
 </head>
 
@@ -79,7 +81,8 @@
         <div class="pure-u-2-24 border" style="background: rgb(37, 42, 58);">
             <div class="content">
                 <div class="nav-inner">
-                    <h1 onclick="location.href='/';" style="cursor:pointer;" class="pure-button">OutFleet {{VERSION}}</h1>
+                    <h1 onclick="location.href='/';" style="cursor:pointer;" class="pure-button">OutFleet {{VERSION}}
+                    </h1>
                     <ul class="pure-menu-list">
                         <li class="pure-menu-item"><a href="/" class="pure-menu-link">Servers</a></li>
                         <li class="pure-menu-item"><a href="/clients" class="pure-menu-link">Clients</a></li>

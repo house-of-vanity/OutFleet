@@ -28,6 +28,28 @@
             </div>
         </div>
         {% endfor %}
+        {% for broken_server in BROKEN_SERVERS %}
+        {% set config = broken_server["config"] %}
+        {% set error = broken_server["error"] %}
+        <div class="server-item server-item-broken">
+            <div onclick="location.href='/?selected_server={{ broken_server['id'] }}&broken=true';">
+                <h5 class="server-name">{{ config.get("name", "None") }}</h5>
+                <h4 class="server-info">API {{ '/'.join(config.get("url", "None").split('/')[0:-1]).split("://")[1] }}
+                </h4>
+                <h4 class="server-info">Client Port: N/D</h4>
+                <h4 class="server-info">Hostname: N/D</h4>
+                <h4 class="server-info">Traffic: N/D</h4>
+                <h4 class="server-info">Version: N/D</h4>
+                <p class="server-comment">
+                    {{ config.get("comment", "None") }}
+
+                </p>
+                <div style="padding: 5px; color: #6a4545; background-color: #f6e9e9; border-radius: 5px;">
+                    {{ error }}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
         <div onclick="location.href='/?add_server=True';" class="server-item server-add ">
             <div class="">
                 +
@@ -71,7 +93,9 @@
     {% else %}
     {% set server = SERVERS[selected_server|int] %}
     {% endif %}
+
     <div class="pure-u-19-24">
+        {% if not is_broken %}
         <div class="">
             <div class="server-content">
                 <div class="server-content-header ">
@@ -81,7 +105,6 @@
                             <span>v.{{server.info()["version"]}} {{server.info()["local_server_id"]}}</span>
                         </p>
                     </div>
-
                 </div>
 
                 {% set ns = namespace(total_bytes=0) %}
@@ -122,19 +145,19 @@
                                 </div>
                                 <div class="">
                                     <label for="url">Server URL</label>
-                                    <input class="form-field" type="text" readonly id="url" class="" name="url"
+                                    <input class="form-field" type="text" disabled id="url" class="" name="url"
                                         value="{{server.info()['url']}}" />
                                 </div>
                                 <div class="">
                                     <label for="cert">Server Access Certificate</label>
-                                    <input class="form-field" type="text" readonly id="cert" class="" name="cert"
+                                    <input class="form-field" type="text" disabled id="cert" class="" name="cert"
                                         value="{{server.info()['cert']}}" />
                                 </div>
                                 <div class="">
                                     Created {{format_timestamp(server.info()['created_timestamp_ms']) }}
                                 </div>
-                                <input class="form-field" type="hidden" readonly id="server_id" class="" name="server_id"
-                                    value="{{server.info()['local_server_id']}}" />
+                                <input class="form-field" type="hidden" readonly id="server_id" class=""
+                                    name="server_id" value="{{server.info()['local_server_id']}}" />
                             </div>
                             <p>Share anonymous metrics</p>
                             <label for="metrics_enabled" class="pure-radio">
@@ -152,14 +175,85 @@
 
                         <input type="hidden" id="really" value="{{ server.info()[" local_server_id"] }}">
                         <label for="really" class="pure-radio">
-                            <button type="submit" class="pure-button pure-button-primary delete-button button">Delete
+                            <button type="submit" id="delete_server"
+                                class="pure-button pure-button-primary delete-button button">Delete
                                 Server 🔒<input type="checkbox" id="agree" name="agree" required></button></label>
-                        
+
                     </form>
 
                 </div>
             </div>
         </div>
+        {% else %}
+
+        {% for server in BROKEN_SERVERS %}
+        {% if server["id"] == selected_server %}
+        {% set config_block = server["config"] %}
+        {% endif %}
+        {% endfor %}
+        {{config_block}} {{id}} 
+        <div class="">
+            <div class="server-content">
+                <div class="server-content-header ">
+                    <div class="">
+                        <h1 class="server-content-title">{{config_block["name"]}}</h1>
+                    </div>
+                </div>
+                <div class="server-content-body">
+                    <form class="pure-form pure-form-aligned" method="POST">
+                        <fieldset>
+                            <div class="">
+                                <div class="">
+                                    <label for="name">Server Name</br>Must be unique. Used for Dynamic Link
+                                        generation.</label>
+                                    <input class="form-field" disabled type="text" id="name" class="" name="name"
+                                        value="No connection" />
+                                </div>
+                                <div class="">
+                                    <label for="comment">Comment</br>Will be used as "Server name" in client
+                                        app.</label>
+                                    <input class="form-field" type="text" id="comment" class="" name="comment"
+                                        value="{{config_block['comment']}}" />
+                                </div>
+                                <div class="">
+                                    <label for="port_for_new_access_keys">Port For New Access Keys</label>
+                                    <input disabled class="form-field" type="text" id="port_for_new_access_keys"
+                                        class="" name="port_for_new_access_keys" value="No connection" />
+                                </div>
+                                <div class="">
+                                    <label for="hostname_for_access_keys">Hostname For Access Keys</label>
+                                    <input disabled class="form-field" type="text" id="hostname_for_access_keys"
+                                        class="" name="hostname_for_access_keys" value="No connection" />
+                                </div>
+                                <div class="">
+                                    <label for="url">Server URL</label>
+                                    <input class="form-field" type="text" id="url" class="" name="url"
+                                        value="{{config_block['url']}}" />
+                                </div>
+                                <div class="">
+                                    <label for="cert">Server Access Certificate</label>
+                                    <input class="form-field" type="text" id="cert" class="" name="cert"
+                                        value="{{config_block['cert']}}" />
+                                </div>
+                                <input class="form-field" readonly id="server_id" class=""
+                                    name="server_id" value="{{ selected_server }}" />
+                            </div>
+                        </fieldset>
+                    </form>
+                    <form action="/del_server" method="post">
+
+                        <input type="hidden" id="really" value="{{ selected_server }}">
+                        <label for="really" class="pure-radio">
+                            <button type="submit" id="delete_server"
+                                class="pure-button pure-button-primary delete-button button">Delete
+                                Server 🔒<input type="checkbox" id="agree" name="agree" required></button></label>
+
+                    </form>
+
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     {% endif %}

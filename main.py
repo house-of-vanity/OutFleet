@@ -6,9 +6,12 @@ import string
 import argparse
 import uuid
 
+
+import k8s
 from flask import Flask, render_template, request, url_for, redirect
 from flask_cors import CORS
 from lib import Server
+
 
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
@@ -34,10 +37,17 @@ parser.add_argument(
     default="/usr/local/etc/outfleet/config.yaml",
     help="Config file location",
 )
+parser.add_argument(
+    "--k8s",
+    default=False,
+    action="store_true",
+    help="Kubernetes Outline server discovery",
+)
 args = parser.parse_args()
 CFG_PATH = args.config
 
 SERVERS = list()
+BROKEN_SERVERS = list()
 CLIENTS = dict()
 VERSION = '3'
 HOSTNAME = ""
@@ -54,12 +64,30 @@ def random_string(length=64):
 
     return "".join(random.choice(letters) for i in range(length))
 
+def get_config():
+    if not args.k8s:
+        try:
+            with open(CFG_PATH, "r") as file:
+                config = yaml.safe_load(file)
+        except:
+            try:
+                with open(CFG_PATH, "w"):
+                    pass
+            except Exception as exp:
+                log.error(f"Couldn't create config. {exp}")
+    else:
+        pass
+
+
 
 def update_state():
     global SERVERS
     global CLIENTS
+    global BROKEN_SERVERS
     global HOSTNAME
+
     SERVERS = list()
+    BROKEN_SERVERS = list()
     CLIENTS = dict()
     config = dict()
     try:
@@ -90,6 +118,11 @@ def update_state():
                     local_server_id,
                 )
             except Exception as e:
+                BROKEN_SERVERS.append({
+                    "config": server_config,
+                    "error": e,
+                    "id": local_server_id
+                })
                 log.warning("Can't access server: %s - %s", server_config["url"], e)
 
         CLIENTS = config.get("clients", dict())
@@ -98,13 +131,16 @@ def update_state():
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "GET":
+        #if request.args.get("broken") == True:
         return render_template(
             "index.html",
             SERVERS=SERVERS,
             VERSION=VERSION,
+            BROKEN_SERVERS=BROKEN_SERVERS,
             nt=request.args.get("nt"),
             nl=request.args.get("nl"),
             selected_server=request.args.get("selected_server"),
+            broken=request.args.get("broken", False),
             add_server=request.args.get("add_server", None),
             format_timestamp=format_timestamp,
         )

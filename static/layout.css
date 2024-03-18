@@ -4,6 +4,7 @@
  */
 body {
     color: #333;
+    word-wrap: break-word;
 }
 
 
@@ -22,8 +23,8 @@ a {
     border-radius: 4px;
 }
 .delete-button {
-    background: #a20c0c;
-    border: 2px solid #310404;
+    background: #9d2c2c;
+    border: 1px solid #480b0b;
     color: #ffffff;
 }
 
@@ -158,6 +159,10 @@ a {
 .server-item-unread {
     border-left: 6px solid #1b98f8;
 }
+.server-item-broken {
+    border-left: 6px solid #880d06;
+}
+
 .server-item:hover {
     background: #d1d0d0;
 }
