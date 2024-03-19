@@ -27,23 +27,24 @@ log.addHandler(file_handler)
 
 def discovery_servers():
     global CONFIG
-    interval = 10
+    interval = 60
     log = logging.getLogger("OutFleet.discovery")
-    with lib.lock:
-        while True:
-            pods = V1.list_namespaced_pod(NAMESPACE, label_selector="app=shadowbox")
-            log.debug(f"Started discovery thread every {interval}")
-            for pod in pods.items:
-                log.debug(f"Found Outline server pod {pod.metadata.name}")
-                container_log = V1.read_namespaced_pod_log(name=pod.metadata.name, namespace=NAMESPACE, container='manager-config-json')
-                secret = json.loads(container_log.replace('\'', '\"'))
-                config = lib.get_config()
-                config_servers = find_server(secret, config["servers"])
-                #log.info(f"config_servers {config_servers}")
-                if len(config_servers) > 0:
-                    log.debug(f"Already exist")
-                    pass
-                else:
+
+    while True:
+        pods = V1.list_namespaced_pod(NAMESPACE, label_selector="app=shadowbox")
+        log.debug(f"Started discovery thread every {interval}")
+        for pod in pods.items:
+            log.debug(f"Found Outline server pod {pod.metadata.name}")
+            container_log = V1.read_namespaced_pod_log(name=pod.metadata.name, namespace=NAMESPACE, container='manager-config-json')
+            secret = json.loads(container_log.replace('\'', '\"'))
+            config = lib.get_config()
+            config_servers = find_server(secret, config["servers"])
+            #log.info(f"config_servers {config_servers}")
+            if len(config_servers) > 0:
+                log.debug(f"Already exist")
+                pass
+            else:
+                with lib.lock:
                     config["servers"][str(uuid.uuid4())] = {
                         "cert": secret["certSha256"],
                         "name": f"{pod.metadata.name}",
@@ -51,7 +52,7 @@ def discovery_servers():
                         "url": secret["apiUrl"],
                     }
                     write_config(config)
-                    log.info(f"Added discovered server")
+                log.info(f"Added discovered server")
         time.sleep(interval)
         
         
@@ -100,7 +101,8 @@ V1 = None
 def reload_config():
     global CONFIG
     while True:
-        CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
+        with lib.lock:
+            CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
         log.debug(f"Synced system config with ConfigMap [config-outfleet].")
         time.sleep(30)
 

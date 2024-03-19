@@ -125,7 +125,7 @@ class Server:
         else:
             return True
 
-    def apply_config(self, config, CFG_PATH):
+    def apply_config(self, config):
         if config.get("name"):
             self.client.set_server_name(config.get("name"))
             self.log.info(
