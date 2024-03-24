@@ -99,13 +99,6 @@ class Server:
             "keys": self.client.get_keys(),
         }
         self.log = logging.getLogger(f'OutFleet.server[{self.data["name"]}]')
-        file_handler = logging.FileHandler("sync.log")
-        file_handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        file_handler.setFormatter(formatter)
-        self.log.addHandler(file_handler)
 
     def info(self) -> ServerDict:
         return self.data
@@ -114,7 +107,7 @@ class Server:
         # Looking for any users with provided name. len(result) != 1 is a problem.
         result = []
         for key in self.client.get_keys():
-            if key.key_id == name:
+            if key.name == name:
                 result.append(name)
                 self.log.info(f"check_client found client `{name}` config is correct.")
         if len(result) != 1:

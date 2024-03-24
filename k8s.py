@@ -10,50 +10,45 @@ import lib
 from kubernetes import client, config as kube_config
 from kubernetes.client.rest import ApiException
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%d-%m-%Y %H:%M:%S",
-)
-
 log = logging.getLogger("OutFleet.k8s")
-file_handler = logging.FileHandler("sync.log")
-file_handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-file_handler.setFormatter(formatter)
-log.addHandler(file_handler)
+
+NAMESPACE = False
+SERVERS = list()
+CONFIG = None
+V1 = None
+K8S_DETECTED = False
+
 
 def discovery_servers():
     global CONFIG
     interval = 60
     log = logging.getLogger("OutFleet.discovery")
 
-    while True:
-        pods = V1.list_namespaced_pod(NAMESPACE, label_selector="app=shadowbox")
-        log.debug(f"Started discovery thread every {interval}")
-        for pod in pods.items:
-            log.debug(f"Found Outline server pod {pod.metadata.name}")
-            container_log = V1.read_namespaced_pod_log(name=pod.metadata.name, namespace=NAMESPACE, container='manager-config-json')
-            secret = json.loads(container_log.replace('\'', '\"'))
-            config = lib.get_config()
-            config_servers = find_server(secret, config["servers"])
-            #log.info(f"config_servers {config_servers}")
-            if len(config_servers) > 0:
-                log.debug(f"Already exist")
-                pass
-            else:
-                with lib.lock:
-                    config["servers"][str(uuid.uuid4())] = {
-                        "cert": secret["certSha256"],
-                        "name": f"{pod.metadata.name}",
-                        "comment": f"{pod.spec.node_name}",
-                        "url": secret["apiUrl"],
-                    }
-                    write_config(config)
-                log.info(f"Added discovered server")
-        time.sleep(interval)
+    if K8S_DETECTED:
+        while True:
+            pods = V1.list_namespaced_pod(NAMESPACE, label_selector="app=shadowbox")
+            log.debug(f"Started discovery thread every {interval}")
+            for pod in pods.items:
+                log.debug(f"Found Outline server pod {pod.metadata.name}")
+                container_log = V1.read_namespaced_pod_log(name=pod.metadata.name, namespace=NAMESPACE, container='manager-config-json')
+                secret = json.loads(container_log.replace('\'', '\"'))
+                config = lib.get_config()
+                config_servers = find_server(secret, config["servers"])
+                #log.info(f"config_servers {config_servers}")
+                if len(config_servers) > 0:
+                    log.debug(f"Already exist")
+                    pass
+                else:
+                    with lib.lock:
+                        config["servers"][str(uuid.uuid4())] = {
+                            "cert": secret["certSha256"],
+                            "name": f"{pod.metadata.name}",
+                            "comment": f"{pod.spec.node_name}",
+                            "url": secret["apiUrl"],
+                        }
+                        write_config(config)
+                    log.info(f"Added discovered server")
+            time.sleep(interval)
         
         
 
@@ -93,10 +88,6 @@ def write_config(config):
         )
     log.info("Updated config in Kubernetes ConfigMap [config-outfleet]")
 
-NAMESPACE = False
-SERVERS = list()
-CONFIG = None
-V1 = None
 
 def reload_config():
     global CONFIG
@@ -110,6 +101,8 @@ def reload_config():
 try:
     kube_config.load_incluster_config()
     V1 = client.CoreV1Api()
+    if V1 != None:
+        K8S_DETECTED = True
     try:
         with open("/var/run/secrets/kubernetes.io/serviceaccount/namespace") as f:
             NAMESPACE = f.read().strip()

@@ -24,9 +24,7 @@ logging.basicConfig(
 )
 
 log = logging.getLogger("OutFleet")
-log.setLevel(logging.INFO)
 file_handler = logging.FileHandler("sync.log")
-file_handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter(
     "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
@@ -363,14 +361,6 @@ def sync():
             lines=lines,
         )
     if request.method == "POST":
-        log = logging.getLogger("sync")
-        file_handler = logging.FileHandler("sync.log")
-        file_handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        file_handler.setFormatter(formatter)
-        log.addHandler(file_handler)
         with lock:
             if request.form.get("wipe") == 'all':
                 for server in SERVERS:
