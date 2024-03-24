@@ -99,13 +99,13 @@ class Server:
             "keys": self.client.get_keys(),
         }
         self.log = logging.getLogger(f'OutFleet.server[{self.data["name"]}]')
-        file_handler = logging.FileHandler("sync.log")
-        file_handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        file_handler.setFormatter(formatter)
-        self.log.addHandler(file_handler)
+        # file_handler = logging.FileHandler("sync.log")
+        # file_handler.setLevel(logging.DEBUG)
+        # formatter = logging.Formatter(
+        #     "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        # )
+        # file_handler.setFormatter(formatter)
+        # self.log.addHandler(file_handler)
 
     def info(self) -> ServerDict:
         return self.data
@@ -114,9 +114,20 @@ class Server:
         # Looking for any users with provided name. len(result) != 1 is a problem.
         result = []
         for key in self.client.get_keys():
-            if key.key_id == name:
+            if key.name == name:
+                # self.log.info("NEW RUN")
                 result.append(name)
                 self.log.info(f"check_client found client `{name}` config is correct.")
+                # self.log.info("self.client:")
+                # self.log.info(self.client)
+                # self.log.info("key.key_id:")                
+                # self.log.info(key.key_id)
+                # self.log.info("key:")                
+                # self.log.info(key)
+                # self.log.info("result:")          
+                # self.log.info(result)
+                # self.log.info("self.client.get_keys():")
+                # self.log.info(self.client.get_keys())
         if len(result) != 1:
             self.log.warning(
                 f"check_client found client `{name}` inconsistent. Found {len(result)} keys."
