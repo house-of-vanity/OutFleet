@@ -5,12 +5,11 @@ import logging
 from datetime import datetime
 import random
 import string
-import argparse
 import uuid
 
 
 import k8s
-from flask import Flask, render_template, request, url_for, redirect
+from flask import Flask, render_template, request, url_for, redirect, jsonify
 from flask_cors import CORS
 from lib import Server, write_config, get_config, args, lock
 
@@ -94,7 +93,6 @@ def update_state(timer=40):
             break
         time.sleep(40)
 
-
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "GET":
@@ -112,6 +110,33 @@ def index():
             add_server=request.args.get("add_server", None),
             format_timestamp=format_timestamp,
         )
+    elif request.method == "POST":
+        server = request.form["server_id"]
+        server = next(
+            (item for item in SERVERS if item.info()["local_server_id"] == server), None
+        )
+        server.apply_config(request.form)
+        update_state(timer=0)
+        return redirect(
+            url_for(
+                "index",
+                nt="Updated Outline VPN Server",
+                selected_server=request.args.get("selected_server"),
+            )
+        )
+    else:
+        return redirect(url_for("index"))
+
+@app.route("/servers", methods=["GET", "POST"])
+@app.route("/servers/<string:local_server_id>", methods=["GET", "POST", "DELETE"])
+def servers(local_server_id=None):
+    if local_server_id:
+        log.info(f"Got {local_server_id} Config {get_config()}")
+        server = get_config()['servers'].get(local_server_id, None)
+        return jsonify(server)
+    if request.method == "GET":
+        return jsonify({ "servers": get_config()['servers']})
+
     elif request.method == "POST":
         server = request.form["server_id"]
         server = next(

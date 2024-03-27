@@ -92,8 +92,9 @@ def write_config(config):
 def reload_config():
     global CONFIG
     while True:
+        new_config = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
         with lib.lock:
-            CONFIG = yaml.safe_load(V1.read_namespaced_config_map(name="config-outfleet", namespace=NAMESPACE).data['config.yaml'])
+            CONFIG = new_config
         log.debug(f"Synced system config with ConfigMap [config-outfleet].")
         time.sleep(30)
 
