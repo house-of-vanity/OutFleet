@@ -36,7 +36,7 @@ NAMESPACE = k8s.NAMESPACE
 SERVERS = list()
 BROKEN_SERVERS = list()
 CLIENTS = dict()
-VERSION = '5'
+VERSION = '6'
 HOSTNAME = ""
 app = Flask(__name__)
 CORS(app)
