@@ -33,10 +33,19 @@ def get_config():
         try:
             with open(args.config, "r") as file:
                 config = yaml.safe_load(file)
+                if config == None:
+                    config = {
+                        "servers": {},
+                        "clients": {}
+                    }
         except:
             try:
                 with open(args.config, "w"):
-                    pass
+                    config = {
+                        "servers": {},
+                        "clients": {}
+                    }
+                    yaml.safe_dump(config, file)
             except Exception as exp:
                 log.error(f"Couldn't create config. {exp}")
                 return None
