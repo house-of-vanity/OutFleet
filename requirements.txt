@@ -3,3 +3,4 @@ kubernetes
 PyYAML>=6.0.1
 Flask>=2.3.3
 flask-cors
+bcrypt

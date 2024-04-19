@@ -7,11 +7,13 @@ import random
 import string
 import argparse
 import uuid
+import bcrypt
 
 
 import k8s
 from flask import Flask, render_template, request, url_for, redirect
 from flask_cors import CORS
+from werkzeug.routing import BaseConverter
 from lib import Server, write_config, get_config, args, lock
 
 
@@ -22,6 +24,15 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     datefmt="%d-%m-%Y %H:%M:%S",
 )
+
+app = Flask(__name__)
+
+class RegexConverter(BaseConverter):
+    def __init__(self, url_map, *items):
+        super(RegexConverter, self).__init__(url_map)
+        self.regex = items[0]
+
+app.url_map.converters['regex'] = RegexConverter
 
 log = logging.getLogger("OutFleet")
 file_handler = logging.FileHandler("sync.log")
@@ -37,7 +48,9 @@ SERVERS = list()
 BROKEN_SERVERS = list()
 CLIENTS = dict()
 VERSION = '6'
+SECRET_LINK_LENGTH = 8
 HOSTNAME = ""
+WRONG_DOOR = "Hey buddy, i think you got the wrong door the leather-club is two blocks down"
 app = Flask(__name__)
 CORS(app)
 
@@ -52,9 +65,7 @@ def random_string(length=64):
     return "".join(random.choice(letters) for i in range(length))
 
 
-
 def update_state(timer=40):
-    
     while True:
         with lock:
             global SERVERS
@@ -181,6 +192,7 @@ def add_server():
                 )
             )
 
+
 @app.route("/del_server", methods=["POST"])
 def del_server():
     if request.method == "POST":
@@ -302,8 +314,64 @@ def del_client():
     return redirect(url_for("clients", nt="User has been deleted"))
 
 
+@app.route("/dynamic/<hash_secret>", methods=["GET"], strict_slashes=False)
+def dynamic(hash_secret):
+    try:
+        short_hash_server = hash_secret[0:SECRET_LINK_LENGTH]
+        short_hash_client = hash_secret[SECRET_LINK_LENGTH:SECRET_LINK_LENGTH * 2 ]
+        client_provided_secret = hash_secret[SECRET_LINK_LENGTH * 2:]
+        hash_server = None
+        hash_client = None
+        server = None
+        client = None
+        log.info(f"short_hash_server {short_hash_server} short_hash_client {short_hash_client} client_provided_secret {client_provided_secret}")
+        for _server in SERVERS:
+            if _server.data["local_server_id"][:SECRET_LINK_LENGTH] == short_hash_server:
+                hash_server = _server.data["local_server_id"]
+                server = _server
+        
+        for client_id, values in CLIENTS.items():
+            if client_id[:SECRET_LINK_LENGTH] == short_hash_client:
+                hash_client = client_id
+                client = CLIENTS[client_id]
+
+        if server and client:
+            client_shadowsocks_key = next(
+                (item for item in server.data["keys"] if item.key_id == client["name"]), None
+            )
+
+            salt = bcrypt.gensalt()
+            secret_string = hash_server + hash_client
+            hash_password = bcrypt.hashpw(
+                password=secret_string.encode('utf-8'),
+                salt=salt
+            )
+            hash_password = 
+            log.info(f"")
+            log.info(f"got srv {short_hash_server}, clt {short_hash_client}, correct secret {hash_password}")
+            check_secret_hash = bcrypt.checkpw(
+                password=secret_string.encode('utf-8'),
+                hashed_password=client_provided_secret.encode('utf-8')
+            )
+            if check_secret_hash:
+                return {
+                    "server": server.data["hostname_for_access_keys"],
+                    "server_port": client_shadowsocks_key.port,
+                    "password": client_shadowsocks_key.password,
+                    "method": client_shadowsocks_key.method,
+                    "info": "Managed by OutFleet [github.com/house-of-vanity/OutFleet/]",
+                }
+            else:
+                return WRONG_DOOR
+        else:
+            return WRONG_DOOR
+    except Exception as e:
+        log.info(f"EXP: {e}")
+        return WRONG_DOOR
+
+
 @app.route("/dynamic/<server_name>/<client_id>", methods=["GET"], strict_slashes=False)
-def dynamic(server_name, client_id):
+def dynamic_depticated(server_name, client_id):
     try:
         client = next(
             (keys for client, keys in CLIENTS.items() if client == client_id), None
@@ -332,18 +400,17 @@ def dynamic(server_name, client_id):
                 client["name"],
                 server.data["name"],
             )
-            return "Hey buddy, i think you got the wrong door the leather-club is two blocks down"
+            return WRONG_DOOR
     except:
         log.warning("Hack attempt! Client or server doesn't exist. SCAM")
-        return "Hey buddy, i think you got the wrong door the leather-club is two blocks down"
+        return WRONG_DOOR
 
 
-@app.route("/dynamic/", methods=["GET"], strict_slashes=False)
+
+@app.route("/dynamic", methods=["GET"], strict_slashes=False)
 def _dynamic():
     log.warning("Hack attempt! Client or server doesn't exist. SCAM")
-    return (
-        "Hey buddy, i think you got the wrong door the leather-club is two blocks down"
-    )
+    return WRONG_DOOR
 
 
 @app.route("/sync", methods=["GET", "POST"])
@@ -391,6 +458,7 @@ def sync():
                         )
         update_state(timer=0)
         return redirect(url_for("sync"))
+
 
 
 if __name__ == "__main__":
