@@ -126,10 +126,15 @@ Same keys will work simultaneously on many devices.
             <tbody>
             {% for server in SERVERS %}
                 {% if server.info()['local_server_id'] in client['servers'] %}
+                {% set salt = bcrypt.gensalt() %}
+                {% set secret_string = server.info()['local_server_id'] + selected_client %}
+                {% set hash_secret = bcrypt.hashpw(
+                    password=secret_string.encode('utf-8'),
+                    salt=salt).decode('utf-8') %}
                 <tr>
                     <td>{{ server.info()['name'] }}</td>
                     <td>
-                        <p style="font-size: 10pt">{% for key in server.data["keys"] %}{% if key.key_id == client['name'] %}ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['name']}}/{{selected_client}}#{{server.info()['comment']}}{% endif %}{% endfor %}</p>
+                        <p style="font-size: 10pt">{% for key in server.data["keys"] %}{% if key.key_id == client['name'] %}ssconf://{{ dynamic_hostname }}/dynamic/{{server.info()['local_server_id'][0:SECRET_LINK_LENGTH]}}{{selected_client[0:SECRET_LINK_LENGTH]}}{{hash_secret[SECRET_LINK_PREFIX|length:]}}#{{server.info()['comment']}}{% endif %}{% endfor %}</p>
                     </td>
                 </tr>
                 {% endif %}

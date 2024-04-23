@@ -47,8 +47,10 @@ NAMESPACE = k8s.NAMESPACE
 SERVERS = list()
 BROKEN_SERVERS = list()
 CLIENTS = dict()
-VERSION = '6'
+VERSION = '7'
 SECRET_LINK_LENGTH = 8
+SECRET_LINK_PREFIX = '$2b$12$'
+SS_PREFIX = "\u0005\u00DC\u005F\u00E0\u0001\u0020"
 HOSTNAME = ""
 WRONG_DOOR = "Hey buddy, i think you got the wrong door the leather-club is two blocks down"
 app = Flask(__name__)
@@ -147,8 +149,11 @@ def clients():
         return render_template(
             "clients.html",
             SERVERS=SERVERS,
+            bcrypt=bcrypt,
             CLIENTS=CLIENTS,
             VERSION=VERSION,
+            SECRET_LINK_LENGTH=SECRET_LINK_LENGTH,
+            SECRET_LINK_PREFIX=SECRET_LINK_PREFIX,
             K8S_NAMESPACE=k8s.NAMESPACE,
             nt=request.args.get("nt"),
             nl=request.args.get("nl"),
@@ -314,8 +319,15 @@ def del_client():
     return redirect(url_for("clients", nt="User has been deleted"))
 
 
-@app.route("/dynamic/<hash_secret>", methods=["GET"], strict_slashes=False)
+@app.route("/dynamic/<path:hash_secret>", methods=["GET"], strict_slashes=False)
 def dynamic(hash_secret):
+    # Depricated scheme.
+    for server in SERVERS:
+        if hash_secret.startswith(server.data["name"]):
+            log.warning("Deprecated key request")
+            server_name = hash_secret.split('/')[0]
+            client_id = hash_secret.split('/')[1]
+            return dynamic_depticated(server_name, client_id)
     try:
         short_hash_server = hash_secret[0:SECRET_LINK_LENGTH]
         short_hash_client = hash_secret[SECRET_LINK_LENGTH:SECRET_LINK_LENGTH * 2 ]
@@ -324,7 +336,6 @@ def dynamic(hash_secret):
         hash_client = None
         server = None
         client = None
-        log.info(f"short_hash_server {short_hash_server} short_hash_client {short_hash_client} client_provided_secret {client_provided_secret}")
         for _server in SERVERS:
             if _server.data["local_server_id"][:SECRET_LINK_LENGTH] == short_hash_server:
                 hash_server = _server.data["local_server_id"]
@@ -336,41 +347,37 @@ def dynamic(hash_secret):
                 client = CLIENTS[client_id]
 
         if server and client:
+
             client_shadowsocks_key = next(
                 (item for item in server.data["keys"] if item.key_id == client["name"]), None
             )
 
-            salt = bcrypt.gensalt()
             secret_string = hash_server + hash_client
-            hash_password = bcrypt.hashpw(
-                password=secret_string.encode('utf-8'),
-                salt=salt
-            )
-            hash_password = 
-            log.info(f"")
-            log.info(f"got srv {short_hash_server}, clt {short_hash_client}, correct secret {hash_password}")
             check_secret_hash = bcrypt.checkpw(
                 password=secret_string.encode('utf-8'),
-                hashed_password=client_provided_secret.encode('utf-8')
+                hashed_password=f"{SECRET_LINK_PREFIX}{client_provided_secret}".encode('utf-8')
             )
             if check_secret_hash:
+                log.info(f"Client {client['name']} has been requested ssconf for {server.data['name']}. Bcrypt client hash {client_provided_secret[0:16]}...[FULL HASH SECURED]")
                 return {
                     "server": server.data["hostname_for_access_keys"],
                     "server_port": client_shadowsocks_key.port,
                     "password": client_shadowsocks_key.password,
                     "method": client_shadowsocks_key.method,
+                    "prefix": SS_PREFIX,
                     "info": "Managed by OutFleet [github.com/house-of-vanity/OutFleet/]",
                 }
             else:
+                log.warning(f"Hack attempt! Client secret does not match: {client_provided_secret}")
                 return WRONG_DOOR
         else:
+            log.warning(f"Hack attempt! Client or server doesn't exist. payload: {hash_secret[0:200]}")
             return WRONG_DOOR
     except Exception as e:
-        log.info(f"EXP: {e}")
+        log.error(f"Dynamic V2 parse error: {e}")
         return WRONG_DOOR
 
 
-@app.route("/dynamic/<server_name>/<client_id>", methods=["GET"], strict_slashes=False)
 def dynamic_depticated(server_name, client_id):
     try:
         client = next(
@@ -385,13 +392,14 @@ def dynamic_depticated(server_name, client_id):
         if server and client and key:
             if server.data["local_server_id"] in client["servers"]:
                 log.info(
-                    "Client %s wants ssconf for %s", client["name"], server.data["name"]
+                    "Client %s has been requested ssconf for %s", client["name"], server.data["name"]
                 )
                 return {
                     "server": server.data["hostname_for_access_keys"],
                     "server_port": key.port,
                     "password": key.password,
                     "method": key.method,
+                    "prefix":SS_PREFIX,
                     "info": "Managed by OutFleet [github.com/house-of-vanity/OutFleet/]",
                 }
         else:
