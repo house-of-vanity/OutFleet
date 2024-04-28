@@ -383,6 +383,7 @@ a {
         "menu entety-menu content";
     height: var(--app-h);
     justify-content: left;
+    overflow: hidden;
 }
 
 #menu {
@@ -402,9 +403,19 @@ a {
 #content {
     grid-area: content;
     height: 100%;
+    overflow: auto;
 }
 
+.srcollable-list-content {
+    overflow-y: auto;
+}
 @media (max-width: 60em) {
+    #entety-menu {
+        width: 200px;
+    }
+}
+
+@media (max-width: 40em) {
     #layout {
         display: grid;
         grid-template-areas:
@@ -423,4 +434,42 @@ a {
         width: 100vw;
         height: initial;
     }
+
+    .srcollable-list-content{
+        display: flex;
+        overflow-y: auto;
+        scroll-snap-type: x mandatory;
+        column-gap: var(--app-space-1);
+    }
+
+    .srcollable-list-content > * {
+        scroll-snap-align: start;
+        flex-grow: 0;
+        flex-shrink: 0;
+        flex-basis: 250px;
+    }
+
+}
+
+.hidden {
+    display: none;
+}
+
+.server-checkbox {
+    display: flex;
+    
+}
+
+.server-checkbox input {
+    margin-right: 8px;
+}
+
+.pure-form-message {
+    padding: 0.2em;
+}
+#search-form {
+    padding: var(--app-space-1);
+}
+#entety-menu-search {
+    width: 100%;
 }

@@ -120,6 +120,33 @@
             document.addEventListener('click', handleEvent);
         });
     </script>
+    <script>
+        // Поиск по скписк в подменю
+        // entety-menu-search
+        const searchBox = document.getElementById('entety-menu-search')
+        searchBox.addEventListener('change', (event)=>{
+            const text = event.target.value
+            const child = Array.from(document.querySelector('[data-search-box]').children)
+
+            child.forEach((element)=>{
+                if(text.length === 0){
+                    element.classList.remove('hidden')
+                    return
+                }
+                const elementSearchData = element.querySelector('[data-search]').textContent
+                const isEqual = elementSearchData.toLowerCase().includes(text.toLowerCase())
+                if(isEqual){
+                    element.classList.remove('hidden')
+                } else {
+                    element.classList.add('hidden')
+                }
+            })
+
+        })
+
+    </script>
+
+
     {% if nt %}
     <label>
         <input type="checkbox" class="alertCheckbox" autocomplete="off" />
