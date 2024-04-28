@@ -1,3 +1,11 @@
+:root {
+    --app-h: 100vh;
+    --app-space-1: 8px;
+}
+
+
+
+
 /* 
  * -- BASE STYLES --
  * Most of these are inherited from Base, but I want to change a few.
@@ -22,6 +30,7 @@ a {
 .button {
     border-radius: 4px;
 }
+
 .delete-button {
     background: #9d2c2c;
     border: 1px solid #480b0b;
@@ -32,7 +41,8 @@ a {
  * -- LAYOUT STYLES --
  * This layout consists of three main elements, `#nav` (navigation bar), `#list` (server list), and `#main` (server content). All 3 elements are within `#layout`
  */
-#layout, #nav, #list, #main {
+#nav,
+#main {
     margin: 0;
     padding: 0;
 }
@@ -45,6 +55,7 @@ a {
     background: rgb(37, 42, 58);
     text-align: center;
 }
+
 /* Show the "Menu" button on phones */
 #nav .nav-menu-button {
     display: block;
@@ -55,8 +66,9 @@ a {
 
 /* When "Menu" is clicked, the navbar should be 80% height */
 #nav.active {
-    height: 80%;
+    height: 100%;
 }
+
 /* Don't show the navigation items... */
 .nav-inner {
     display: none;
@@ -78,19 +90,22 @@ a {
     border: none;
     text-align: left;
 }
-    #nav .pure-menu-link:hover,
-    #nav .pure-menu-link:focus {
-        background: rgb(55, 60, 90);
-    }
-    #nav .pure-menu-link {
-        color: #fff;
-        margin-left: 0.5em;
-    }
-    #nav .pure-menu-heading {
-        border-bottom: none;
-        font-size:110%;
-        color: rgb(75, 113, 151);
-    }
+
+#nav .pure-menu-link:hover,
+#nav .pure-menu-link:focus {
+    background: rgb(55, 60, 90);
+}
+
+#nav .pure-menu-link {
+    color: #fff;
+    margin-left: 0.5em;
+}
+
+#nav .pure-menu-heading {
+    border-bottom: none;
+    font-size: 110%;
+    color: rgb(75, 113, 151);
+}
 
 
 /*
@@ -110,94 +125,118 @@ a {
     margin-right: 0.5em;
     border-radius: 3px;
 }
+
 .server-label-personal {
     background: #ffc94c;
 }
+
 .server-label-work {
     background: #41ccb4;
 }
+
 .server-label-travel {
     background: #40c365;
 }
 
 
 /* server Item Styles */
-.server-item {
-    padding: 0.9em 1em;
-    border-bottom: 1px solid #ddd;
-    border-left: 6px solid transparent;
+.server-content-title {
+    padding: var(--app-space-1);
+    /* color: #ffffff; */
 }
-    .server-name {
-        text-transform: uppercase;
-    }
-    .server-name,
-    .server-info {
-        margin: 0;
-        font-size: 100%;
-    }
-    .server-info {
-        color: #999;
-        font-size: 80%;
-    }
-    .server-comment {
-        font-size: 90%;
-        margin: 0.4em 0;
-    }
-    .server-add {
-        cursor: pointer;
-        text-align: center;
-        font-size: 150%;
-        color: #999;
-    }
-    .server-add:hover {
-        color: black;
-    }
 
-.server-item-selected {
-    background: #eeeeee;
-}
-.server-item-unread {
-    border-left: 6px solid #1b98f8;
-}
-.server-item-broken {
-    border-left: 6px solid #880d06;
+.server-item {
+    padding: var(--app-space-1);
+    /* color: #ffffff; */
+    cursor: pointer;
 }
 
 .server-item:hover {
     background: #d1d0d0;
 }
 
+.server-name {
+    text-transform: uppercase;
+}
+
+.server-name,
+.server-info {
+    margin: 0;
+    font-size: 100%;
+}
+
+.server-info {
+    color: #999;
+    font-size: 80%;
+}
+
+.server-comment {
+    font-size: 90%;
+    margin: 0.4em 0;
+}
+
+.server-add {
+    cursor: pointer;
+    text-align: center;
+    font-size: 150%;
+    color: #999;
+}
+
+.server-add:hover {
+    color: black;
+}
+
+.server-item-selected {
+    background: #eeeeee;
+}
+
+.server-item-unread {
+    border-left: 6px solid #1b98f8;
+}
+
+.server-item-broken {
+    border-left: 6px solid #880d06;
+}
+
+
 /* server Content Styles */
-.server-content-header, .server-content-body, .server-content-footer {
+.server-content-header,
+.server-content-body,
+.server-content-footer {
     padding: 1em 2em;
 }
-    .server-content-header {
-        border-bottom: 1px solid #ddd;
-    }
 
-        .server-content-title {
-            margin: 0.5em 0 0;
-        }
-        .server-content-subtitle {
-            font-size: 1em;
-            margin: 0;
-            font-weight: normal;
-        }
-            .server-content-subtitle span {
-                color: #999;
-            }
-    .server-content-controls {
-        margin-top: 2em;
-        text-align: right;
-    }
-        .server-content-controls .secondary-button {
-            margin-bottom: 0.3em;
-        }
+.server-content-header {
+    border-bottom: 1px solid #ddd;
+}
 
-    .server-avatar {
-        width: 40px;
-        height: 40px;
-    }
+.server-content-title {
+    margin: 0.5em 0 0;
+}
+
+.server-content-subtitle {
+    font-size: 1em;
+    margin: 0;
+    font-weight: normal;
+}
+
+.server-content-subtitle span {
+    color: #999;
+}
+
+.server-content-controls {
+    margin-top: 2em;
+    text-align: right;
+}
+
+.server-content-controls .secondary-button {
+    margin-bottom: 0.3em;
+}
+
+.server-avatar {
+    width: 40px;
+    height: 40px;
+}
 
 
 /*
@@ -207,22 +246,17 @@ a {
  */
 @media (min-width: 40em) {
 
-    /* Move the layout over so we can fit the nav + list in on the left */
-    #layout {
-        padding-left:500px;
-        position: relative;
-    }
-
     /* These are position:fixed; elements that will be in the left 500px of the screen */
-    #nav, #list {
+    #nav {
         position: fixed;
         top: 0;
         bottom: 0;
         overflow: auto;
     }
+
     #nav {
-        margin-left:-500px;
-        width:150px;
+        /* margin-left: -500px; */
+        width: 150px;
         height: 100%;
     }
 
@@ -237,12 +271,6 @@ a {
         display: none;
     }
 
-    #list {
-        margin-left: -350px;
-        width: 100%;
-        height: 33%;
-        border-bottom: 1px solid #ddd;
-    }
 
     #main {
         position: fixed;
@@ -251,7 +279,8 @@ a {
         bottom: 0;
         left: 150px;
         overflow: auto;
-        width: auto; /* so that it's not 100% */
+        width: auto;
+        /* so that it's not 100% */
     }
 
 }
@@ -264,12 +293,7 @@ a {
 @media (min-width: 60em) {
 
     /* This will take up the entire height, and be a little thinner */
-    #list {
-        margin-left: -350px;
-        width:350px;
-        height: 100%;
-        border-right: 1px solid #ddd;
-    }
+
 
     /* This will now take up it's own column, so don't need position: fixed; */
     #main {
@@ -281,72 +305,122 @@ a {
 
 
 .alert {
-  position: absolute;
-  top: 1em;
-  right: 1em;
-  width: auto;
-  height: auto;
-  padding: 10px;
-  margin: 10px;
-  line-height: 1.8;
-  border-radius: 5px;
-  cursor: hand;
-  cursor: pointer;
-  font-family: sans-serif;
-  font-weight: 400;
+    position: absolute;
+    top: 1em;
+    right: 1em;
+    width: auto;
+    height: auto;
+    padding: 10px;
+    margin: 10px;
+    line-height: 1.8;
+    border-radius: 5px;
+    cursor: hand;
+    cursor: pointer;
+    font-family: sans-serif;
+    font-weight: 400;
 }
 
 .alertCheckbox {
-  display: none;
+    display: none;
 }
 
-:checked + .alert {
-  display: none;
+:checked+.alert {
+    display: none;
 }
 
 .alertText {
-  display: table;
-  margin: 0 auto;
-  text-align: center;
-  font-size: 150%;
+    display: table;
+    margin: 0 auto;
+    text-align: center;
+    font-size: 150%;
 }
 
 .alertClose {
-  float: right;
-  padding-top: 0px;
-  font-size: 120%;
+    float: right;
+    padding-top: 0px;
+    font-size: 120%;
 }
 
 .clear {
-  clear: both;
+    clear: both;
 }
 
 .info {
-  background-color: #EEE;
-  border: 1px solid #DDD;
-  color: #999;
+    background-color: #EEE;
+    border: 1px solid #DDD;
+    color: #999;
 }
 
 .success {
-  background-color: #EFE;
-  border: 1px solid #DED;
-  color: #9A9;
+    background-color: #EFE;
+    border: 1px solid #DED;
+    color: #9A9;
 }
 
 .notice {
-  background-color: #EFF;
-  border: 1px solid #DEE;
-  color: #9AA;
+    background-color: #EFF;
+    border: 1px solid #DEE;
+    color: #9AA;
 }
 
 .warning {
-  background-color: #FDF7DF;
-  border: 1px solid #FEEC6F;
-  color: #C9971C;
+    background-color: #FDF7DF;
+    border: 1px solid #FEEC6F;
+    color: #C9971C;
 }
 
 .error {
-  background-color: #FEE;
-  border: 1px solid #EDD;
-  color: #A66;
+    background-color: #FEE;
+    border: 1px solid #EDD;
+    color: #A66;
+}
+
+
+
+#layout {
+    display: grid;
+    grid-template-areas:
+        "menu entety-menu content";
+    height: var(--app-h);
+    justify-content: left;
+}
+
+#menu {
+    grid-area: menu;
+    width: 150px;
+    height: 100%;
+    background-color: #333;
+}
+
+#entety-menu {
+    grid-area: entety-menu;
+    width: 300px;
+    height: 100%;
+    background-color: #fff;
+}
+
+#content {
+    grid-area: content;
+    height: 100%;
+}
+
+@media (max-width: 60em) {
+    #layout {
+        display: grid;
+        grid-template-areas:
+            "menu"
+            "entety-menu"
+            "content";
+        grid-template-rows: min-content min-content;
+    }
+
+    #menu {
+        width: 100vw;
+        height: fit-content;
+    }
+    
+    #entety-menu {
+        width: 100vw;
+        height: initial;
+    }
 }
