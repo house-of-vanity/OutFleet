@@ -17,19 +17,12 @@ from werkzeug.routing import BaseConverter
 from lib import Server, write_config, get_config, args, lock
 
 class DuplicateFilter(logging.Filter):
-    def __init__(self, interval=100):
-        super(DuplicateFilter, self).__init__()
-        self.msgs = {}
-        self.interval = interval
 
     def filter(self, record):
-        msg = record.getMessage()
-        if msg not in self.msgs:
-            self.msgs[msg] = 0
-        self.msgs[msg] += 1
-
-        # Print every nth message, where n is the interval
-        if self.msgs[msg] % self.interval == 0:
+        # add other fields if you need more granular comparison, depends on your app
+        current_log = (record.module, record.levelno, record.msg)
+        if current_log != getattr(self, "last_log", None):
+            self.last_log = current_log
             return True
         return False
 
@@ -48,7 +41,7 @@ formatter = logging.Formatter(
 )
 file_handler.setFormatter(formatter)
 log.addHandler(file_handler)
-duplicate_filter = DuplicateFilter(interval=100)
+duplicate_filter = DuplicateFilter()
 log.addFilter(duplicate_filter)
 
 CFG_PATH = args.config
