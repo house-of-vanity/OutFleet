@@ -16,6 +16,22 @@ from flask_cors import CORS
 from werkzeug.routing import BaseConverter
 from lib import Server, write_config, get_config, args, lock
 
+class DuplicateFilter(logging.Filter):
+    def __init__(self, interval=100):
+        super(DuplicateFilter, self).__init__()
+        self.msgs = {}
+        self.interval = interval
+
+    def filter(self, record):
+        msg = record.getMessage()
+        if msg not in self.msgs:
+            self.msgs[msg] = 0
+        self.msgs[msg] += 1
+
+        # Print every nth message, where n is the interval
+        if self.msgs[msg] % self.interval == 0:
+            return True
+        return False
 
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
@@ -25,15 +41,6 @@ logging.basicConfig(
     datefmt="%d-%m-%Y %H:%M:%S",
 )
 
-app = Flask(__name__)
-
-class RegexConverter(BaseConverter):
-    def __init__(self, url_map, *items):
-        super(RegexConverter, self).__init__(url_map)
-        self.regex = items[0]
-
-app.url_map.converters['regex'] = RegexConverter
-
 log = logging.getLogger("OutFleet")
 file_handler = logging.FileHandler("sync.log")
 formatter = logging.Formatter(
@@ -41,6 +48,8 @@ formatter = logging.Formatter(
 )
 file_handler.setFormatter(formatter)
 log.addHandler(file_handler)
+duplicate_filter = DuplicateFilter(interval=100)
+log.addFilter(duplicate_filter)
 
 CFG_PATH = args.config
 NAMESPACE = k8s.NAMESPACE
