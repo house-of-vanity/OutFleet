@@ -1,17 +1,5 @@
-# Path to log file
-$logFile = $args[3]
-
-# Function to log messages
-function Log-Message {
-    param (
-        [string]$message
-    )
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    "$timestamp - $message" | Out-File -Append -FilePath $logFile
-}
-
 if ($args.Count -lt 2) {
-    Log-Message "Usage: windows_task.ps1 <url> <sslocal_path> <comment> <log_file>"
+    Log-Message "Usage: windows_task.ps1 <url> <sslocal_path> <comment>"
     exit 1
 }
 
