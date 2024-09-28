@@ -1,5 +1,5 @@
 # Path to log file
-$logFile = $args[4]
+$logFile = $args[3]
 
 # Function to log messages
 function Log-Message {
