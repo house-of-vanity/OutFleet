@@ -5,9 +5,9 @@ if ($args.Count -lt 2) {
 
 $url = $args[0]
 $sslocalPath = $args[1]
+$localPort = $args[2]
 
 $localAddr = "localhost"
-$localPort = 1080
 $checkInterval = 60
 $previousPassword = ""
 
