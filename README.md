@@ -82,6 +82,14 @@ server {
 }
 
 ```
+
+#### Setup sslocal service on Windows
+Shadowsocks servers can be used directly with **sslocal**. For automatic and regular password updates, you can create a Task Scheduler job to rotate the passwords when they change, as OutFleet manages the passwords automatically.
+You may run script in Admin PowerShell to create Task for autorun **sslocal** and update connection details automatically using Outfleet API
+```PowerShell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; Invoke-Expression (Invoke-WebRequest -Uri "https://raw.githubusercontent.com/house-of-vanity/OutFleet/refs/heads/master/tools/windows-helper.ps1" -UseBasicParsing).Content
+```
+
 Keep in mind that all user keys are stored in a single **config.yaml** file. If this file is lost, user keys will remain on the servers, but OutFleet will lose the ability to manage them. Handle with extreme caution and use backups.
 
 ## Authors
