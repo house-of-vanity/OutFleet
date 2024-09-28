@@ -1,5 +1,5 @@
 # Path to log file
-$logFile = "$HOME\shadowsocks-rust\sslocal_log.txt"
+$logFile = $args[4]
 
 # Function to log messages
 function Log-Message {
@@ -11,7 +11,7 @@ function Log-Message {
 }
 
 if ($args.Count -lt 2) {
-    Log-Message "Usage: script.ps1 <url> <sslocal_path>"
+    Log-Message "Usage: windows_task.ps1 <url> <sslocal_path> <comment> <log_file>"
     exit 1
 }
 
