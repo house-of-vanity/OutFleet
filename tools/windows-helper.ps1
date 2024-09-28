@@ -1,4 +1,4 @@
-$url = Read-Host "Please enter the URL for the JSON configuration, Use HTTPS:// instead of SS://"
+$url = Read-Host "Please enter the URL for the JSON configuration"
 $comment = Read-Host "Comment [server, country, etc]"
 $port = Read-Host "Please enter the port to use for sslocal"
 
@@ -10,6 +10,13 @@ $scriptUrl = "https://raw.githubusercontent.com/house-of-vanity/OutFleet/refs/he
 $cmdFilePath = "$extractPath\run_${comment}.cmd"
 $taskName = "Shadowsocks_Task_${comment}"
 $logFile = "$extractPath\Log_${comment}.log"
+
+
+if ($url -notmatch "^[a-z]+://") {
+    $url = "https://$url"
+} elseif ($url -like "ssconf://*") {
+    $url = $url -replace "^ssconf://", "https://"
+}
 
 function Test-Admin {
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
