@@ -1,5 +1,17 @@
+# Path to log file
+$logFile = "$HOME\shadowsocks-rust\sslocal_log.txt"
+
+# Function to log messages
+function Log-Message {
+    param (
+        [string]$message
+    )
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    "$timestamp - $message" | Out-File -Append -FilePath $logFile
+}
+
 if ($args.Count -lt 2) {
-    Write-Host "Usage: script.ps1 <url> <sslocal_path>"
+    Log-Message "Usage: script.ps1 <url> <sslocal_path>"
     exit 1
 }
 
@@ -28,6 +40,9 @@ function Start-SSLocal {
     # Kill any existing sslocal process
     Get-Process sslocal -ErrorAction SilentlyContinue | Stop-Process -Force
 
+    # Log the sslocal restart
+    Log-Message "Starting sslocal with method: $method, server: $server, port: $serverPort"
+
     # Start sslocal with the provided arguments
     Start-Process -NoNewWindow -FilePath $sslocalPath -ArgumentList "--local-addr ${localAddr}:${localPort} --server-url $ssUrl"
 }
@@ -45,16 +60,21 @@ while ($true) {
         $server = $json.server
         $serverPort = $json.server_port
 
+        # Log current password and server information
+        Log-Message "Checking server: $server, port: $serverPort"
+
         # Check if the password has changed
         if ($password -ne $previousPassword) {
             # Start/restart sslocal
             Start-SSLocal -method $method -password $password -server $server -serverPort $serverPort
             $previousPassword = $password
-            Write-Host "Password changed, restarting sslocal."
+            Log-Message "Password changed, restarting sslocal."
+        } else {
+            Log-Message "Password has not changed."
         }
 
     } catch {
-        Write-Host "Error occurred: $_"
+        Log-Message "Error occurred: $_"
     }
 
     # Wait for the next check
