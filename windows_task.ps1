@@ -1,5 +1,5 @@
-if ($args.Count -lt 2) {
-    Write-Host "Usage: windows_task.ps1 <url> <sslocal_path> <comment>"
+if ($args.Count -lt 3) {
+    Write-Host "Usage: windows_task.ps1 <url> <sslocal_path> <local_port>"
     exit 1
 }
 
@@ -11,6 +11,24 @@ $localAddr = "localhost"
 $checkInterval = 60
 $previousPassword = ""
 
+# Function to get the process ID of the process listening on a specific port
+function Get-ProcessByPort {
+    param (
+        [int]$port
+    )
+    
+    # Use Get-NetTCPConnection to find the process listening on the given port
+    $connection = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Where-Object { $_.State -eq 'Listen' }
+    
+    if ($connection) {
+        # Get the owning process ID (OwningProcess) from the connection
+        $pid = $connection.OwningProcess
+        return Get-Process -Id $pid -ErrorAction SilentlyContinue
+    } else {
+        return $null
+    }
+}
+
 # Function to start sslocal
 function Start-SSLocal {
     param (
@@ -19,14 +37,18 @@ function Start-SSLocal {
         [string]$server,
         [int]$serverPort
     )
-    
+
     # Form the Shadowsocks connection string
     $credentials = "${method}:${password}@${server}:${serverPort}"
     $encodedCredentials = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($credentials))
     $ssUrl = "ss://$encodedCredentials"
 
-    # Kill any existing sslocal process
-    Get-Process sslocal -ErrorAction SilentlyContinue | Stop-Process -Force
+    # Get the process listening on the specified port and kill it if found
+    $process = Get-ProcessByPort -port $localPort
+    if ($process) {
+        Write-Host "Killing process $($process.Id) using port $localPort"
+        Stop-Process -Id $process.Id -Force
+    }
 
     # Log the sslocal restart
     Write-Host "Starting sslocal with method: $method, server: $server, port: $serverPort"
@@ -68,3 +90,4 @@ while ($true) {
     # Wait for the next check
     Start-Sleep -Seconds $checkInterval
 }
+
