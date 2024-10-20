@@ -39,10 +39,6 @@ def sync_user(id):
                 result[server.name] = server.add_user(user)
             else:
                 result[server.name] = server.delete_user(user)
-
-        except User.DoesNotExist as e:
-            result = {"error": e}
-            logger.error("User not found.")
         except Exception as e:
             errors[server.name] = {"error": e}
         finally:
