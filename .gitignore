@@ -1,0 +1,8 @@
+db.sqlite3
+debug.log
+*.swp
+*.swo
+*.pyc
+staticfiles/
+*.__pycache__.*
+vpn/migrations/

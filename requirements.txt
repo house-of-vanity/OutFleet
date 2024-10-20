@@ -1,0 +1,14 @@
+django-environ==0.11.2
+Django==5.1.2
+celery==5.4.0
+django-jazzmin==3.0.1
+django-polymorphic==3.1.0
+django-cors-headers==4.5.0
+requests==2.32.3
+outline-vpn-api==6.3.0
+Redis==5.1.1
+whitenoise==6.7.0
+psycopg2-binary==2.9.10
+setuptools==75.2.0
+shortuuid==1.0.13
+django-celery-results==2.5.1
