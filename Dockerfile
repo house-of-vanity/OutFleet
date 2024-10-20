@@ -1,13 +1,10 @@
-FROM python:3-alpine
+FROM python:3
 
 WORKDIR /app
 
-COPY requirements.txt .
-COPY static static
-COPY templates templates
-COPY *.py .
-
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 5000
-CMD ["python", "main.py"]
+COPY . .
+
+CMD [ "python", "./manage.py", "runserver", "0.0.0.0:8000" ]
