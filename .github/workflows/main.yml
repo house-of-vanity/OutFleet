@@ -3,7 +3,7 @@ name: Docker hub build
 on:
   push:
     branches:
-      - 'master'
+      - 'django'
 
 jobs:
   docker:
@@ -33,4 +33,4 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ultradesu/outfleet:latest,ultradesu/outfleet:${{ steps.vars.outputs.sha_short }}
+          tags: ultradesu/outfleet:v2,ultradesu/outfleet:${{ steps.vars.outputs.sha_short }}
