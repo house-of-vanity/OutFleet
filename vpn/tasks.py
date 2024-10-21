@@ -47,13 +47,12 @@ def sync_server(id):
     return {"status": Server.objects.get(id=id).sync()}
 
 @shared_task(name="sync_user_on_server")
-def sync_user(user_id, server_id):
+def sync_user(user, server_id):
     from .models import User, ACL
     from vpn.server_plugins import Server
     
     errors = {}
     result = {}
-    user = User.objects.get(id=user_id)
     acls = ACL.objects.filter(user=user)
 
     server = Server.objects.get(id=server_id)

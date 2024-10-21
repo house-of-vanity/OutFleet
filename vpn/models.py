@@ -48,8 +48,8 @@ class ACL(models.Model):
 
 @receiver(post_save, sender=ACL)
 def acl_created_or_updated(sender, instance, created, **kwargs):
-    sync_user.delay_on_commit(instance.user.id, instance.server.id)
+    sync_user.delay_on_commit(instance.user, instance.server.id)
 
 @receiver(pre_delete, sender=ACL)
 def acl_deleted(sender, instance, **kwargs):
-    sync_user.delay_on_commit(instance.user.id, instance.server.id)
+    sync_user.delay_on_commit(instance.user, instance.server.id)
