@@ -27,6 +27,9 @@ class Server(PolymorphicModel):
     def sync(self, *args, **kwargs):
         pass
 
+    def sync_users(self, *args, **kwargs):
+        pass
+
     def add_user(self, *args, **kwargs):
         pass
 

@@ -6,3 +6,4 @@ debug.log
 staticfiles/
 *.__pycache__.*
 vpn/migrations/
+celerybeat-schedule

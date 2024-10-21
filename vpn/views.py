@@ -1,17 +1,15 @@
-from django.shortcuts import render
-
-
-# views.py
-
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse
-from django.utils import timezone
 
 
 def shadowsocks(request, link):
     from .models import ACL
     acl = get_object_or_404(ACL, link=link)
-    server_user = acl.server.get_user(acl.user, raw=True)
+    try:
+        server_user = acl.server.get_user(acl.user, raw=True)
+    except:
+        return JsonResponse({"error": "Couldn't get credentials from server."})
+
     config = {
         "info": "Managed by OutFleet_v2 [github.com/house-of-vanity/OutFleet/]",
         "password": server_user.password,

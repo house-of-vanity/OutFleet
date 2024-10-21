@@ -4,7 +4,7 @@ import requests
 from django.db import models
 from .generic import Server
 from urllib3 import PoolManager
-from outline_vpn.outline_vpn import OutlineVPN, OutlineLibraryException
+from outline_vpn.outline_vpn import OutlineVPN, OutlineServerErrorException
 from polymorphic.admin import PolymorphicChildModelAdmin
 from django.contrib import admin
 from django.utils.safestring import mark_safe
@@ -78,6 +78,22 @@ class OutlineServer(Server):
             status.update({f"error": e})
         return status
     
+    def sync_users(self):
+        from vpn.models import User, ACL
+        logger.debug(f"[{self.name}] Sync all users")
+        keys = self.client.get_keys()
+        acls = ACL.objects.filter(server=self)
+        acl_users = set(acl.user for acl in acls)
+
+        for user in User.objects.all():
+            if user in acl_users:
+                self.add_user(user=user)
+            else:
+                self.delete_user(user=user)
+
+        return True
+
+    
     def sync(self):
         status = {}
         try:
@@ -98,11 +114,7 @@ class OutlineServer(Server):
             raise OutlineConnectionError("Client error. Can't connect.", original_exception=e)
 
     def _get_key(self, user):
-        try:
-            return self.client.get_key(user.hash)
-        except Exception as e:
-            logger.warning(f"sync error: {e}")
-            return None
+        return self.client.get_key(user.hash)
 
     def get_user(self, user, raw=False):
         user_info = self._get_key(user)
@@ -120,29 +132,55 @@ class OutlineServer(Server):
         
 
     def add_user(self, user):
-        server_user = self._get_key(user)
-        logger.warning(server_user)
+        try:
+            server_user = self._get_key(user)
+        except OutlineServerErrorException as e:
+            server_user = None
+        logger.debug(f"[{self.name}] User {str(server_user)}")
+
         result = {}
         key = None
 
         if server_user:
-            self.client.delete_key(user.hash)
-            key = self.client.create_key(
-                name=user.name,
-                method=server_user.method,
-                password=user.hash,
-                data_limit=None,
-                port=server_user.port
-            )
+            if server_user.method != "chacha20-ietf-poly1305" or \
+            server_user.port != int(self.client_port) or \
+            server_user.name != user.name or \
+            server_user.password != user.hash or \
+            self.client.delete_key(user.hash):
+
+                self.delete_user(user)
+                key = self.client.create_key(
+                    key_id=user.hash,
+                    name=user.name,
+                    method=server_user.method,
+                    password=user.hash,
+                    data_limit=None,
+                    port=server_user.port
+                )
+                logger.debug(f"[{self.name}] User {user.name} updated")
         else:
-            key = self.client.create_key(
-                key_id=user.hash,
-                name=user.name,
-                method=server_user.method,
-                password=user.hash,
-                data_limit=None,
-                port=server_user.port
-            )
+            try:
+                key = self.client.create_key(
+                    key_id=user.hash,
+                    name=user.name,
+                    method="chacha20-ietf-poly1305",
+                    password=user.hash,
+                    data_limit=None,
+                    port=int(self.client_port)
+                )
+                logger.info(f"[{self.name}] User {user.name} created")
+            except OutlineServerErrorException as e:
+                error_message = str(e)
+                if "code\":\"Conflict" in error_message:
+                    logger.warning(f"[{self.name}] Conflict for User {user.name}, trying to force sync. {error_message}")
+                    for key in self.client.get_keys():
+                        logger.warning(f"[{self.name}] hash: {user.hash}, password: {key.password}")
+                        if key.password == user.hash:
+                            self.client.delete_key(key.key_id)
+                            logger.warning(f"[{self.name}] Removed orphan key{str(key)}")
+                    return self.add_user(user)
+                else:
+                    raise OutlineConnectionError("API Error", original_exception=e)
         try:
             result['key_id'] = key.key_id
             result['name'] = key.name
@@ -155,16 +193,17 @@ class OutlineServer(Server):
         return result
 
     def delete_user(self, user):
-        server_user = self._get_key(user)
         result = None
+        try:
+            server_user = self._get_key(user)
+        except OutlineServerErrorException as e:
+            return {"status": "User not found on server. Nothing to do."}
 
         if server_user:
             self.logger.info(f"[{self.name}] TEST")
             self.client.delete_key(server_user.key_id)
             result = {"status": "User was deleted"}
             self.logger.info(f"[{self.name}] User deleted: {user.name} on server {self.name}")
-        else:
-            result = {"status": "User absent, nothing to do."}
 
         return result
 

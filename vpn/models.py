@@ -20,7 +20,6 @@ class User(models.Model):
     def save(self, *args, **kwargs):
         if not self.hash:
             self.hash = shortuuid.ShortUUID().random(length=16)
-        sync_user.delay_on_commit(self.id)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -49,11 +48,8 @@ class ACL(models.Model):
 
 @receiver(post_save, sender=ACL)
 def acl_created_or_updated(sender, instance, created, **kwargs):
-    if created:
-        sync_user.delay(instance.user.id)
-    else:
-        pass
+    sync_user.delay_on_commit(instance.user.id, instance.server.id)
 
 @receiver(pre_delete, sender=ACL)
 def acl_deleted(sender, instance, **kwargs):
-    sync_user.delay(instance.user.id)
+    sync_user.delay_on_commit(instance.user.id, instance.server.id)

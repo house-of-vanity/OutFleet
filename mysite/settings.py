@@ -103,6 +103,7 @@ INSTALLED_APPS = [
     'polymorphic',
     'corsheaders',
     'django_celery_results',
+    'django_celery_beat',
     'vpn',
 ]
 
