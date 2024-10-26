@@ -15,7 +15,7 @@ def shadowsocks(request, link):
         "password": server_user.password,
         "method": server_user.method,
         "prefix": "\u0005\u00dc_\u00e0\u0001",
-        "server": acl.server.client_server_name,
+        "server": acl.server.client_hostname,
         "server_port": server_user.port,
         "access_url": server_user.access_url,
     }
