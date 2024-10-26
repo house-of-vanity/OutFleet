@@ -333,7 +333,7 @@ def dynamic(hash_secret):
             log.warning("Deprecated key request")
             server_name = hash_secret.split('/')[0]
             client_id = hash_secret.split('/')[1]
-            return dynamic_depticated(server_name, client_id)
+            return dynamic_depticated(server_name, client_id, hash_secret)
     try:
         short_hash_server = hash_secret[0:SECRET_LINK_LENGTH]
         short_hash_client = hash_secret[SECRET_LINK_LENGTH:SECRET_LINK_LENGTH * 2 ]
@@ -384,7 +384,7 @@ def dynamic(hash_secret):
         return WRONG_DOOR
 
 
-def dynamic_depticated(server_name, client_id):
+def dynamic_depticated(server_name, client_id, hash_secret=""):
     try:
         client = next(
             (keys for client, keys in CLIENTS.items() if client == client_id), None
@@ -400,6 +400,7 @@ def dynamic_depticated(server_name, client_id):
                 log.info(
                     "Client %s has been requested ssconf for %s", client["name"], server.data["name"]
                 )
+                append_to_log(f"User: {client["name"]}. Server: {server.data['name']} client secret string: {hash_secret}")
                 return {
                     "server": server.data["hostname_for_access_keys"],
                     "server_port": key.port,
