@@ -1,6 +1,14 @@
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse
+from django.http import HttpResponse
 
+def print_headers(request):
+    headers = {key: value for key, value in request.META.items() if key.startswith('HTTP_')}
+    
+    for key, value in headers.items():
+        print(f'{key}: {value}')
+    
+    return HttpResponse(f"Headers: {headers}")
 
 def shadowsocks(request, link):
     from .models import ACL

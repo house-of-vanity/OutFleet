@@ -73,7 +73,9 @@ class OutlineServer(Server):
             if raw:
                 status = info
             else:
+                keys = self.client.get_keys()
                 status.update(info)
+                status.update({"keys": len(keys)})
         except Exception as e:
             status.update({f"error": e})
         return status

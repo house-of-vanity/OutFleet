@@ -33,7 +33,6 @@ class ServerAdmin(PolymorphicParentModelAdmin):
         status = obj.get_server_status()
         if 'error' in status:
             return mark_safe(f"<span style='color: red;'>Error: {status['error']}</span>")
-        # Преобразуем JSON в красивый формат
         import json
         pretty_status =  ", ".join(f"{key}: {value}" for key, value in status.items())
         return mark_safe(f"<pre>{pretty_status}</pre>")
