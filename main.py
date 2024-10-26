@@ -321,6 +321,10 @@ def del_client():
     return redirect(url_for("clients", nt="User has been deleted"))
 
 
+def append_to_log(log_entry):
+    with open("access_log.log", "a") as log_file:
+        log_file.write(log_entry + "\n")
+
 @app.route("/dynamic/<path:hash_secret>", methods=["GET"], strict_slashes=False)
 def dynamic(hash_secret):
     # Depricated scheme.
@@ -349,7 +353,7 @@ def dynamic(hash_secret):
                 client = CLIENTS[client_id]
 
         if server and client:
-
+            append_to_log(f"User: {client["name"]}. Server: {server.data['name']} client secret string: {hash_secret}")
             client_shadowsocks_key = next(
                 (item for item in server.data["keys"] if item.key_id == client["name"]), None
             )
