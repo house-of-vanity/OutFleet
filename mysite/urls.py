@@ -21,7 +21,7 @@ from vpn.views import shadowsocks
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('ss/<str:link>', shadowsocks, name='shadowsocks'),
-    path('dynamic/<str:link>', shadowsocks, name='shadowsocks'),
+    path('ss/<path:link>', shadowsocks, name='shadowsocks'),
+    path('dynamic/<path:link>', shadowsocks, name='shadowsocks'),
     path('', RedirectView.as_view(url='/admin/', permanent=False)),
 ]

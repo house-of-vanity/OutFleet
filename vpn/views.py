@@ -7,8 +7,8 @@ def shadowsocks(request, link):
     acl = get_object_or_404(ACL, link=link)
     try:
         server_user = acl.server.get_user(acl.user, raw=True)
-    except:
-        return JsonResponse({"error": "Couldn't get credentials from server."})
+    except Exception as e:
+        return JsonResponse({"error": f"Couldn't get credentials from server. {e}"})
 
     config = {
         "info": "Managed by OutFleet_v2 [github.com/house-of-vanity/OutFleet/]",
