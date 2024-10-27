@@ -109,7 +109,9 @@ INSTALLED_APPS = [
     'vpn',
 ]
 
-
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.RemoteUserBackend",
+]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -118,10 +120,12 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.auth.middleware.RemoteUserMiddleware',
+    'mysite.middleware.AutoLoginMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
-    #'mysite.middleware.AutoLoginMiddleware',
+
 ]
 
 ROOT_URLCONF = 'mysite.urls'
