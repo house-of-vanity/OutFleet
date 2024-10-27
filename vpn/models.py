@@ -10,8 +10,7 @@ from django.contrib.auth.models import AbstractUser
 
 
 class User(AbstractUser):
-    #username = models.CharField(max_length=100)
-    is_active = False
+    #is_active = False
     comment = models.TextField(default="", blank=True)
     registration_date = models.DateTimeField(auto_now_add=True)
     servers = models.ManyToManyField('Server', through='ACL', blank=True)
