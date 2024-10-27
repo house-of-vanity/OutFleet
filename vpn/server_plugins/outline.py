@@ -146,35 +146,35 @@ class OutlineServer(Server):
         if server_user:
             if server_user.method != "chacha20-ietf-poly1305" or \
             server_user.port != int(self.client_port) or \
-            server_user.name != user.name or \
+            server_user.username != user.username or \
             server_user.password != user.hash or \
             self.client.delete_key(user.hash):
 
                 self.delete_user(user)
                 key = self.client.create_key(
                     key_id=user.hash,
-                    name=user.name,
+                    name=user.username,
                     method=server_user.method,
                     password=user.hash,
                     data_limit=None,
                     port=server_user.port
                 )
-                logger.debug(f"[{self.name}] User {user.name} updated")
+                logger.debug(f"[{self.name}] User {user.username} updated")
         else:
             try:
                 key = self.client.create_key(
                     key_id=user.hash,
-                    name=user.name,
+                    name=user.username,
                     method="chacha20-ietf-poly1305",
                     password=user.hash,
                     data_limit=None,
                     port=int(self.client_port)
                 )
-                logger.info(f"[{self.name}] User {user.name} created")
+                logger.info(f"[{self.name}] User {user.username} created")
             except OutlineServerErrorException as e:
                 error_message = str(e)
                 if "code\":\"Conflict" in error_message:
-                    logger.warning(f"[{self.name}] Conflict for User {user.name}, trying to force sync. {error_message}")
+                    logger.warning(f"[{self.name}] Conflict for User {user.username}, trying to force sync. {error_message}")
                     for key in self.client.get_keys():
                         logger.warning(f"[{self.name}] hash: {user.hash}, password: {key.password}")
                         if key.password == user.hash:
@@ -205,7 +205,7 @@ class OutlineServer(Server):
             self.logger.info(f"[{self.name}] TEST")
             self.client.delete_key(server_user.key_id)
             result = {"status": "User was deleted"}
-            self.logger.info(f"[{self.name}] User deleted: {user.name} on server {self.name}")
+            self.logger.info(f"[{self.name}] User deleted: {user.username} on server {self.name}")
 
         return result
 

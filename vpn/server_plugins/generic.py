@@ -42,6 +42,9 @@ class Server(PolymorphicModel):
     class Meta:
         verbose_name = "Server"
         verbose_name_plural = "Servers"
+        permissions = [
+            ("access_server", "Can view public status"),
+        ]
 
     def __str__(self):
         return self.name

@@ -21,6 +21,8 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_RESULT_EXTENDED = True
 
+AUTH_USER_MODEL = "vpn.User"
+
 # CACHES  = {
 #     'default': {
 #         'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
@@ -110,7 +112,6 @@ INSTALLED_APPS = [
 
 
 MIDDLEWARE = [
-    #'mysite.middleware.RequestLogger',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -120,6 +121,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    #'mysite.middleware.AutoLoginMiddleware',
 ]
 
 ROOT_URLCONF = 'mysite.urls'

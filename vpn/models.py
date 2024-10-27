@@ -6,8 +6,12 @@ from django.dispatch import receiver
 from .server_plugins import Server
 import shortuuid
 
-class User(models.Model):
-    name = models.CharField(max_length=100)
+from django.contrib.auth.models import AbstractUser
+
+
+class User(AbstractUser):
+    #username = models.CharField(max_length=100)
+    is_active = False
     comment = models.TextField(default="", blank=True)
     registration_date = models.DateTimeField(auto_now_add=True)
     servers = models.ManyToManyField('Server', through='ACL', blank=True)
@@ -23,7 +27,7 @@ class User(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.name
+        return self.username
 
 
 class ACL(models.Model):
@@ -39,7 +43,7 @@ class ACL(models.Model):
 
     
     def __str__(self):
-        return f"{self.user.name} - {self.server.name}"
+        return f"{self.user.username} - {self.server.name}"
     
     def save(self, *args, **kwargs):
         if not self.link:

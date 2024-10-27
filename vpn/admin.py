@@ -6,6 +6,9 @@ from django.contrib import admin
 from django.utils.safestring import mark_safe
 from django.db.models import Count
 
+from django.contrib.auth.admin import UserAdmin
+from .models import User
+
 from vpn.models import User, ACL
 from vpn.forms import UserForm
 from .server_plugins import (
@@ -43,11 +46,12 @@ class ServerAdmin(PolymorphicParentModelAdmin):
         qs = qs.annotate(user_count=Count('acl'))
         return qs
 
+#admin.site.register(User, UserAdmin)
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
     form = UserForm
-    list_display = ('name', 'comment', 'registration_date', 'hash', 'server_count')
-    search_fields = ('name', 'hash')
+    list_display = ('username', 'comment', 'registration_date', 'hash', 'server_count')
+    search_fields = ('username', 'hash')
     readonly_fields = ('hash',)
 
 
