@@ -93,7 +93,6 @@ class ServerAdmin(PolymorphicParentModelAdmin):
 class UserAdmin(admin.ModelAdmin):
     form = UserForm
     list_display = ('username', 'comment', 'registration_date', 'hash', 'server_count')
-    list_editable = ('hash', )
     search_fields = ('username', 'hash')
     readonly_fields = ('hash',)
 
