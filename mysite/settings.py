@@ -3,6 +3,7 @@ import os
 import environ
 from django.core.management.utils import get_random_secret_key
 
+
 ENV = environ.Env(
     DEBUG=(bool, False)
 )
@@ -22,13 +23,6 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_RESULT_EXTENDED = True
 
 AUTH_USER_MODEL = "vpn.User"
-
-# CACHES  = {
-#     'default': {
-#         'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
-#         'LOCATION': 'cache_table',
-#     }
-# }
 
 DEBUG = ENV('DEBUG')
 
@@ -109,10 +103,6 @@ INSTALLED_APPS = [
     'vpn',
 ]
 
-AUTHENTICATION_BACKENDS = [
-    "django.contrib.auth.backends.RemoteUserBackend",
-]
-
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -120,7 +110,6 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.auth.middleware.RemoteUserMiddleware',
     'mysite.middleware.AutoLoginMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',

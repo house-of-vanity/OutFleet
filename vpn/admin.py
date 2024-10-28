@@ -19,6 +19,11 @@ from .server_plugins import (
     OutlineServerAdmin)
 
 
+admin.site.site_title = "VPN Manager"
+admin.site.site_header = "VPN Manager"
+admin.site.index_title = "OutFleet"
+
+
 @admin.register(Server)
 class ServerAdmin(PolymorphicParentModelAdmin):
     base_model = Server

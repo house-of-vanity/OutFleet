@@ -1,6 +1,5 @@
-from django.urls import resolve
-from django.http import Http404, HttpResponseNotFound
-from django.contrib.auth.middleware import RemoteUserMiddleware
+from django.contrib.auth import authenticate, login
+from django.utils.deprecation import MiddlewareMixin
 
 class RequestLogger:
     def __init__(self, get_response):
@@ -15,5 +14,9 @@ class RequestLogger:
         return response
 
 
-class AutoLoginMiddleware(RemoteUserMiddleware):
-    header = "HTTP_X_AUTHENTIK_USERNAME"
+class AutoLoginMiddleware(MiddlewareMixin):
+    def process_request(self, request):
+        if not request.user.is_authenticated:
+            user = authenticate(username='admin', password='admin')
+            if user:
+                login(request, user)
