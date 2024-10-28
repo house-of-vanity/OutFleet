@@ -50,6 +50,11 @@ class ACL(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {self.server.name}"
+    
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if not self.links.exists():
+            ACLLink.objects.create(acl=self, link=shortuuid.ShortUUID().random(length=16))
 
 @receiver(post_save, sender=ACL)
 def acl_created_or_updated(sender, instance, created, **kwargs):
@@ -62,10 +67,10 @@ def acl_deleted(sender, instance, **kwargs):
 
 class ACLLink(models.Model):
     acl = models.ForeignKey(ACL, related_name='links', on_delete=models.CASCADE)
-    link = models.CharField(max_length=64, unique=True, blank=True, null=True, verbose_name="Access link", help_text="Access link to get dynamic configuration")
+    link = models.CharField(max_length=64, default="", unique=True, blank=True, null=True, verbose_name="Access link", help_text="Access link to get dynamic configuration")
 
     def save(self, *args, **kwargs):
-        if not self.link:
+        if self.link == "":
             self.link = shortuuid.ShortUUID().random(length=16)
         super().save(*args, **kwargs)
 
