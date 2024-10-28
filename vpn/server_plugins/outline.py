@@ -37,11 +37,10 @@ class _FingerprintAdapter(requests.adapters.HTTPAdapter):
 
 class OutlineServer(Server):
     logger = logging.getLogger(__name__)
-    admin_url = models.URLField()
-    admin_access_cert = models.CharField(max_length=255)
-    client_server_name = models.CharField(max_length=255)
-    client_hostname = models.CharField(max_length=255)
-    client_port = models.CharField(max_length=5)
+    admin_url = models.URLField(help_text="Management URL")
+    admin_access_cert = models.CharField(max_length=255, help_text="Fingerprint")
+    client_hostname = models.CharField(max_length=255, help_text="Server address for clients")
+    client_port = models.CharField(max_length=5, help_text="Server port for clients")
     
     class Meta:
         verbose_name = 'Outline'
@@ -146,7 +145,7 @@ class OutlineServer(Server):
         if server_user:
             if server_user.method != "chacha20-ietf-poly1305" or \
             server_user.port != int(self.client_port) or \
-            server_user.username != user.username or \
+            server_user.name != user.username or \
             server_user.password != user.hash or \
             self.client.delete_key(user.hash):
 
@@ -213,19 +212,18 @@ class OutlineServer(Server):
 
 class OutlineServerAdmin(PolymorphicChildModelAdmin):
     base_model = OutlineServer
-    show_in_index = False  # Не отображать в главном списке админки
+    show_in_index = False
     list_display = (
         'name',
         'admin_url',
         'admin_access_cert',
-        'client_server_name',
         'client_hostname',
         'client_port',
-        'server_status_inline',
         'user_count',
-        'registration_date'
+        'server_status_inline',
     )
-    readonly_fields = ('server_status_full', )
+    readonly_fields = ('server_status_full', 'registration_date',)
+    list_editable = ('admin_url', 'admin_access_cert', 'client_hostname', 'client_port',)
     exclude = ('server_type',)
 
     @admin.display(description='Clients', ordering='user_count')

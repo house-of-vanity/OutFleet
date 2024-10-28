@@ -9,9 +9,9 @@ class Server(PolymorphicModel):
         ('Wireguard', 'Wireguard'),
     )
 
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, help_text="Server name")
     comment = models.TextField(default="", blank=True)
-    registration_date = models.DateTimeField(auto_now_add=True)
+    registration_date = models.DateTimeField(auto_now_add=True, verbose_name="Created")
     server_type = models.CharField(max_length=50, choices=SERVER_TYPE_CHOICES, editable=False)
 
     def __init__(self, *args, **kwargs):

@@ -1,21 +1,21 @@
+import json
 from django.shortcuts import get_object_or_404
-from django.http import JsonResponse
-from django.http import HttpResponse
+from django.http import JsonResponse, HttpResponse, Http404
 
-def print_headers(request):
-    headers = {key: value for key, value in request.META.items() if key.startswith('HTTP_')}
-    
-    for key, value in headers.items():
-        print(f'{key}: {value}')
-    
-    return HttpResponse(f"Headers: {headers}")
 
 def shadowsocks(request, link):
-    from .models import ACL
-    acl = get_object_or_404(ACL, link=link)
+    from .models import ACLLink, AccessLog
+    try:
+        acl_link = get_object_or_404(ACLLink, link=link)
+        acl = acl_link.acl
+    except Http404:
+        AccessLog.objects.create(user=None, server="Unknown", action="Failed", data=f"ACL not found for link: {link}")
+        return JsonResponse({"error": "Not allowed"}, status=403)
+    
     try:
         server_user = acl.server.get_user(acl.user, raw=True)
     except Exception as e:
+        AccessLog.objects.create(user=acl.user, server=acl.server.name, action="Failed", data=f"{e}")
         return JsonResponse({"error": f"Couldn't get credentials from server. {e}"})
 
     config = {
@@ -26,7 +26,13 @@ def shadowsocks(request, link):
         "server": acl.server.client_hostname,
         "server_port": server_user.port,
         "access_url": server_user.access_url,
+        "outfleet": {
+            "acl_link": link,
+            "server_name": acl.server.name,
+            "server_type": acl.server.server_type,
+        }
     }
+    
+    AccessLog.objects.create(user=acl.user, server=acl.server.name, action="Success", data=json.dumps(config, indent=2))
+    
     return JsonResponse(config)
-
-

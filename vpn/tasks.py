@@ -29,11 +29,13 @@ def sync_all_users():
 @shared_task(name="sync_all_users_on_server")
 def sync_users(server_id):
     from .models import Server
-    
+    status = {}
     try:
         server = Server.objects.get(id=server_id)
-        server.sync_users()
-        logger.info(f"Successfully synced users for server {server.name}")
+        sync = server.sync_users()
+        if sync:
+            logger.info(f"Successfully synced users for server {server.name}")
+            return f"Successfully synced users for server {server.name}"
     except Exception as e:
         logger.error(f"Error syncing users for server {server.name}: {e}")
         raise TaskFailedException(message=f"Error syncing users for server {server.name}")
