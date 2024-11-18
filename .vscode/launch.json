@@ -1,0 +1,64 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Django VPN app",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {
+                "POSTGRES_PORT": "5433",
+                "DJANGO_SETTINGS_MODULE": "mysite.settings",
+                "EXTERNAL_ADDRESS": "http://localhost:8000"
+            },
+            "args": [
+                "runserver",
+                "0.0.0.0:8000"
+            ],
+            "django": true,
+            "autoStartBrowser": false,
+            "program": "${workspaceFolder}/manage.py"
+        },
+        {
+            "name": "Celery Worker",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "celery",
+            "args": [
+                "-A", "mysite",
+                "worker",
+                "--loglevel=info"
+            ],
+            "env": {
+                "POSTGRES_PORT": "5433",
+                "DJANGO_SETTINGS_MODULE": "mysite.settings"
+            },
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Celery Beat",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "celery",
+            "args": [
+                "-A", "mysite",
+                "beat",
+                "--loglevel=info"
+            ],
+            "env": {
+                "POSTGRES_PORT": "5433",
+                "DJANGO_SETTINGS_MODULE": "mysite.settings"
+            },
+            "console": "integratedTerminal"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Run Django, Celery Worker, and Celery Beat",
+            "configurations": [
+                "Django VPN app",
+                "Celery Worker",
+                "Celery Beat"
+            ]
+        }
+    ]
+}

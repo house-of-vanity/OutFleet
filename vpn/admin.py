@@ -11,6 +11,7 @@ from .models import User, AccessLog
 from django.utils.timezone import localtime
 from vpn.models import User, ACL, ACLLink
 from vpn.forms import UserForm
+from mysite.settings import EXTERNAL_ADDRESS
 from .server_plugins import (
     Server,
     WireguardServer,
@@ -164,8 +165,9 @@ class ACLAdmin(admin.ModelAdmin):
         except Exception as e:
             return mark_safe(f"<span style='color: red;'>Error: {e}</span>")
 
-    @admin.display(description='Links')
+    @admin.display(description='Dynamic Config Links')
     def display_links(self, obj):
         links = obj.links.all()
-        return mark_safe('<br>'.join([link.link for link in links]))
+        formatted_links = [f"{EXTERNAL_ADDRESS}/{link.link}" for link in links]
+        return mark_safe('<br>'.join(formatted_links))
 

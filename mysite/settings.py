@@ -13,6 +13,7 @@ environ.Env.read_env()
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY=ENV('SECRET_KEY', default=get_random_secret_key())
 TIME_ZONE = ENV('TIMEZONE', default='Asia/Nicosia')
+EXTERNAL_ADDRESS = ENV('EXTERNAL_ADDRESS', default='https://example.org')
 
 CELERY_BROKER_URL = ENV('CELERY_BROKER_URL', default='redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = 'django-db'
@@ -154,7 +155,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': ENV('POSTGRES_DB', default="outfleet"),
         'USER': ENV('POSTGRES_USER', default="outfleet"),
-        'PASSWORD': ENV('POSTGRES_PASSWORD', default="password"),
+        'PASSWORD': ENV('POSTGRES_PASSWORD', default="outfleet"),
         'HOST': ENV('POSTGRES_HOST', default='localhost'),
         'PORT': ENV('POSTGRES_PORT', default='5432'),
     }
