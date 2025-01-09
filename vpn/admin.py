@@ -139,13 +139,13 @@ class ACLLinkInline(admin.TabularInline):
     help_text = 'Add or change ACL links'
     verbose_name = 'Dynamic link'
     verbose_name_plural = 'Dynamic links'
-    fields = ('link',)
+    fields = ('link', 'comment')
 
 @admin.register(ACL)
 class ACLAdmin(admin.ModelAdmin):
 
     list_display = ('user', 'server', 'server_type', 'display_links', 'created_at')
-    list_editable = ('server', )
+    #list_editable = ('server', )
     list_filter = (UserNameFilter, 'server__server_type', ServerNameFilter)
     search_fields = ('user__name', 'server__name', 'server__comment', 'user__comment', 'links__link')
     readonly_fields = ('user_info',)
@@ -168,6 +168,6 @@ class ACLAdmin(admin.ModelAdmin):
     @admin.display(description='Dynamic Config Links')
     def display_links(self, obj):
         links = obj.links.all()
-        formatted_links = [f"{EXTERNAL_ADDRESS}/ss/{link.link}" for link in links]
+        formatted_links = [f"{EXTERNAL_ADDRESS}/ss/{link.link}#{link.acl.server.name}" for link in links]
         return mark_safe('<br>'.join(formatted_links))
 

@@ -1,7 +1,10 @@
 services:
   web_ui:
-    image: ultradesu/outfleet:v2
+    #image: ultradesu/outfleet:v2
+    image: outfleet:local
     container_name: outfleet-web
+#    volumes:
+#      - .:/app
     build:
       context: .
     ports:
@@ -10,6 +13,7 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+      - EXTERNAL_ADDRESS=http://127.0.0.1:8000
       - CELERY_BROKER_URL=redis://redis:6379/0
     depends_on:
       postgres:
@@ -25,6 +29,8 @@ services:
   worker:
     image: ultradesu/outfleet:v2
     container_name: outfleet-worker
+#    volumes:
+#      - .:/app
     build:
       context: .
     environment:
@@ -42,6 +48,8 @@ services:
   beat:
     image: ultradesu/outfleet:v2
     container_name: outfleet-beat
+#    volumes:
+#      - .:/app
     build:
       context: .
     environment:
@@ -66,6 +74,8 @@ services:
       POSTGRES_DB: outfleet
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
