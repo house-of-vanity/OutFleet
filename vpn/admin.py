@@ -168,6 +168,6 @@ class ACLAdmin(admin.ModelAdmin):
     @admin.display(description='Dynamic Config Links')
     def display_links(self, obj):
         links = obj.links.all()
-        formatted_links = [f"{EXTERNAL_ADDRESS}/{link.link}" for link in links]
+        formatted_links = [f"{EXTERNAL_ADDRESS}/ss/{link.link}" for link in links]
         return mark_safe('<br>'.join(formatted_links))
 
