@@ -2,7 +2,7 @@
   <h1 align="center">OutFleet: Master Your OutLine VPN</h1>
 
   <p align="center">
-    Streamline OutLine VPN experience. OutFleet offers centralized key control for many servers and always-updated Dynamic Access Keys instead of ss:// links
+    Streamline OutLine VPN experience. OutFleet offers centralized key control for many servers, users and always-updated Dynamic Access Keys instead of ss:// links
     <br/>
     <br/>
     <a href="https://github.com/house-of-vanity/outfleet/issues">Request Feature</a>
@@ -12,8 +12,6 @@
 ![Forks](https://img.shields.io/github/forks/house-of-vanity/outfleet?style=social) ![Stargazers](https://img.shields.io/github/stars/house-of-vanity/outfleet?style=social) ![License](https://img.shields.io/github/license/house-of-vanity/outfleet) 
 
 ## About The Project
-
-![Screen Shot](img/servers.png)
 
 ### Key Features
 
@@ -28,59 +26,13 @@ Tired of juggling multiple home servers and the headache of individually managin
 
 ## Built With
 
-Python, Flask and offer hassle-free deployment.
+Django, Postgres SQL and offer hassle-free deployment using Kubernetes or docker-compose
 
 ### Installation
 
 Docker deploy is easy:
 ```
-docker run --restart always -p 5000:5000 -d --name outfleet --mount type=bind,source=/etc/outfleet/config.yaml,target=/usr/local/etc/outfleet/config.yaml ultradesu/outfleet:latest
-```
-#### Use reverse proxy to secure ALL path of OutFleet except of `/dynamic/*`
-```nginx
-server {
-  listen 443 ssl http2;
-  server_name server.name;
-  
-  # Specify SSL config if using a shared one.
-  #include conf.d/ssl/ssl.conf;
-  
-  # Allow large attachments
-  client_max_body_size 128M;
-    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/server.name/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/server.name/privkey.pem; # managed by Certbot
-
-  location / {
-    proxy_pass http://localhost:5000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    auth_basic "Private Place";
-    auth_basic_user_file /etc/nginx/htpasswd;
-  }
-  
-  location /dynamic {
-    auth_basic off;
-    proxy_pass http://localhost:5000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-  }
-    access_log /var/log/nginx/server.name.access.log;
-    error_log /var/log/nginx/server.name.error.log;
-
-}
-server {
-        listen 80;
-        server_name server.name;
-        listen [::]:80;
-        return 301 https://$host$request_uri;
-}
-
+docker-compose up -d
 ```
 
 #### Setup sslocal service on Windows
