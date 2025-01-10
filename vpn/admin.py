@@ -119,8 +119,8 @@ class UserAdmin(admin.ModelAdmin):
 @admin.register(AccessLog)
 class AccessLogAdmin(admin.ModelAdmin):
     list_display = ('user', 'server', 'action', 'formatted_timestamp')
-    list_filter = (UserNameFilter, ServerNameFilter, 'timestamp')
-    search_fields = ('accesslog__user', 'server', 'timestamp')
+    list_filter = ('user', 'server', 'action', 'timestamp')
+    search_fields = ('user', 'server', 'action', 'timestamp')
     readonly_fields = ('server', 'user', 'formatted_timestamp', 'action', 'formated_data')
 
     @admin.display(description='Timestamp')
