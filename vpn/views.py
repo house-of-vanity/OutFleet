@@ -42,4 +42,4 @@ def shadowsocks(request, link):
     AccessLog.objects.create(user=acl.user, server=acl.server.name, action="Success", data=json.dumps(config, indent=2))
 
     yaml_data = yaml.dump(config, allow_unicode=True)
-    return HttpResponse(yaml_data, content_type="application/x-yaml")
+    return HttpResponse(yaml_data, content_type="text/html")
