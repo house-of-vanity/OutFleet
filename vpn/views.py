@@ -1,4 +1,4 @@
-import json
+import yaml
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse, HttpResponse, Http404
 
@@ -19,20 +19,26 @@ def shadowsocks(request, link):
         return JsonResponse({"error": f"Couldn't get credentials from server. {e}"})
 
     config = {
-        "info": "Managed by OutFleet_v2 [github.com/house-of-vanity/OutFleet/]",
-        "password": server_user.password,
-        "method": server_user.method,
-        "prefix": "\u0005\u00dc_\u00e0\u0001",
-        "server": acl.server.client_hostname,
-        "server_port": server_user.port,
-        "access_url": server_user.access_url,
-        "outfleet": {
-            "acl_link": link,
-            "server_name": acl.server.name,
-            "server_type": acl.server.server_type,
+        "transport": {
+            "$type": "tcpudp",
+            "tcp": {
+                "$type": "shadowsocks",
+                "endpoint": f"{acl.server.client_hostname}:{server_user.port}",
+                "cipher": f"{server_user.method}",
+                "secret": f"{server_user.password}",
+                "prefix": "\u0005\u00dc_\u00e0\u0001"
+            },
+            "udp": {
+                "$type": "shadowsocks",
+                "endpoint": f"{acl.server.client_hostname}:{server_user.port}",
+                "cipher": f"{server_user.method}",
+                "secret": f"{server_user.password}",
+                "prefix": "\u0005\u00dc_\u00e0\u0001"
+            }
         }
     }
-    
+
     AccessLog.objects.create(user=acl.user, server=acl.server.name, action="Success", data=json.dumps(config, indent=2))
-    
-    return JsonResponse(config)
+
+    yaml_data = yaml.dump(config, allow_unicode=True)
+    return HttpResponse(yaml_data, content_type="application/x-yaml")
