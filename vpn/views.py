@@ -35,7 +35,7 @@ def shadowsocks(request, link):
               "server_type": acl.server.server_type,
           }
       }
-      response = yaml.dump(config, allow_unicode=True)
+      response = json.dumps(config, indent=2)
     else:
       config = {
           "transport": {
@@ -56,7 +56,7 @@ def shadowsocks(request, link):
               }
           }
       }
-      response = json.dumps(config, indent=2)
+      response = yaml.dump(config, allow_unicode=True)
 
     AccessLog.objects.create(user=acl.user, server=acl.server.name, action="Success", data=response)
 
