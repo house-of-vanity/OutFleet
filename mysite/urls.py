@@ -17,11 +17,12 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import RedirectView
-from vpn.views import shadowsocks
+from vpn.views import shadowsocks, userFrontend
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('ss/<path:link>', shadowsocks, name='shadowsocks'),
     path('dynamic/<path:link>', shadowsocks, name='shadowsocks'),
+    path('stat/<path:user_hash>', userFrontend, name='userFrontend'),
     path('', RedirectView.as_view(url='/admin/', permanent=False)),
 ]

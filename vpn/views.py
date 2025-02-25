@@ -2,6 +2,23 @@ import yaml
 import json
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse, HttpResponse, Http404
+from mysite.settings import EXTERNAL_ADDRESS
+
+def userFrontend(request, user_hash):
+    from .models import User, ACLLink
+    try:
+        user = get_object_or_404(User, hash=user_hash)
+    except Http404:
+        return JsonResponse({"error": "Not allowed"}, status=403)
+
+    acl_links = {}
+    for link in ACLLink.objects.filter(acl__user=user).select_related('acl__server'):
+        server_name = link.acl.server.name
+        if server_name not in acl_links:
+            acl_links[server_name] = []
+        acl_links[server_name].append({"link": f"{EXTERNAL_ADDRESS}/ss/{link.link}#{link.acl.server.name}", "comment": link.comment})
+
+    return JsonResponse(acl_links)
 
 def shadowsocks(request, link):
     from .models import ACLLink, AccessLog
@@ -22,7 +39,7 @@ def shadowsocks(request, link):
 
     if request.GET.get('mode') == 'json':
       config = {
-          "info": "Managed by OutFleet_v2 [github.com/house-of-vanity/OutFleet/]",
+          "info": "Managed by OutFleet_2 [github.com/house-of-vanity/OutFleet/]",
           "password": server_user.password,
           "method": server_user.method,
           "prefix": "\u0005\u00dc_\u00e0\u0001",

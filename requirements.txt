@@ -13,4 +13,5 @@ setuptools==75.2.0
 shortuuid==1.0.13
 django-celery-results==2.5.1
 PyYaml==6.0.2
+Markdown==3.7
 git+https://github.com/celery/django-celery-beat#egg=django-celery-beat
