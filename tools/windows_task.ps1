@@ -60,6 +60,13 @@ function Start-SSLocal {
 # Main loop
 while ($true) {
     try {
+        if ($url -notmatch "mode=json") {
+            $delimiter = "?"
+            if ($url -match "\?") {
+                $delimiter = "&"
+            }
+            $url = "$url${delimiter}mode=json"
+        }
         # Download and parse the JSON
         $jsonContent = Invoke-WebRequest -Uri $url -UseBasicParsing | Select-Object -ExpandProperty Content
         $json = $jsonContent | ConvertFrom-Json
