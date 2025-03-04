@@ -4,6 +4,7 @@ from polymorphic.admin import (
 )
 from django.contrib import admin
 from django.utils.safestring import mark_safe
+from django.utils.html import format_html
 from django.db.models import Count
 
 from django.contrib.auth.admin import UserAdmin
@@ -93,10 +94,14 @@ class ServerAdmin(PolymorphicParentModelAdmin):
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
     form = UserForm
-    list_display = ('username', 'comment', 'registration_date', 'hash', 'server_count')
+    list_display = ('username', 'comment', 'registration_date', 'hash_link', 'server_count')
     search_fields = ('username', 'hash')
-    readonly_fields = ('hash',)
+    readonly_fields = ('hash_link',)
 
+    @admin.display(description='API access', ordering='hash')
+    def hash_link(self, obj):
+        url = f"{EXTERNAL_ADDRESS}/stat/{obj.hash}"
+        return format_html('<a href="{}">JSON server list</a>', url, obj.hash)
 
     @admin.display(description='Allowed servers', ordering='server_count')
     def server_count(self, obj):
@@ -139,13 +144,22 @@ class ACLLinkInline(admin.TabularInline):
     help_text = 'Add or change ACL links'
     verbose_name = 'Dynamic link'
     verbose_name_plural = 'Dynamic links'
-    fields = ('link', 'comment')
+    fields = ('link', 'generate_link_button', 'comment')
+    readonly_fields = ('generate_link_button',)
+
+    @admin.display(description="Generate")
+    def generate_link_button(self, obj=None):
+        return format_html(
+            '<button type="button" class="generate-link" onclick="generateLink(this)">🔄</button>'
+        )
+
+    class Media:
+        js = ('admin/js/generate_link.js',)
 
 @admin.register(ACL)
 class ACLAdmin(admin.ModelAdmin):
 
     list_display = ('user', 'server', 'server_type', 'display_links', 'created_at')
-    #list_editable = ('server', )
     list_filter = (UserNameFilter, 'server__server_type', ServerNameFilter)
     search_fields = ('user__name', 'server__name', 'server__comment', 'user__comment', 'links__link')
     readonly_fields = ('user_info',)
