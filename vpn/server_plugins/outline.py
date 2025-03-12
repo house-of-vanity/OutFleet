@@ -69,7 +69,7 @@ class OutlineServer(Server):
         status = {}
 
         for key in self.client.get_keys():
-            c.delete_key(key.key_id)
+            self.client.delete_key(key.key_id)
         try:
             info = self.client.get_server_information()
             if raw:
