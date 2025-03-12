@@ -150,8 +150,9 @@ class OutlineServer(Server):
             self.client.delete_key(user.hash):
 
                 self.delete_user(user)
+                key_id = f"{user.username}-{user.hash}"
                 key = self.client.create_key(
-                    key_id=user.hash,
+                    key_id=key_id,
                     name=user.username,
                     method=server_user.method,
                     password=user.hash,
@@ -161,8 +162,9 @@ class OutlineServer(Server):
                 logger.debug(f"[{self.name}] User {user.username} updated")
         else:
             try:
+                key_id = f"{user.username}-{user.hash}"
                 key = self.client.create_key(
-                    key_id=user.hash,
+                    key_id=key_id,
                     name=user.username,
                     method="chacha20-ietf-poly1305",
                     password=user.hash,
