@@ -76,6 +76,9 @@ class OutlineServer(Server):
                 keys = self.client.get_keys()
                 status.update(info)
                 status.update({"keys": len(keys)})
+                status["all_keys"] = []
+                for key in keys:
+                    status["all_keys"].append(key.key_id)
         except Exception as e:
             status.update({f"error": e})
         return status
