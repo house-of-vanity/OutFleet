@@ -32,10 +32,14 @@ Django, Postgres SQL and hassle-free deployment using Kubernetes or docker-compo
 
 ### Installation
 
+#### Docker compose
 Docker deploy is easy:
 ```
 docker-compose up -d
 ```
+#### Kubernetes
+I use ArgoCD for deployment. [Take a look](https://gt.hexor.cy/ab/homelab/src/branch/main/k8s/apps/vpn) to `outfleet.yaml` file for manifests.
+
 
 #### Setup sslocal service on Windows
 Shadowsocks servers can be used directly with **sslocal**. For automatic and regular password updates, you can create a Task Scheduler job to rotate the passwords when they change, as OutFleet manages the passwords automatically.
