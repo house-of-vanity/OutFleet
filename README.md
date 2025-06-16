@@ -28,7 +28,7 @@ Tired of juggling multiple home servers and the headache of individually managin
 
 ## Built With
 
-Django, Postgres SQL and offer hassle-free deployment using Kubernetes or docker-compose
+Django, Postgres SQL and hassle-free deployment using Kubernetes or docker-compose
 
 ### Installation
 
