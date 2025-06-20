@@ -185,3 +185,23 @@ class ACLAdmin(admin.ModelAdmin):
         links = obj.links.all()
         formatted_links = [f"{link.comment} - {EXTERNAL_ADDRESS}/ss/{link.link}#{link.acl.server.name}" for link in links]
         return mark_safe('<br>'.join(formatted_links))
+
+try:
+    from django_celery_results.models import GroupResult
+    from django_celery_beat.models import (
+        PeriodicTask, 
+        ClockedSchedule, 
+        CrontabSchedule, 
+        IntervalSchedule, 
+        SolarSchedule
+    )
+    
+    admin.site.unregister(GroupResult)
+    admin.site.unregister(PeriodicTask)
+    admin.site.unregister(ClockedSchedule)
+    admin.site.unregister(CrontabSchedule)
+    admin.site.unregister(IntervalSchedule)
+    admin.site.unregister(SolarSchedule)
+    
+except (ImportError, admin.sites.NotRegistered):
+    pass
