@@ -120,6 +120,10 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'mysite.urls'
 
+GIT_COMMIT = ENV('GIT_COMMIT', default='development')
+GIT_COMMIT_SHORT = ENV('GIT_COMMIT_SHORT', default='dev')
+BUILD_DATE = ENV('BUILD_DATE', default='unknown')
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -131,10 +135,12 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'mysite.context_processors.version_info',
             ],
         },
     },
 ]
+
 
 WSGI_APPLICATION = 'mysite.wsgi.application'
 

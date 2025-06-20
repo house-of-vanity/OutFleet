@@ -125,7 +125,7 @@ class UserAdmin(admin.ModelAdmin):
 class AccessLogAdmin(admin.ModelAdmin):
     list_display = ('user', 'server', 'action', 'formatted_timestamp')
     list_filter = ('user', 'server', 'action', 'timestamp')
-    search_fields = ('user', 'server', 'action', 'timestamp')
+    search_fields = ('user', 'server', 'action', 'timestamp', 'data')
     readonly_fields = ('server', 'user', 'formatted_timestamp', 'action', 'formated_data')
 
     @admin.display(description='Timestamp')
@@ -161,7 +161,8 @@ class ACLAdmin(admin.ModelAdmin):
 
     list_display = ('user', 'server', 'server_type', 'display_links', 'created_at')
     list_filter = (UserNameFilter, 'server__server_type', ServerNameFilter)
-    search_fields = ('user__name', 'server__name', 'server__comment', 'user__comment', 'links__link')
+    # Fixed search_fields - removed problematic polymorphic server fields
+    search_fields = ('user__username', 'user__comment', 'links__link')
     readonly_fields = ('user_info',)
     inlines = [ACLLinkInline]
 
@@ -184,4 +185,3 @@ class ACLAdmin(admin.ModelAdmin):
         links = obj.links.all()
         formatted_links = [f"{link.comment} - {EXTERNAL_ADDRESS}/ss/{link.link}#{link.acl.server.name}" for link in links]
         return mark_safe('<br>'.join(formatted_links))
-
