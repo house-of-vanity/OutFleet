@@ -1,0 +1,327 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block content %}
+<div class="content-main">
+    <h1>{{ title }}</h1>
+    
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}" style="margin: 10px 0; padding: 10px; border-radius: 4px; 
+                {% if message.tags == 'error' %}background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24;
+                {% elif message.tags == 'success' %}background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724;
+                {% elif message.tags == 'warning' %}background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404;
+                {% elif message.tags == 'info' %}background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460;
+                {% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" id="move-clients-form">
+        {% csrf_token %}
+        
+        <div class="form-row" style="margin-bottom: 20px;">
+            <div style="display: flex; gap: 20px;">
+                <div style="flex: 1;">
+                    <label for="source_server"><strong>Source Server:</strong></label>
+                    <select id="source_server" name="source_server" style="width: 100%; padding: 5px;" onchange="updateLinksList()">
+                        <option value="">-- Select Source Server --</option>
+                        {% for server in servers %}
+                            <option value="{{ server.id }}">{{ server.name }} ({{ server.server_type }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div style="flex: 1;">
+                    <label for="target_server"><strong>Target Server:</strong></label>
+                    <select id="target_server" name="target_server" style="width: 100%; padding: 5px;" onchange="updateSubmitButton()">
+                        <option value="">-- Select Target Server --</option>
+                        {% for server in all_servers %}
+                            <option value="{{ server.id }}">{{ server.name }} ({{ server.server_type }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="links-list" style="margin-bottom: 20px;">
+            <h3>Select Client Links to Move:</h3>
+            <div id="links-container">
+                <p style="color: #666;">Please select a source server first.</p>
+            </div>
+        </div>
+
+        <div class="submit-row">
+            <input type="submit" value="Move Selected Links" class="default" id="submit-btn" disabled>
+            <a href="{% url 'admin:vpn_server_changelist' %}" class="button cancel">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+// Client links data for each server
+var linksByServer = {
+    {% for server, links in links_by_server.items %}
+        "{{ server.id }}": [
+            {% for link in links %}
+                {
+                    "id": {{ link.id }},
+                    "link": "{{ link.link|escapejs }}",
+                    "comment": "{{ link.comment|escapejs }}",
+                    "username": "{{ link.acl.user.username|escapejs }}",
+                    "user_comment": "{{ link.acl.user.comment|escapejs }}",
+                    "created_at": "{{ link.acl.created_at|date:'Y-m-d H:i' }}",
+                    "full_url": "{{ EXTERNAL_ADDRESS }}/ss/{{ link.link }}#{{ link.acl.server.name|escapejs }}"
+                },
+            {% endfor %}
+        ],
+    {% endfor %}
+};
+
+function updateLinksList() {
+    var sourceServerId = document.getElementById('source_server').value;
+    var linksContainer = document.getElementById('links-container');
+    var submitBtn = document.getElementById('submit-btn');
+    
+    if (!sourceServerId) {
+        linksContainer.innerHTML = '<p style="color: #666;">Please select a source server first.</p>';
+        submitBtn.disabled = true;
+        return;
+    }
+    
+    var links = linksByServer[sourceServerId] || [];
+    
+    if (links.length === 0) {
+        linksContainer.innerHTML = '<p style="color: #666;">No client links found for this server.</p>';
+        submitBtn.disabled = true;
+        return;
+    }
+    
+    // Group links by user for better organization
+    var linksByUser = {};
+    links.forEach(function(link) {
+        if (!linksByUser[link.username]) {
+            linksByUser[link.username] = {
+                user_comment: link.user_comment,
+                created_at: link.created_at,
+                links: []
+            };
+        }
+        linksByUser[link.username].links.push(link);
+    });
+    
+    var html = '<div style="max-height: 500px; overflow-y: auto; border: 1px solid #ddd; padding: 10px;">';
+    html += '<div style="margin-bottom: 10px;">';
+    html += '<button type="button" onclick="toggleAllLinks()" style="padding: 5px 10px; margin-right: 10px;">Select All</button>';
+    html += '<button type="button" onclick="toggleAllLinks(false)" style="padding: 5px 10px;">Deselect All</button>';
+    html += '</div>';
+    
+    html += '<table style="width: 100%; border-collapse: collapse;">';
+    html += '<thead><tr style="background-color: #f5f5f5;">';
+    html += '<th style="padding: 8px; border: 1px solid #ddd; width: 50px;">Select</th>';
+    html += '<th style="padding: 8px; border: 1px solid #ddd;">Username</th>';
+    html += '<th style="padding: 8px; border: 1px solid #ddd;">Link Comment</th>';
+    html += '<th style="padding: 8px; border: 1px solid #ddd;">Link ID</th>';
+    html += '<th style="padding: 8px; border: 1px solid #ddd;">User Comment</th>';
+    html += '<th style="padding: 8px; border: 1px solid #ddd;">Created</th>';
+    html += '</tr></thead><tbody>';
+    
+    // Sort users alphabetically
+    var sortedUsers = Object.keys(linksByUser).sort();
+    
+    sortedUsers.forEach(function(username) {
+        var userData = linksByUser[username];
+        var userLinks = userData.links;
+        
+        // Add user row header if user has multiple links
+        if (userLinks.length > 1) {
+            html += '<tr style="background-color: #f9f9f9;">';
+            html += '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
+            html += '<input type="checkbox" class="user-checkbox" data-username="' + username + '" onchange="toggleUserLinks(\'' + username + '\')">';
+            html += '</td>';
+            html += '<td colspan="5" style="padding: 8px; border: 1px solid #ddd;"><strong>' + username + '</strong> (' + userLinks.length + ' links)</td>';
+            html += '</tr>';
+        }
+        
+        // Add individual link rows
+        userLinks.forEach(function(link) {
+            html += '<tr class="link-row" data-username="' + username + '">';
+            html += '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
+            html += '<input type="checkbox" name="selected_links" value="' + link.id + '" class="link-checkbox" data-username="' + username + '" onchange="updateSubmitButton(); updateUserCheckbox(\'' + username + '\')">';
+            html += '</td>';
+            html += '<td style="padding: 8px; border: 1px solid #ddd;">' + (userLinks.length === 1 ? '<strong>' + username + '</strong>' : '↳') + '</td>';
+            html += '<td style="padding: 8px; border: 1px solid #ddd;">' + (link.comment || '<em>No comment</em>') + '</td>';
+            html += '<td style="padding: 8px; border: 1px solid #ddd; font-family: monospace; font-size: 12px;">' + link.link + '</td>';
+            html += '<td style="padding: 8px; border: 1px solid #ddd;">' + (userData.user_comment || '') + '</td>';
+            html += '<td style="padding: 8px; border: 1px solid #ddd;">' + userData.created_at + '</td>';
+            html += '</tr>';
+        });
+    });
+    
+    html += '</tbody></table></div>';
+    linksContainer.innerHTML = html;
+    
+    updateSubmitButton();
+}
+
+function toggleAllLinks(selectAll = true) {
+    var checkboxes = document.getElementsByName('selected_links');
+    var userCheckboxes = document.getElementsByClassName('user-checkbox');
+    
+    for (var i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = selectAll;
+    }
+    
+    for (var i = 0; i < userCheckboxes.length; i++) {
+        userCheckboxes[i].checked = selectAll;
+    }
+    
+    updateSubmitButton();
+}
+
+function toggleUserLinks(username) {
+    var userCheckbox = document.querySelector('.user-checkbox[data-username="' + username + '"]');
+    var userLinkCheckboxes = document.querySelectorAll('.link-checkbox[data-username="' + username + '"]');
+    
+    for (var i = 0; i < userLinkCheckboxes.length; i++) {
+        userLinkCheckboxes[i].checked = userCheckbox.checked;
+    }
+    
+    updateSubmitButton();
+}
+
+function updateUserCheckbox(username) {
+    var userLinkCheckboxes = document.querySelectorAll('.link-checkbox[data-username="' + username + '"]');
+    var userCheckbox = document.querySelector('.user-checkbox[data-username="' + username + '"]');
+    
+    if (!userCheckbox) return; // No user checkbox for single-link users
+    
+    var allChecked = true;
+    var noneChecked = true;
+    
+    for (var i = 0; i < userLinkCheckboxes.length; i++) {
+        if (userLinkCheckboxes[i].checked) {
+            noneChecked = false;
+        } else {
+            allChecked = false;
+        }
+    }
+    
+    if (allChecked) {
+        userCheckbox.checked = true;
+        userCheckbox.indeterminate = false;
+    } else if (noneChecked) {
+        userCheckbox.checked = false;
+        userCheckbox.indeterminate = false;
+    } else {
+        userCheckbox.checked = false;
+        userCheckbox.indeterminate = true;
+    }
+}
+
+function updateSubmitButton() {
+    var checkboxes = document.getElementsByName('selected_links');
+    var sourceServer = document.getElementById('source_server').value;
+    var targetServer = document.getElementById('target_server').value;
+    var submitBtn = document.getElementById('submit-btn');
+    
+    var hasSelected = false;
+    for (var i = 0; i < checkboxes.length; i++) {
+        if (checkboxes[i].checked) {
+            hasSelected = true;
+            break;
+        }
+    }
+    
+    submitBtn.disabled = !(hasSelected && sourceServer && targetServer && sourceServer !== targetServer);
+}
+
+// Form submission confirmation
+document.getElementById('move-clients-form').addEventListener('submit', function(e) {
+    var checkboxes = document.getElementsByName('selected_links');
+    var selectedCount = 0;
+    var selectedUsers = new Set();
+    
+    for (var i = 0; i < checkboxes.length; i++) {
+        if (checkboxes[i].checked) {
+            selectedCount++;
+            selectedUsers.add(checkboxes[i].getAttribute('data-username'));
+        }
+    }
+    
+    var sourceServerName = document.getElementById('source_server').selectedOptions[0].text;
+    var targetServerName = document.getElementById('target_server').selectedOptions[0].text;
+    
+    var confirmMessage = 'Are you sure you want to move ' + selectedCount + ' link(s) for ' + selectedUsers.size + ' user(s) from "' + sourceServerName + '" to "' + targetServerName + '"?\n\n';
+    confirmMessage += 'This action will:\n';
+    confirmMessage += '- Transfer selected links to target server\n';
+    confirmMessage += '- Create ACLs for users who don\'t have access to target server\n';
+    confirmMessage += '- Remove empty ACLs from source server\n';
+    confirmMessage += '- Preserve all link settings and comments\n\n';
+    confirmMessage += 'This cannot be undone.';
+    
+    if (!confirm(confirmMessage)) {
+        e.preventDefault();
+    }
+});
+</script>
+
+<style>
+.alert {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.form-row {
+    margin-bottom: 20px;
+}
+
+.submit-row {
+    padding: 12px 14px;
+    margin: 0 0 20px;
+    background: #f8f8f8;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.submit-row input[type="submit"] {
+    background: #417690;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-right: 10px;
+}
+
+.submit-row input[type="submit"]:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.submit-row .cancel {
+    background: #6c757d;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 4px;
+    text-decoration: none;
+}
+
+.submit-row .cancel:hover {
+    background: #5a6268;
+    color: white;
+}
+
+.link-row:hover {
+    background-color: #f8f9fa;
+}
+
+input[type="checkbox"]:indeterminate {
+    opacity: 0.5;
+}
+</style>
+{% endblock %}
