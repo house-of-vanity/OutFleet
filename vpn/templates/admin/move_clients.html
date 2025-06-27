@@ -384,7 +384,7 @@ function getSampleComments() {
     }
     
     // Add some realistic default samples if no comments found or need more samples
-    var defaultSamples = ['iPhone 13', 'Work Laptop', 'Home Router', '', 'Android Phone', 'iPad Pro', 'Office PC'];
+    var defaultSamples = ['iPhone 13'];
     for (var i = 0; i < defaultSamples.length && comments.length < 5; i++) {
         if (comments.indexOf(defaultSamples[i]) === -1) {
             comments.push(defaultSamples[i]);
