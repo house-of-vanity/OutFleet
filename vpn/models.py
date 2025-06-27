@@ -52,8 +52,15 @@ class ACL(models.Model):
         return f"{self.user.username} - {self.server.name}"
     
     def save(self, *args, **kwargs):
+        # Check if this is a new ACL and if auto_create_link should be enabled
+        is_new = self.pk is None
+        auto_create_link = kwargs.pop('auto_create_link', True)
+        
         super().save(*args, **kwargs)
-        if not self.links.exists():
+        
+        # Only create default link for new ACLs when auto_create_link is True
+        # This happens when ACL is created through admin interface or initial user setup
+        if is_new and auto_create_link and not self.links.exists():
             ACLLink.objects.create(acl=self, link=shortuuid.ShortUUID().random(length=16))
 
 @receiver(post_save, sender=ACL)

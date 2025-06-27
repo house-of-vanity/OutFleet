@@ -6,6 +6,10 @@ from django.contrib import admin
 from django.utils.safestring import mark_safe
 from django.utils.html import format_html
 from django.db.models import Count
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.urls import path, reverse
+from django.http import HttpResponseRedirect
 
 from django.contrib.auth.admin import UserAdmin
 from .models import User, AccessLog
@@ -70,6 +74,149 @@ class ServerAdmin(PolymorphicParentModelAdmin):
     list_display = ('name', 'server_type', 'comment', 'registration_date', 'user_count', 'server_status_inline')
     search_fields = ('name', 'comment')
     list_filter = ('server_type', )
+    actions = ['move_clients_action']
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('move-clients/', self.admin_site.admin_view(self.move_clients_view), name='server_move_clients'),
+        ]
+        return custom_urls + urls
+
+    def move_clients_action(self, request, queryset):
+        if queryset.count() == 0:
+            self.message_user(request, "Select at least one server.", level=messages.ERROR)
+            return
+        
+        selected_ids = ','.join(str(server.id) for server in queryset)
+        return HttpResponseRedirect(f"{reverse('admin:server_move_clients')}?servers={selected_ids}")
+
+    move_clients_action.short_description = "Move client links between servers"
+
+    def move_clients_view(self, request):
+        """View for moving clients between servers"""
+        if request.method == 'GET':
+            # Get selected servers from URL parameters
+            server_ids = request.GET.get('servers', '').split(',')
+            if not server_ids or server_ids == ['']:
+                messages.error(request, "No servers selected.")
+                return redirect('admin:vpn_server_changelist')
+            
+            try:
+                servers = Server.objects.filter(id__in=server_ids)
+                all_servers = Server.objects.all()
+                
+                # Get ACL links for selected servers with related data
+                links_by_server = {}
+                for server in servers:
+                    # Get all ACL links for this server with user and ACL data
+                    links = ACLLink.objects.filter(
+                        acl__server=server
+                    ).select_related('acl__user', 'acl__server').order_by('acl__user__username', 'comment')
+                    links_by_server[server] = links
+                
+                context = {
+                    'title': 'Move Client Links Between Servers',
+                    'servers': servers,
+                    'all_servers': all_servers,
+                    'links_by_server': links_by_server,
+                }
+                
+                return render(request, 'admin/move_clients.html', context)
+                
+            except Exception as e:
+                messages.error(request, f"Error loading data: {e}")
+                return redirect('admin:vpn_server_changelist')
+        
+        elif request.method == 'POST':
+            # Process the transfer of ACL links
+            try:
+                source_server_id = request.POST.get('source_server')
+                target_server_id = request.POST.get('target_server')
+                selected_link_ids = request.POST.getlist('selected_links')
+                
+                if not source_server_id or not target_server_id:
+                    messages.error(request, "Please select both source and target servers.")
+                    return redirect(request.get_full_path())
+                
+                if source_server_id == target_server_id:
+                    messages.error(request, "Source and target servers cannot be the same.")
+                    return redirect(request.get_full_path())
+                
+                if not selected_link_ids:
+                    messages.error(request, "Please select at least one link to move.")
+                    return redirect(request.get_full_path())
+                
+                source_server = Server.objects.get(id=source_server_id)
+                target_server = Server.objects.get(id=target_server_id)
+                
+                moved_count = 0
+                errors = []
+                users_processed = set()
+                
+                for link_id in selected_link_ids:
+                    try:
+                        # Get the ACL link with related ACL and user data
+                        acl_link = ACLLink.objects.select_related('acl__user', 'acl__server').get(
+                            id=link_id, 
+                            acl__server=source_server
+                        )
+                        user = acl_link.acl.user
+                        
+                        # Check if user already has ACL on target server
+                        target_acl = ACL.objects.filter(user=user, server=target_server).first()
+                        
+                        if target_acl:
+                            created = False
+                        else:
+                            # Create new ACL without auto-creating default link
+                            target_acl = ACL(user=user, server=target_server)
+                            target_acl.save(auto_create_link=False)
+                            created = True
+                        
+                        # Move the link to target ACL
+                        acl_link.acl = target_acl
+                        acl_link.save()
+                        
+                        moved_count += 1
+                        users_processed.add(user.username)
+                        
+                        if created:
+                            messages.info(request, f"Created new ACL for user {user.username} on server {target_server.name}")
+                        
+                    except ACLLink.DoesNotExist:
+                        errors.append(f"Link with ID {link_id} not found on source server")
+                    except Exception as e:
+                        errors.append(f"Error moving link {link_id}: {e}")
+                
+                # Clean up empty ACLs on source server
+                # (ACLs that have no more links after the move)
+                empty_acls = ACL.objects.filter(
+                    server=source_server,
+                    links__isnull=True
+                )
+                deleted_acls_count = empty_acls.count()
+                empty_acls.delete()
+                
+                if moved_count > 0:
+                    messages.success(request, 
+                        f"Successfully moved {moved_count} link(s) for {len(users_processed)} user(s) "
+                        f"from '{source_server.name}' to '{target_server.name}'. "
+                        f"Cleaned up {deleted_acls_count} empty ACL(s)."
+                    )
+                
+                if errors:
+                    for error in errors:
+                        messages.error(request, error)
+                
+                return redirect('admin:vpn_server_changelist')
+                
+            except Server.DoesNotExist:
+                messages.error(request, "One of the selected servers was not found.")
+                return redirect('admin:vpn_server_changelist')
+            except Exception as e:
+                messages.error(request, f"Error during link transfer: {e}")
+                return redirect('admin:vpn_server_changelist')
 
     @admin.display(description='User Count', ordering='user_count')
     def user_count(self, obj):
@@ -116,10 +263,13 @@ class UserAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
         selected_servers = form.cleaned_data.get('servers', [])
 
+        # Remove ACLs that are no longer selected
         ACL.objects.filter(user=obj).exclude(server__in=selected_servers).delete()
 
+        # Create new ACLs for newly selected servers (with default links)
         for server in selected_servers:
-            ACL.objects.get_or_create(user=obj, server=server)
+            acl, created = ACL.objects.get_or_create(user=obj, server=server)
+            # Note: get_or_create will use the default save() method which creates default links
 
 @admin.register(AccessLog)
 class AccessLogAdmin(admin.ModelAdmin):
