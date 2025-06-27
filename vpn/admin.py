@@ -85,7 +85,7 @@ class ServerAdmin(PolymorphicParentModelAdmin):
 
     def move_clients_action(self, request, queryset):
         if queryset.count() == 0:
-            self.message_user(request, "Select at least one server.", level=messages.ERROR)
+            self.message_user(request, "Select al least two servers.", level=messages.ERROR)
             return
         
         selected_ids = ','.join(str(server.id) for server in queryset)
@@ -103,17 +103,24 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                 return redirect('admin:vpn_server_changelist')
             
             try:
+                # Only work with database objects, don't check server connectivity
                 servers = Server.objects.filter(id__in=server_ids)
                 all_servers = Server.objects.all()
                 
                 # Get ACL links for selected servers with related data
+                # This is purely database operation, no server connectivity required
                 links_by_server = {}
                 for server in servers:
-                    # Get all ACL links for this server with user and ACL data
-                    links = ACLLink.objects.filter(
-                        acl__server=server
-                    ).select_related('acl__user', 'acl__server').order_by('acl__user__username', 'comment')
-                    links_by_server[server] = links
+                    try:
+                        # Get all ACL links for this server with user and ACL data
+                        links = ACLLink.objects.filter(
+                            acl__server=server
+                        ).select_related('acl__user', 'acl__server').order_by('acl__user__username', 'comment')
+                        links_by_server[server] = links
+                    except Exception as e:
+                        # Log the error but continue with other servers
+                        messages.warning(request, f"Warning: Could not load links for server {server.name}: {e}")
+                        links_by_server[server] = []
                 
                 context = {
                     'title': 'Move Client Links Between Servers',
@@ -125,11 +132,11 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                 return render(request, 'admin/move_clients.html', context)
                 
             except Exception as e:
-                messages.error(request, f"Error loading data: {e}")
+                messages.error(request, f"Database error while loading data: {e}")
                 return redirect('admin:vpn_server_changelist')
         
         elif request.method == 'POST':
-            # Process the transfer of ACL links
+            # Process the transfer of ACL links - purely database operations
             try:
                 source_server_id = request.POST.get('source_server')
                 target_server_id = request.POST.get('target_server')
@@ -147,13 +154,19 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                     messages.error(request, "Please select at least one link to move.")
                     return redirect(request.get_full_path())
                 
-                source_server = Server.objects.get(id=source_server_id)
-                target_server = Server.objects.get(id=target_server_id)
+                # Get server objects from database only
+                try:
+                    source_server = Server.objects.get(id=source_server_id)
+                    target_server = Server.objects.get(id=target_server_id)
+                except Server.DoesNotExist:
+                    messages.error(request, "One of the selected servers was not found in database.")
+                    return redirect('admin:vpn_server_changelist')
                 
                 moved_count = 0
                 errors = []
                 users_processed = set()
                 
+                # Process each selected link - database operations only
                 for link_id in selected_link_ids:
                     try:
                         # Get the ACL link with related ACL and user data
@@ -174,7 +187,7 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                             target_acl.save(auto_create_link=False)
                             created = True
                         
-                        # Move the link to target ACL
+                        # Move the link to target ACL - pure database operation
                         acl_link.acl = target_acl
                         acl_link.save()
                         
@@ -187,16 +200,19 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                     except ACLLink.DoesNotExist:
                         errors.append(f"Link with ID {link_id} not found on source server")
                     except Exception as e:
-                        errors.append(f"Error moving link {link_id}: {e}")
+                        errors.append(f"Database error moving link {link_id}: {e}")
                 
-                # Clean up empty ACLs on source server
-                # (ACLs that have no more links after the move)
-                empty_acls = ACL.objects.filter(
-                    server=source_server,
-                    links__isnull=True
-                )
-                deleted_acls_count = empty_acls.count()
-                empty_acls.delete()
+                # Clean up empty ACLs on source server - database operation only
+                try:
+                    empty_acls = ACL.objects.filter(
+                        server=source_server,
+                        links__isnull=True
+                    )
+                    deleted_acls_count = empty_acls.count()
+                    empty_acls.delete()
+                except Exception as e:
+                    messages.warning(request, f"Warning: Could not clean up empty ACLs: {e}")
+                    deleted_acls_count = 0
                 
                 if moved_count > 0:
                     messages.success(request, 
@@ -211,11 +227,8 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                 
                 return redirect('admin:vpn_server_changelist')
                 
-            except Server.DoesNotExist:
-                messages.error(request, "One of the selected servers was not found.")
-                return redirect('admin:vpn_server_changelist')
             except Exception as e:
-                messages.error(request, f"Error during link transfer: {e}")
+                messages.error(request, f"Database error during link transfer: {e}")
                 return redirect('admin:vpn_server_changelist')
 
     @admin.display(description='User Count', ordering='user_count')
@@ -224,12 +237,16 @@ class ServerAdmin(PolymorphicParentModelAdmin):
 
     @admin.display(description='Status')
     def server_status_inline(self, obj):
-        status = obj.get_server_status()
-        if 'error' in status:
-            return mark_safe(f"<span style='color: red;'>Error: {status['error']}</span>")
-        import json
-        pretty_status =  ", ".join(f"{key}: {value}" for key, value in status.items())
-        return mark_safe(f"<pre>{pretty_status}</pre>")
+        try:
+            status = obj.get_server_status()
+            if 'error' in status:
+                return mark_safe(f"<span style='color: red;'>Error: {status['error']}</span>")
+            import json
+            pretty_status = ", ".join(f"{key}: {value}" for key, value in status.items())
+            return mark_safe(f"<pre>{pretty_status}</pre>")
+        except Exception as e:
+            # Don't let server connectivity issues break the admin interface
+            return mark_safe(f"<span style='color: orange;'>Status unavailable: {e}</span>")
     server_status_inline.short_description = "Status"
 
     def get_queryset(self, request):
