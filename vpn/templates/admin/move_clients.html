@@ -7,6 +7,11 @@
 <div class="content-main">
     <h1>{{ title }}</h1>
     
+    <div class="alert alert-info" style="margin: 10px 0; padding: 10px; border-radius: 4px; background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460;">
+        <strong>Note:</strong> This operation only affects the database and works even if servers are unreachable. 
+        Server connectivity is not required for moving links between servers.
+    </div>
+    
     {% if messages %}
         {% for message in messages %}
             <div class="alert alert-{{ message.tags }}" style="margin: 10px 0; padding: 10px; border-radius: 4px; 
@@ -51,6 +56,62 @@
             <h3>Select Client Links to Move:</h3>
             <div id="links-container">
                 <p style="color: #666;">Please select a source server first.</p>
+            </div>
+        </div>
+
+        <!-- REGEX TRANSFORMATION SECTION -->
+        <div class="form-row" style="margin-bottom: 20px; border: 2px solid #007cba; border-radius: 8px; padding: 20px; background-color: #f8f9fa;">
+            <h3 style="margin-top: 0; color: #007cba;">📝 Comment Transformation (Optional)</h3>
+            
+            <div style="margin-bottom: 15px;">
+                <label for="comment_regex"><strong>Regular Expression Pattern:</strong></label>
+                <input type="text" id="comment_regex" name="comment_regex" 
+                       style="width: 100%; padding: 10px; font-family: 'Courier New', monospace; font-size: 14px; border: 2px solid #ddd; border-radius: 4px;" 
+                       placeholder="Example: ^(.*)$ -> [OLD_SERVER] $1"
+                       title="Use regex pattern -> replacement format">
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    Format: <code>pattern -> replacement</code> (leave empty to keep original comments)
+                </small>
+            </div>
+            
+            <div class="regex-help" style="background-color: #ffffff; padding: 15px; border-radius: 5px; border: 1px solid #dee2e6;">
+                <h4 style="margin-top: 0; color: #007cba;">🔧 Regular Expression Help & Examples:</h4>
+                <div style="font-size: 14px;">
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px;">
+                        <div>
+                            <h5 style="color: #28a745;">✨ Common Examples:</h5>
+                            <ul style="margin: 5px 0; padding-left: 20px; line-height: 1.6;">
+                                <li><code>^(.*)$ -> [ServerA] $1</code><br><small style="color: #666;">Add prefix to all comments</small></li>
+                                <li><code>^(.*)$ -> $1 (moved)</code><br><small style="color: #666;">Add suffix to all comments</small></li>
+                                <li><code>^$ -> Default Device</code><br><small style="color: #666;">Replace empty comments</small></li>
+                                <li><code>phone -> mobile</code><br><small style="color: #666;">Replace specific word</small></li>
+                                <li><code>^(.*)(phone|mobile)(.*)$ -> $1device$3</code><br><small style="color: #666;">Replace phone/mobile with device</small></li>
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h5 style="color: #dc3545;">🚀 Advanced Examples:</h5>
+                            <ul style="margin: 5px 0; padding-left: 20px; line-height: 1.6;">
+                                <li><code>^(.+) - (.+)$ -> $2: $1</code><br><small style="color: #666;">Swap parts separated by " - "</small></li>
+                                <li><code>(\d{4})-(\d{2})-(\d{2}) -> $3/$2/$1</code><br><small style="color: #666;">Change date format YYYY-MM-DD to DD/MM/YYYY</small></li>
+                                <li><code>^(.{1,20}).*$ -> $1...</code><br><small style="color: #666;">Truncate long comments to 20 chars</small></li>
+                                <li><code>([a-zA-Z]+)\s+(\d+) -> $1_$2</code><br><small style="color: #666;">Replace spaces with underscores in "word number"</small></li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 15px; padding: 12px; background-color: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107;">
+                        <strong>💡 Tips:</strong>
+                        <ul style="margin: 8px 0; padding-left: 20px; font-size: 13px; line-height: 1.5;">
+                            <li>Use <code>$1, $2, $3...</code> to reference captured groups in parentheses</li>
+                            <li>Use <code>^</code> for start of string, <code>$</code> for end of string</li>
+                            <li>Use <code>.*</code> to match any characters, <code>.+</code> to match one or more characters</li>
+                            <li>Test your regex carefully - invalid patterns will show an error</li>
+                            <li>Leave empty to keep original comments unchanged</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -150,7 +211,7 @@ function updateLinksList() {
         userLinks.forEach(function(link) {
             html += '<tr class="link-row" data-username="' + username + '">';
             html += '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
-            html += '<input type="checkbox" name="selected_links" value="' + link.id + '" class="link-checkbox" data-username="' + username + '" onchange="updateSubmitButton(); updateUserCheckbox(\'' + username + '\')">';
+            html += '<input type="checkbox" name="selected_links" value="' + link.id + '" class="link-checkbox" data-username="' + username + '" onchange="updateSubmitButton(); updateUserCheckbox(\'' + username + '\'); updateRegexPreview()">';
             html += '</td>';
             html += '<td style="padding: 8px; border: 1px solid #ddd;">' + (userLinks.length === 1 ? '<strong>' + username + '</strong>' : '↳') + '</td>';
             html += '<td style="padding: 8px; border: 1px solid #ddd;">' + (link.comment || '<em>No comment</em>') + '</td>';
@@ -180,6 +241,7 @@ function toggleAllLinks(selectAll = true) {
     }
     
     updateSubmitButton();
+    updateRegexPreview();
 }
 
 function toggleUserLinks(username) {
@@ -191,6 +253,7 @@ function toggleUserLinks(username) {
     }
     
     updateSubmitButton();
+    updateRegexPreview();
 }
 
 function updateUserCheckbox(username) {
@@ -239,6 +302,103 @@ function updateSubmitButton() {
     submitBtn.disabled = !(hasSelected && sourceServer && targetServer && sourceServer !== targetServer);
 }
 
+// Add regex preview functionality
+document.getElementById('comment_regex').addEventListener('input', function() {
+    updateRegexPreview();
+});
+
+function updateRegexPreview() {
+    var regexInput = document.getElementById('comment_regex').value.trim();
+    
+    // Remove any existing preview
+    var existingPreview = document.getElementById('regex-preview');
+    if (existingPreview) {
+        existingPreview.remove();
+    }
+    
+    if (!regexInput) return;
+    
+    // Parse pattern -> replacement format
+    var parts = regexInput.split(' -> ');
+    if (parts.length !== 2) {
+        showRegexError('Invalid format. Use: pattern -> replacement');
+        return;
+    }
+    
+    var pattern = parts[0];
+    var replacement = parts[1];
+    
+    try {
+        var regex = new RegExp(pattern, 'g');
+        
+        // Test with sample comments from currently selected links
+        var sampleComments = getSampleComments();
+        if (sampleComments.length > 0) {
+            showRegexPreview(sampleComments, regex, replacement);
+        }
+        
+    } catch (e) {
+        showRegexError('Invalid regex pattern: ' + e.message);
+    }
+}
+
+function getSampleComments() {
+    var comments = [];
+    var checkboxes = document.getElementsByName('selected_links');
+    
+    for (var i = 0; i < checkboxes.length && comments.length < 5; i++) {
+        if (checkboxes[i].checked) {
+            var row = checkboxes[i].closest('tr');
+            var commentCell = row.children[2]; // Link Comment column
+            var commentText = commentCell.textContent.trim();
+            if (commentText && commentText !== 'No comment') {
+                comments.push(commentText);
+            } else {
+                comments.push(''); // Include empty comments
+            }
+        }
+    }
+    
+    // Add some default samples if no selected links
+    if (comments.length === 0) {
+        comments = ['iPhone 13', 'Work Laptop', 'Home Router', '', 'Android Phone'];
+    }
+    
+    return comments;
+}
+
+function showRegexPreview(samples, regex, replacement) {
+    var previewHtml = '<div id="regex-preview" style="margin-top: 15px; padding: 15px; background-color: #e8f5e8; border-radius: 5px; border-left: 4px solid #28a745;">';
+    previewHtml += '<h5 style="margin-top: 0; color: #28a745;">✅ Preview (selected links):</h5>';
+    previewHtml += '<table style="width: 100%; font-size: 13px; border-collapse: collapse;">';
+    previewHtml += '<tr style="background-color: rgba(40, 167, 69, 0.1);"><th style="text-align: left; padding: 8px; border: 1px solid #28a745;">Original</th><th style="text-align: left; padding: 8px; border: 1px solid #28a745;">→</th><th style="text-align: left; padding: 8px; border: 1px solid #28a745;">Transformed</th></tr>';
+    
+    samples.forEach(function(comment) {
+        var original = comment || '(empty)';
+        var transformed = comment.replace(regex, replacement);
+        var changed = original !== transformed;
+        
+        previewHtml += '<tr>';
+        previewHtml += '<td style="padding: 8px; border: 1px solid #ddd; font-family: monospace;">' + original + '</td>';
+        previewHtml += '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">→</td>';
+        previewHtml += '<td style="padding: 8px; border: 1px solid #ddd; font-family: monospace;' + (changed ? ' font-weight: bold; color: #28a745; background-color: rgba(40, 167, 69, 0.1);' : '') + '">' + transformed + '</td>';
+        previewHtml += '</tr>';
+    });
+    
+    previewHtml += '</table></div>';
+    
+    document.querySelector('.regex-help').insertAdjacentHTML('afterend', previewHtml);
+}
+
+function showRegexError(message) {
+    var errorHtml = '<div id="regex-preview" style="margin-top: 15px; padding: 15px; background-color: #f8d7da; border-radius: 5px; border-left: 4px solid #dc3545;">';
+    errorHtml += '<h5 style="margin-top: 0; color: #dc3545;">❌ Error:</h5>';
+    errorHtml += '<p style="margin: 0; color: #721c24; font-weight: bold;">' + message + '</p>';
+    errorHtml += '</div>';
+    
+    document.querySelector('.regex-help').insertAdjacentHTML('afterend', errorHtml);
+}
+
 // Form submission confirmation
 document.getElementById('move-clients-form').addEventListener('submit', function(e) {
     var checkboxes = document.getElementsByName('selected_links');
@@ -254,14 +414,20 @@ document.getElementById('move-clients-form').addEventListener('submit', function
     
     var sourceServerName = document.getElementById('source_server').selectedOptions[0].text;
     var targetServerName = document.getElementById('target_server').selectedOptions[0].text;
+    var commentRegex = document.getElementById('comment_regex').value.trim();
     
     var confirmMessage = 'Are you sure you want to move ' + selectedCount + ' link(s) for ' + selectedUsers.size + ' user(s) from "' + sourceServerName + '" to "' + targetServerName + '"?\n\n';
     confirmMessage += 'This action will:\n';
     confirmMessage += '- Transfer selected links to target server\n';
     confirmMessage += '- Create ACLs for users who don\'t have access to target server\n';
     confirmMessage += '- Remove empty ACLs from source server\n';
-    confirmMessage += '- Preserve all link settings and comments\n\n';
-    confirmMessage += 'This cannot be undone.';
+    confirmMessage += '- Preserve all link settings and comments\n';
+    
+    if (commentRegex) {
+        confirmMessage += '- Apply regex transformation to comments: "' + commentRegex + '"\n';
+    }
+    
+    confirmMessage += '\nThis cannot be undone.';
     
     if (!confirm(confirmMessage)) {
         e.preventDefault();
@@ -322,6 +488,15 @@ document.getElementById('move-clients-form').addEventListener('submit', function
 
 input[type="checkbox"]:indeterminate {
     opacity: 0.5;
+}
+
+#comment_regex {
+    transition: border-color 0.3s ease;
+}
+
+#comment_regex:focus {
+    border-color: #007cba !important;
+    box-shadow: 0 0 5px rgba(0, 124, 186, 0.3);
 }
 </style>
 {% endblock %}

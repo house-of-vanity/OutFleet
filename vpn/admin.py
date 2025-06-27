@@ -84,10 +84,12 @@ class ServerAdmin(PolymorphicParentModelAdmin):
         return custom_urls + urls
 
     def move_clients_action(self, request, queryset):
+        """Кастомное действие для перехода к странице переноса клиентов"""
         if queryset.count() == 0:
-            self.message_user(request, "Select al least two servers.", level=messages.ERROR)
+            self.message_user(request, "Выберите хотя бы один сервер.", level=messages.ERROR)
             return
         
+        # Перенаправляем на страницу переноса клиентов
         selected_ids = ','.join(str(server.id) for server in queryset)
         return HttpResponseRedirect(f"{reverse('admin:server_move_clients')}?servers={selected_ids}")
 
@@ -141,6 +143,7 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                 source_server_id = request.POST.get('source_server')
                 target_server_id = request.POST.get('target_server')
                 selected_link_ids = request.POST.getlist('selected_links')
+                comment_regex = request.POST.get('comment_regex', '').strip()
                 
                 if not source_server_id or not target_server_id:
                     messages.error(request, "Please select both source and target servers.")
@@ -154,6 +157,24 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                     messages.error(request, "Please select at least one link to move.")
                     return redirect(request.get_full_path())
                 
+                # Parse and validate regex pattern if provided
+                regex_pattern = None
+                regex_replacement = None
+                if comment_regex:
+                    try:
+                        import re
+                        parts = comment_regex.split(' -> ')
+                        if len(parts) != 2:
+                            messages.error(request, "Invalid regex format. Use: pattern -> replacement")
+                            return redirect(request.get_full_path())
+                        
+                        regex_pattern = re.compile(parts[0])
+                        regex_replacement = parts[1]
+                        
+                    except re.error as e:
+                        messages.error(request, f"Invalid regular expression: {e}")
+                        return redirect(request.get_full_path())
+                
                 # Get server objects from database only
                 try:
                     source_server = Server.objects.get(id=source_server_id)
@@ -165,6 +186,7 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                 moved_count = 0
                 errors = []
                 users_processed = set()
+                comments_transformed = 0
                 
                 # Process each selected link - database operations only
                 for link_id in selected_link_ids:
@@ -175,6 +197,18 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                             acl__server=source_server
                         )
                         user = acl_link.acl.user
+                        
+                        # Apply regex transformation to comment if provided
+                        original_comment = acl_link.comment
+                        if regex_pattern and regex_replacement is not None:
+                            try:
+                                new_comment = regex_pattern.sub(regex_replacement, original_comment)
+                                if new_comment != original_comment:
+                                    acl_link.comment = new_comment
+                                    comments_transformed += 1
+                            except Exception as e:
+                                errors.append(f"Error applying regex to link {link_id}: {e}")
+                                # Continue with original comment
                         
                         # Check if user already has ACL on target server
                         target_acl = ACL.objects.filter(user=user, server=target_server).first()
@@ -215,11 +249,15 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                     deleted_acls_count = 0
                 
                 if moved_count > 0:
-                    messages.success(request, 
+                    success_msg = (
                         f"Successfully moved {moved_count} link(s) for {len(users_processed)} user(s) "
                         f"from '{source_server.name}' to '{target_server.name}'. "
                         f"Cleaned up {deleted_acls_count} empty ACL(s)."
                     )
+                    if comments_transformed > 0:
+                        success_msg += f" Transformed {comments_transformed} comment(s) using regex."
+                    
+                    messages.success(request, success_msg)
                 
                 if errors:
                     for error in errors:
