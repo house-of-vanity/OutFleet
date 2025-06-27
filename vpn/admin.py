@@ -160,19 +160,36 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                 # Parse and validate regex pattern if provided
                 regex_pattern = None
                 regex_replacement = None
+                regex_parts = None
                 if comment_regex:
                     try:
                         import re
-                        parts = comment_regex.split(' -> ')
-                        if len(parts) != 2:
+                        regex_parts = comment_regex.split(' -> ')
+                        if len(regex_parts) != 2:
                             messages.error(request, "Invalid regex format. Use: pattern -> replacement")
                             return redirect(request.get_full_path())
                         
-                        regex_pattern = re.compile(parts[0])
-                        regex_replacement = parts[1]
+                        pattern_str = regex_parts[0]
+                        replacement_str = regex_parts[1]
+                        
+                        # Convert JavaScript-style $1, $2, $3 to Python-style \1, \2, \3
+                        python_replacement = replacement_str
+                        import re as regex_module
+                        # Replace $1, $2, etc. with \1, \2, etc. for Python regex
+                        python_replacement = regex_module.sub(r'\$(\d+)', r'\\\1', replacement_str)
+                        
+                        # Test compile the regex pattern
+                        regex_pattern = re.compile(pattern_str)
+                        regex_replacement = python_replacement
+                        
+                        # Test the replacement on a sample string to validate syntax
+                        test_result = regex_pattern.sub(regex_replacement, "test sample")
                         
                     except re.error as e:
-                        messages.error(request, f"Invalid regular expression: {e}")
+                        messages.error(request, f"Invalid regular expression pattern '{regex_parts[0] if regex_parts else comment_regex}': {e}")
+                        return redirect(request.get_full_path())
+                    except Exception as e:
+                        messages.error(request, f"Error in regex replacement '{replacement_str if 'replacement_str' in locals() else 'unknown'}': {e}")
                         return redirect(request.get_full_path())
                 
                 # Get server objects from database only
@@ -202,12 +219,17 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                         original_comment = acl_link.comment
                         if regex_pattern and regex_replacement is not None:
                             try:
+                                # Use Python's re.sub for replacement, which properly handles $1, $2 groups
                                 new_comment = regex_pattern.sub(regex_replacement, original_comment)
                                 if new_comment != original_comment:
                                     acl_link.comment = new_comment
                                     comments_transformed += 1
+                                    # Debug logging - shows both original and converted patterns
+                                    print(f"DEBUG: Transformed '{original_comment}' -> '{new_comment}'")
+                                    print(f"  Original pattern: '{regex_parts[0]}' -> '{regex_parts[1]}'")
+                                    print(f"  Python pattern: '{regex_parts[0]}' -> '{regex_replacement}'")
                             except Exception as e:
-                                errors.append(f"Error applying regex to link {link_id}: {e}")
+                                errors.append(f"Error applying regex to link {link_id} ('{original_comment}'): {e}")
                                 # Continue with original comment
                         
                         # Check if user already has ACL on target server

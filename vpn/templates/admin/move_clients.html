@@ -59,56 +59,46 @@
             </div>
         </div>
 
-        <!-- REGEX TRANSFORMATION SECTION -->
-        <div class="form-row" style="margin-bottom: 20px; border: 2px solid #007cba; border-radius: 8px; padding: 20px; background-color: #f8f9fa;">
-            <h3 style="margin-top: 0; color: #007cba;">📝 Comment Transformation (Optional)</h3>
-            
-            <div style="margin-bottom: 15px;">
+        <div class="form-row" style="margin-bottom: 20px;">
+            <h3>Comment Transformation (Optional)</h3>
+            <div style="margin-bottom: 10px;">
                 <label for="comment_regex"><strong>Regular Expression Pattern:</strong></label>
                 <input type="text" id="comment_regex" name="comment_regex" 
-                       style="width: 100%; padding: 10px; font-family: 'Courier New', monospace; font-size: 14px; border: 2px solid #ddd; border-radius: 4px;" 
+                       style="width: 100%; padding: 8px; font-family: monospace;" 
                        placeholder="Example: ^(.*)$ -> [OLD_SERVER] $1"
                        title="Use regex pattern -> replacement format">
-                <small style="color: #666; display: block; margin-top: 5px;">
-                    Format: <code>pattern -> replacement</code> (leave empty to keep original comments)
-                </small>
             </div>
             
-            <div class="regex-help" style="background-color: #ffffff; padding: 15px; border-radius: 5px; border: 1px solid #dee2e6;">
-                <h4 style="margin-top: 0; color: #007cba;">🔧 Regular Expression Help & Examples:</h4>
-                <div style="font-size: 14px;">
+            <div class="regex-help" style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; border-left: 4px solid #007cba;">
+                <h4 style="margin: 0 0 10px 0; color: #007cba; font-size: 14px;">Regular Expression Help & Examples:</h4>
+                <div style="font-size: 13px;">
+                    <p style="margin: 0 0 8px 0;"><strong>Format:</strong> <code>pattern -> replacement</code></p>
                     
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px;">
-                        <div>
-                            <h5 style="color: #28a745;">✨ Common Examples:</h5>
-                            <ul style="margin: 5px 0; padding-left: 20px; line-height: 1.6;">
-                                <li><code>^(.*)$ -> [ServerA] $1</code><br><small style="color: #666;">Add prefix to all comments</small></li>
-                                <li><code>^(.*)$ -> $1 (moved)</code><br><small style="color: #666;">Add suffix to all comments</small></li>
-                                <li><code>^$ -> Default Device</code><br><small style="color: #666;">Replace empty comments</small></li>
-                                <li><code>phone -> mobile</code><br><small style="color: #666;">Replace specific word</small></li>
-                                <li><code>^(.*)(phone|mobile)(.*)$ -> $1device$3</code><br><small style="color: #666;">Replace phone/mobile with device</small></li>
-                            </ul>
-                        </div>
-                        
-                        <div>
-                            <h5 style="color: #dc3545;">🚀 Advanced Examples:</h5>
-                            <ul style="margin: 5px 0; padding-left: 20px; line-height: 1.6;">
-                                <li><code>^(.+) - (.+)$ -> $2: $1</code><br><small style="color: #666;">Swap parts separated by " - "</small></li>
-                                <li><code>(\d{4})-(\d{2})-(\d{2}) -> $3/$2/$1</code><br><small style="color: #666;">Change date format YYYY-MM-DD to DD/MM/YYYY</small></li>
-                                <li><code>^(.{1,20}).*$ -> $1...</code><br><small style="color: #666;">Truncate long comments to 20 chars</small></li>
-                                <li><code>([a-zA-Z]+)\s+(\d+) -> $1_$2</code><br><small style="color: #666;">Replace spaces with underscores in "word number"</small></li>
-                            </ul>
-                        </div>
+                    <div style="margin-bottom: 10px;">
+                        <h5 style="margin: 0 0 5px 0; font-size: 13px;">Common Examples:</h5>
+                        <ul style="margin: 0; padding-left: 15px; line-height: 1.4;">
+                            <li><code>^(.*)$ -> [FROM RU] $1</code> <small>- Add prefix to all comments</small></li>
+                            <li><code>^(.*)$ -> $1 (moved)</code> <small>- Add suffix to all comments</small></li>
+                            <li><code>^$ -> Default Device</code> <small>- Replace empty comments</small></li>
+                            <li><code>phone -> mobile</code> <small>- Replace specific word</small></li>
+                        </ul>
                     </div>
                     
-                    <div style="margin-top: 15px; padding: 12px; background-color: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107;">
-                        <strong>💡 Tips:</strong>
-                        <ul style="margin: 8px 0; padding-left: 20px; font-size: 13px; line-height: 1.5;">
-                            <li>Use <code>$1, $2, $3...</code> to reference captured groups in parentheses</li>
-                            <li>Use <code>^</code> for start of string, <code>$</code> for end of string</li>
-                            <li>Use <code>.*</code> to match any characters, <code>.+</code> to match one or more characters</li>
-                            <li>Test your regex carefully - invalid patterns will show an error</li>
-                            <li>Leave empty to keep original comments unchanged</li>
+                    <div style="margin-bottom: 10px;">
+                        <h5 style="margin: 0 0 5px 0; font-size: 13px;">Advanced Examples:</h5>
+                        <ul style="margin: 0; padding-left: 15px; line-height: 1.4;">
+                            <li><code>^(.+) - (.+)$ -> $2: $1</code> <small>- Swap parts separated by " - "</small></li>
+                            <li><code>(\d{4})-(\d{2})-(\d{2}) -> $3/$2/$1</code> <small>- Change date format</small></li>
+                            <li><code>^(.{1,20}).*$ -> $1...</code> <small>- Truncate long comments</small></li>
+                        </ul>
+                    </div>
+                    
+                    <div style="padding: 8px; background-color: #fff3cd; border-radius: 3px; margin: 0;">
+                        <strong style="font-size: 12px;">Tips:</strong>
+                        <ul style="margin: 3px 0 0 0; padding-left: 15px; font-size: 12px; line-height: 1.3;">
+                            <li>Use <code>$1, $2, $3...</code> for captured groups (auto-converted to Python)</li>
+                            <li>Use <code>^</code> for start, <code>$</code> for end of string</li>
+                            <li>Preview shows result; leave empty to keep original comments</li>
                         </ul>
                     </div>
                 </div>
@@ -211,7 +201,7 @@ function updateLinksList() {
         userLinks.forEach(function(link) {
             html += '<tr class="link-row" data-username="' + username + '">';
             html += '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
-            html += '<input type="checkbox" name="selected_links" value="' + link.id + '" class="link-checkbox" data-username="' + username + '" onchange="updateSubmitButton(); updateUserCheckbox(\'' + username + '\'); updateRegexPreview()">';
+            html += '<input type="checkbox" name="selected_links" value="' + link.id + '" class="link-checkbox" data-username="' + username + '" onchange="updateSubmitButton(); updateUserCheckbox(\'' + username + '\')">';
             html += '</td>';
             html += '<td style="padding: 8px; border: 1px solid #ddd;">' + (userLinks.length === 1 ? '<strong>' + username + '</strong>' : '↳') + '</td>';
             html += '<td style="padding: 8px; border: 1px solid #ddd;">' + (link.comment || '<em>No comment</em>') + '</td>';
@@ -241,7 +231,6 @@ function toggleAllLinks(selectAll = true) {
     }
     
     updateSubmitButton();
-    updateRegexPreview();
 }
 
 function toggleUserLinks(username) {
@@ -253,7 +242,6 @@ function toggleUserLinks(username) {
     }
     
     updateSubmitButton();
-    updateRegexPreview();
 }
 
 function updateUserCheckbox(username) {
@@ -302,103 +290,6 @@ function updateSubmitButton() {
     submitBtn.disabled = !(hasSelected && sourceServer && targetServer && sourceServer !== targetServer);
 }
 
-// Add regex preview functionality
-document.getElementById('comment_regex').addEventListener('input', function() {
-    updateRegexPreview();
-});
-
-function updateRegexPreview() {
-    var regexInput = document.getElementById('comment_regex').value.trim();
-    
-    // Remove any existing preview
-    var existingPreview = document.getElementById('regex-preview');
-    if (existingPreview) {
-        existingPreview.remove();
-    }
-    
-    if (!regexInput) return;
-    
-    // Parse pattern -> replacement format
-    var parts = regexInput.split(' -> ');
-    if (parts.length !== 2) {
-        showRegexError('Invalid format. Use: pattern -> replacement');
-        return;
-    }
-    
-    var pattern = parts[0];
-    var replacement = parts[1];
-    
-    try {
-        var regex = new RegExp(pattern, 'g');
-        
-        // Test with sample comments from currently selected links
-        var sampleComments = getSampleComments();
-        if (sampleComments.length > 0) {
-            showRegexPreview(sampleComments, regex, replacement);
-        }
-        
-    } catch (e) {
-        showRegexError('Invalid regex pattern: ' + e.message);
-    }
-}
-
-function getSampleComments() {
-    var comments = [];
-    var checkboxes = document.getElementsByName('selected_links');
-    
-    for (var i = 0; i < checkboxes.length && comments.length < 5; i++) {
-        if (checkboxes[i].checked) {
-            var row = checkboxes[i].closest('tr');
-            var commentCell = row.children[2]; // Link Comment column
-            var commentText = commentCell.textContent.trim();
-            if (commentText && commentText !== 'No comment') {
-                comments.push(commentText);
-            } else {
-                comments.push(''); // Include empty comments
-            }
-        }
-    }
-    
-    // Add some default samples if no selected links
-    if (comments.length === 0) {
-        comments = ['iPhone 13', 'Work Laptop', 'Home Router', '', 'Android Phone'];
-    }
-    
-    return comments;
-}
-
-function showRegexPreview(samples, regex, replacement) {
-    var previewHtml = '<div id="regex-preview" style="margin-top: 15px; padding: 15px; background-color: #e8f5e8; border-radius: 5px; border-left: 4px solid #28a745;">';
-    previewHtml += '<h5 style="margin-top: 0; color: #28a745;">✅ Preview (selected links):</h5>';
-    previewHtml += '<table style="width: 100%; font-size: 13px; border-collapse: collapse;">';
-    previewHtml += '<tr style="background-color: rgba(40, 167, 69, 0.1);"><th style="text-align: left; padding: 8px; border: 1px solid #28a745;">Original</th><th style="text-align: left; padding: 8px; border: 1px solid #28a745;">→</th><th style="text-align: left; padding: 8px; border: 1px solid #28a745;">Transformed</th></tr>';
-    
-    samples.forEach(function(comment) {
-        var original = comment || '(empty)';
-        var transformed = comment.replace(regex, replacement);
-        var changed = original !== transformed;
-        
-        previewHtml += '<tr>';
-        previewHtml += '<td style="padding: 8px; border: 1px solid #ddd; font-family: monospace;">' + original + '</td>';
-        previewHtml += '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">→</td>';
-        previewHtml += '<td style="padding: 8px; border: 1px solid #ddd; font-family: monospace;' + (changed ? ' font-weight: bold; color: #28a745; background-color: rgba(40, 167, 69, 0.1);' : '') + '">' + transformed + '</td>';
-        previewHtml += '</tr>';
-    });
-    
-    previewHtml += '</table></div>';
-    
-    document.querySelector('.regex-help').insertAdjacentHTML('afterend', previewHtml);
-}
-
-function showRegexError(message) {
-    var errorHtml = '<div id="regex-preview" style="margin-top: 15px; padding: 15px; background-color: #f8d7da; border-radius: 5px; border-left: 4px solid #dc3545;">';
-    errorHtml += '<h5 style="margin-top: 0; color: #dc3545;">❌ Error:</h5>';
-    errorHtml += '<p style="margin: 0; color: #721c24; font-weight: bold;">' + message + '</p>';
-    errorHtml += '</div>';
-    
-    document.querySelector('.regex-help').insertAdjacentHTML('afterend', errorHtml);
-}
-
 // Form submission confirmation
 document.getElementById('move-clients-form').addEventListener('submit', function(e) {
     var checkboxes = document.getElementsByName('selected_links');
@@ -433,6 +324,121 @@ document.getElementById('move-clients-form').addEventListener('submit', function
         e.preventDefault();
     }
 });
+
+// Add regex preview functionality
+document.getElementById('comment_regex').addEventListener('input', function() {
+    updateRegexPreview();
+});
+
+function updateRegexPreview() {
+    var regexInput = document.getElementById('comment_regex').value.trim();
+    
+    // Remove any existing preview
+    var existingPreview = document.getElementById('regex-preview');
+    if (existingPreview) {
+        existingPreview.remove();
+    }
+    
+    if (!regexInput) return;
+    
+    // Parse pattern -> replacement format
+    var parts = regexInput.split(' -> ');
+    if (parts.length !== 2) {
+        showRegexError('Invalid format. Use: pattern -> replacement');
+        return;
+    }
+    
+    var pattern = parts[0];
+    var replacement = parts[1];
+    
+    try {
+        var regex = new RegExp(pattern, 'g');
+        
+        // Test with sample comments from currently visible links
+        var sampleComments = getSampleComments();
+        if (sampleComments.length > 0) {
+            showRegexPreview(sampleComments, regex, replacement);
+        }
+        
+    } catch (e) {
+        showRegexError('Invalid regex pattern: ' + e.message);
+    }
+}
+
+function getSampleComments() {
+    var comments = [];
+    var checkboxes = document.getElementsByName('selected_links');
+    
+    // Collect actual comments from visible links
+    for (var i = 0; i < checkboxes.length && comments.length < 5; i++) {
+        var row = checkboxes[i].closest('tr');
+        if (row) {
+            var commentCell = row.children[2]; // Link Comment column
+            if (commentCell) {
+                var commentText = commentCell.textContent.trim();
+                if (commentText && commentText !== 'No comment') {
+                    comments.push(commentText);
+                }
+            }
+        }
+    }
+    
+    // Add some realistic default samples if no comments found or need more samples
+    var defaultSamples = ['iPhone 13', 'Work Laptop', 'Home Router', '', 'Android Phone', 'iPad Pro', 'Office PC'];
+    for (var i = 0; i < defaultSamples.length && comments.length < 5; i++) {
+        if (comments.indexOf(defaultSamples[i]) === -1) {
+            comments.push(defaultSamples[i]);
+        }
+    }
+    
+    return comments.slice(0, 5); // Limit to 5 samples
+}
+
+function showRegexPreview(samples, regex, replacement) {
+    var previewHtml = '<div id="regex-preview" style="margin-top: 10px; padding: 10px; background-color: #e8f5e8; border-radius: 3px; border-left: 4px solid #28a745;">';
+    previewHtml += '<h5 style="margin-top: 0; color: #28a745;">Preview (first 5 samples):</h5>';
+    previewHtml += '<table style="width: 100%; font-size: 13px;">';
+    previewHtml += '<tr><th style="text-align: left; padding: 5px;">Original</th><th style="text-align: left; padding: 5px;">→</th><th style="text-align: left; padding: 5px;">Transformed</th></tr>';
+    
+    samples.forEach(function(comment) {
+        var original = comment || '(empty)';
+        var transformed;
+        
+        try {
+            // Use string replace with regex and replacement string
+            transformed = original.replace(regex, replacement);
+        } catch (e) {
+            transformed = '(error: ' + e.message + ')';
+        }
+        
+        var changed = original !== transformed;
+        
+        previewHtml += '<tr>';
+        previewHtml += '<td style="padding: 3px 5px; font-family: monospace;">' + escapeHtml(original) + '</td>';
+        previewHtml += '<td style="padding: 3px 5px;">→</td>';
+        previewHtml += '<td style="padding: 3px 5px; font-family: monospace;' + (changed ? ' font-weight: bold; color: #28a745;' : '') + '">' + escapeHtml(transformed) + '</td>';
+        previewHtml += '</tr>';
+    });
+    
+    previewHtml += '</table></div>';
+    
+    document.querySelector('.regex-help').insertAdjacentHTML('afterend', previewHtml);
+}
+
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showRegexError(message) {
+    var errorHtml = '<div id="regex-preview" style="margin-top: 10px; padding: 10px; background-color: #f8d7da; border-radius: 3px; border-left: 4px solid #dc3545;">';
+    errorHtml += '<h5 style="margin-top: 0; color: #dc3545;">Error:</h5>';
+    errorHtml += '<p style="margin: 0; color: #721c24;">' + message + '</p>';
+    errorHtml += '</div>';
+    
+    document.querySelector('.regex-help').insertAdjacentHTML('afterend', errorHtml);
+}
 </script>
 
 <style>
@@ -488,15 +494,6 @@ document.getElementById('move-clients-form').addEventListener('submit', function
 
 input[type="checkbox"]:indeterminate {
     opacity: 0.5;
-}
-
-#comment_regex {
-    transition: border-color 0.3s ease;
-}
-
-#comment_regex:focus {
-    border-color: #007cba !important;
-    box-shadow: 0 0 5px rgba(0, 124, 186, 0.3);
 }
 </style>
 {% endblock %}
