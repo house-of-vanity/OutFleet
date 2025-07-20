@@ -1,0 +1,93 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_list %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrahead %}
+    <link rel="stylesheet" type="text/css" href="{% static 'admin/css/vpn_admin.css' %}">
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+    &rsaquo; <a href="{% url 'admin:vpn_server_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+
+<div class="module aligned">
+    <div class="form-row">
+        <div class="form-row field-box">
+            <label>Source Server:</label>
+            <div class="readonly"><strong>{{ source_server.name }}</strong> ({{ source_server.server_type }})</div>
+        </div>
+        
+        <div class="form-row field-box">
+            <label>Statistics:</label>
+            <div class="readonly">
+                <strong>{{ links_count }}</strong> client link(s) for <strong>{{ users_count }}</strong> user(s)
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if links_count == 0 %}
+    <div class="messagelist">
+        <div class="warning">No client links found on this server.</div>
+    </div>
+    <div class="submit-row">
+        <a href="{% url 'admin:vpn_server_changelist' %}" class="default">« Back to server list</a>
+    </div>
+{% else %}
+    <form method="post" id="move-form">
+        {% csrf_token %}
+        
+        <fieldset class="module aligned">
+            <h2>Move Options</h2>
+            
+            <div class="form-row">
+                <div>
+                    <label for="target_server" class="required">Target Server:</label>
+                    <select id="target_server" name="target_server" class="vLargeTextField" required>
+                        <option value="">-- Select target server --</option>
+                        {% for server in all_servers %}
+                            <option value="{{ server.id }}">{{ server.name }} ({{ server.server_type }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div>
+                    <label for="add_prefix">Add prefix to comments (optional):</label>
+                    <input type="text" id="add_prefix" name="add_prefix" class="vTextField" 
+                           placeholder="e.g. [FROM {{ source_server.name }}]">
+                    <p class="help">This prefix will be added to all client link comments</p>
+                </div>
+            </div>
+        </fieldset>
+
+        <div class="submit-row">
+            <input type="submit" value="Move All Client Links" class="default" 
+                   onclick="return confirm('Are you sure you want to move ALL {{ links_count }} client link(s) from {{ source_server.name }} to the selected target server?\\n\\nThis action cannot be undone.');">
+            <a href="{% url 'admin:vpn_server_changelist' %}" class="button cancel">Cancel</a>
+        </div>
+    </form>
+    
+    <div class="help">
+        <h3>What will happen:</h3>
+        <ul>
+            <li>All {{ links_count }} client links will be moved from <strong>{{ source_server.name }}</strong> to the target server</li>
+            <li>Users who don't have access to the target server will get new ACL entries created automatically</li>
+            <li>Empty ACL entries on the source server will be cleaned up</li>
+            <li>All link settings and comments will be preserved (with optional prefix)</li>
+            <li>This operation is database-only and doesn't require server connectivity</li>
+        </ul>
+    </div>
+{% endif %}
+
+{% endblock %}

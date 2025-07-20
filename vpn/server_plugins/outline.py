@@ -1,5 +1,4 @@
 import logging
-from venv import logger
 import requests
 from django.db import models
 from .generic import Server
@@ -36,11 +35,14 @@ class _FingerprintAdapter(requests.adapters.HTTPAdapter):
 
 
 class OutlineServer(Server):
-    logger = logging.getLogger(__name__)
     admin_url = models.URLField(help_text="Management URL")
     admin_access_cert = models.CharField(max_length=255, help_text="Fingerprint")
     client_hostname = models.CharField(max_length=255, help_text="Server address for clients")
     client_port = models.CharField(max_length=5, help_text="Server port for clients")
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.logger = logging.getLogger(__name__)
     
     class Meta:
         verbose_name = 'Outline'
@@ -58,9 +60,6 @@ class OutlineServer(Server):
     def client(self):
         return OutlineVPN(api_url=self.admin_url, cert_sha256=self.admin_access_cert)
 
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name} ({self.client_hostname}:{self.client_port})"
@@ -85,6 +84,7 @@ class OutlineServer(Server):
     
     def sync_users(self):
         from vpn.models import User, ACL
+        logger = logging.getLogger(__name__)
         logger.debug(f"[{self.name}] Sync all users")
         keys = self.client.get_keys()
         acls = ACL.objects.filter(server=self)
@@ -119,10 +119,28 @@ class OutlineServer(Server):
             raise OutlineConnectionError("Client error. Can't connect.", original_exception=e)
 
     def _get_key(self, user):
-        logger.error(f"Asking for key for user {user.username}")
-        result = self.client.get_key(str(user.username))
-        logger.error(f"Got key for user {user.username} - {result}")
-        return result
+        logger = logging.getLogger(__name__)
+        logger.debug(f"[{self.name}] Looking for key for user {user.username}")
+        try:
+            # Try to get key by username first
+            result = self.client.get_key(str(user.username))
+            logger.debug(f"[{self.name}] Found key for user {user.username} by username")
+            return result
+        except OutlineServerErrorException:
+            # If not found by username, search by password (hash)
+            logger.debug(f"[{self.name}] Key not found by username, searching by password")
+            try:
+                keys = self.client.get_keys()
+                for key in keys:
+                    if key.password == user.hash:
+                        logger.debug(f"[{self.name}] Found key for user {user.username} by password match")
+                        return key
+                # No key found
+                logger.debug(f"[{self.name}] No key found for user {user.username}")
+                raise OutlineServerErrorException(f"Key not found for user {user.username}")
+            except Exception as e:
+                logger.error(f"[{self.name}] Error searching for key for user {user.username}: {e}")
+                raise OutlineServerErrorException(f"Error searching for key: {e}")
 
     def get_user(self, user, raw=False):
         user_info = self._get_key(user)
@@ -140,33 +158,53 @@ class OutlineServer(Server):
         
 
     def add_user(self, user):
+        logger = logging.getLogger(__name__)
         try:
             server_user = self._get_key(user)
         except OutlineServerErrorException as e:
             server_user = None
+        
         logger.debug(f"[{self.name}] User {str(server_user)}")
 
         result = {}
         key = None
 
         if server_user:
-            if server_user.method != "chacha20-ietf-poly1305" or \
-            server_user.port != int(self.client_port) or \
-            server_user.name != user.username or \
-            server_user.password != user.hash or \
-            self.client.delete_key(user.hash):
-
-                self.delete_user(user)
-                key = self.client.create_key(
-                    key_id=user.username,
-                    name=user.username,
-                    method=server_user.method,
-                    password=user.hash,
-                    data_limit=None,
-                    port=server_user.port
-                )
-                logger.debug(f"[{self.name}] User {user.username} updated")
+            # Check if user needs update - but don't delete immediately
+            needs_update = (
+                server_user.method != "chacha20-ietf-poly1305" or 
+                server_user.port != int(self.client_port) or 
+                server_user.name != user.username or 
+                server_user.password != user.hash
+            )
+            
+            if needs_update:
+                # Delete old key before creating new one
+                try:
+                    self.client.delete_key(server_user.key_id)
+                    logger.debug(f"[{self.name}] Deleted outdated key for user {user.username}")
+                except Exception as e:
+                    logger.warning(f"[{self.name}] Failed to delete old key for user {user.username}: {e}")
+                
+                # Create new key with correct parameters
+                try:
+                    key = self.client.create_key(
+                        key_id=user.username,
+                        name=user.username,
+                        method="chacha20-ietf-poly1305",
+                        password=user.hash,
+                        data_limit=None,
+                        port=int(self.client_port)
+                    )
+                    logger.info(f"[{self.name}] User {user.username} updated")
+                except OutlineServerErrorException as e:
+                    raise OutlineConnectionError(f"Failed to create updated key for user {user.username}", original_exception=e)
+            else:
+                # User exists and is up to date
+                key = server_user
+                logger.debug(f"[{self.name}] User {user.username} already up to date")
         else:
+            # User doesn't exist, create new key
             try:
                 key = self.client.create_key(
                     key_id=user.username,
@@ -180,23 +218,39 @@ class OutlineServer(Server):
             except OutlineServerErrorException as e:
                 error_message = str(e)
                 if "code\":\"Conflict" in error_message:
-                    logger.warning(f"[{self.name}] Conflict for User {user.username}, trying to force sync. {error_message}")
-                    for key in self.client.get_keys():
-                        logger.warning(f"[{self.name}] checking user: {key.name} passowrd: {key.password}")
-                        if key.password == user.hash:
-                            self.delete_user(user)
-                    return self.add_user(user)
+                    logger.warning(f"[{self.name}] Conflict for User {user.username}, trying to resolve. {error_message}")
+                    # Find conflicting key by password and remove it
+                    try:
+                        for existing_key in self.client.get_keys():
+                            if existing_key.password == user.hash:
+                                logger.warning(f"[{self.name}] Found conflicting key {existing_key.key_id} with same password")
+                                self.client.delete_key(existing_key.key_id)
+                                break
+                        # Try to create again after cleanup
+                        return self.add_user(user)
+                    except Exception as cleanup_error:
+                        logger.error(f"[{self.name}] Failed to resolve conflict for user {user.username}: {cleanup_error}")
+                        raise OutlineConnectionError(f"Conflict resolution failed for user {user.username}", original_exception=e)
                 else:
                     raise OutlineConnectionError("API Error", original_exception=e)
+        
+        # Build result from key object
         try:
-            result['key_id'] = key.key_id
-            result['name'] = key.name
-            result['method'] = key.method
-            result['password'] = key.password
-            result['data_limit'] = key.data_limit
-            result['port'] = key.port
+            if key:
+                result = {
+                    'key_id': key.key_id,
+                    'name': key.name,
+                    'method': key.method,
+                    'password': key.password,
+                    'data_limit': key.data_limit,
+                    'port': key.port
+                }
+            else:
+                result = {"error": "No key object returned"}
         except Exception as e:
+            logger.error(f"[{self.name}] Error building result for user {user.username}: {e}")
             result = {"error": str(e)}
+        
         return result
 
     def delete_user(self, user):

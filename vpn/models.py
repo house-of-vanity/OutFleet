@@ -1,4 +1,5 @@
 import uuid
+import logging
 from django.db import models
 from vpn.tasks import sync_user
 from django.db.models.signals import post_save, pre_delete
@@ -7,6 +8,8 @@ from .server_plugins import Server
 import shortuuid
 
 from django.contrib.auth.models import AbstractUser
+
+logger = logging.getLogger(__name__)
 
 class AccessLog(models.Model):
     user = models.CharField(max_length=256, blank=True, null=True, editable=False)
@@ -65,11 +68,24 @@ class ACL(models.Model):
 
 @receiver(post_save, sender=ACL)
 def acl_created_or_updated(sender, instance, created, **kwargs):
-    sync_user.delay_on_commit(instance.user.id, instance.server.id)
+    try:
+        sync_user.delay_on_commit(instance.user.id, instance.server.id)
+        if created:
+            logger.info(f"Scheduled sync for new ACL: user {instance.user.username} on server {instance.server.name}")
+        else:
+            logger.info(f"Scheduled sync for updated ACL: user {instance.user.username} on server {instance.server.name}")
+    except Exception as e:
+        logger.error(f"Failed to schedule sync task for ACL {instance.id}: {e}")
+        # Don't raise exception to avoid blocking ACL creation/update
 
 @receiver(pre_delete, sender=ACL)
 def acl_deleted(sender, instance, **kwargs):
-    sync_user.delay_on_commit(instance.user.id, instance.server.id)
+    try:
+        sync_user.delay_on_commit(instance.user.id, instance.server.id)
+        logger.info(f"Scheduled sync for deleted ACL: user {instance.user.username} on server {instance.server.name}")
+    except Exception as e:
+        logger.error(f"Failed to schedule sync task for ACL deletion {instance.id}: {e}")
+        # Don't raise exception to avoid blocking ACL deletion
 
 
 class ACLLink(models.Model):

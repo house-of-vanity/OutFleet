@@ -1,0 +1,137 @@
+/* Custom styles for VPN admin interface */
+
+/* Quick action buttons in server list */
+.quick-actions .button {
+    display: inline-block;
+    padding: 4px 8px;
+    margin: 0 2px;
+    font-size: 11px;
+    line-height: 1.2;
+    text-decoration: none;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: linear-gradient(to bottom, #f8f8f8, #e8e8e8);
+    color: #333;
+    cursor: pointer;
+    white-space: nowrap;
+    min-width: 60px;
+    text-align: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+}
+
+.quick-actions .button:hover {
+    background: linear-gradient(to bottom, #e8e8e8, #d8d8d8);
+    border-color: #bbb;
+    color: #000;
+    text-decoration: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.quick-actions .button:active {
+    background: linear-gradient(to bottom, #d8d8d8, #e8e8e8);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+}
+
+/* Sync button - blue theme */
+.quick-actions .button[href*="/sync/"] {
+    background: linear-gradient(to bottom, #4a90e2, #357abd);
+    border-color: #2968a3;
+    color: white;
+}
+
+.quick-actions .button[href*="/sync/"]:hover {
+    background: linear-gradient(to bottom, #357abd, #2968a3);
+    border-color: #1f5582;
+}
+
+/* Move clients button - orange theme */
+.quick-actions .button[href*="/move-clients/"] {
+    background: linear-gradient(to bottom, #f39c12, #e67e22);
+    border-color: #d35400;
+    color: white;
+}
+
+.quick-actions .button[href*="/move-clients/"]:hover {
+    background: linear-gradient(to bottom, #e67e22, #d35400);
+    border-color: #bf4f36;
+}
+
+/* Status indicators improvements */
+.server-status-ok {
+    color: #27ae60;
+    font-weight: bold;
+}
+
+.server-status-error {
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+.server-status-warning {
+    color: #f39c12;
+    font-weight: bold;
+}
+
+/* Better spacing for list display */
+.admin-object-tools {
+    margin-bottom: 10px;
+}
+
+/* Improve readability of pre-formatted status */
+.changelist-results pre {
+    font-size: 11px;
+    margin: 0;
+    padding: 2px 4px;
+    background: #f8f8f8;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Form improvements for move clients page */
+.form-row.field-box {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    margin: 10px 0;
+    background: #f9f9f9;
+}
+
+.form-row.field-box label {
+    font-weight: bold;
+    color: #333;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.form-row.field-box .readonly {
+    padding: 5px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+}
+
+.help {
+    background: #e8f4fd;
+    border: 1px solid #b8daff;
+    border-radius: 4px;
+    padding: 15px;
+    margin: 20px 0;
+}
+
+.help h3 {
+    margin-top: 0;
+    color: #0066cc;
+}
+
+.help ul {
+    margin-bottom: 0;
+}
+
+.help li {
+    margin-bottom: 5px;
+}

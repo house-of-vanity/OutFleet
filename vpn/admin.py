@@ -337,15 +337,23 @@ class UserAdmin(admin.ModelAdmin):
         return qs
 
     def save_model(self, request, obj, form, change):
+        import logging
+        logger = logging.getLogger(__name__)
+        
         super().save_model(request, obj, form, change)
         selected_servers = form.cleaned_data.get('servers', [])
 
         # Remove ACLs that are no longer selected
-        ACL.objects.filter(user=obj).exclude(server__in=selected_servers).delete()
+        removed_acls = ACL.objects.filter(user=obj).exclude(server__in=selected_servers)
+        for acl in removed_acls:
+            logger.info(f"Removing ACL for user {obj.username} from server {acl.server.name}")
+        removed_acls.delete()
 
         # Create new ACLs for newly selected servers (with default links)
         for server in selected_servers:
             acl, created = ACL.objects.get_or_create(user=obj, server=server)
+            if created:
+                logger.info(f"Created new ACL for user {obj.username} on server {server.name}")
             # Note: get_or_create will use the default save() method which creates default links
 
 @admin.register(AccessLog)
@@ -405,7 +413,10 @@ class ACLAdmin(admin.ModelAdmin):
             data = server.get_user(user)
             return format_object(data)
         except Exception as e:
-            return mark_safe(f"<span style='color: red;'>Error: {e}</span>")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to get user info for {user.username} on {server.name}: {e}")
+            return mark_safe(f"<span style='color: red;'>Server connection error: {e}</span>")
 
     @admin.display(description='Dynamic Config Links')
     def display_links(self, obj):

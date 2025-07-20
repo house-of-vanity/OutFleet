@@ -22,20 +22,28 @@ def userFrontend(request, user_hash):
 
 def shadowsocks(request, link):
     from .models import ACLLink, AccessLog
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
     try:
         acl_link = get_object_or_404(ACLLink, link=link)
         acl = acl_link.acl
+        logger.info(f"Found ACL link for user {acl.user.username} on server {acl.server.name}")
     except Http404:
+        logger.warning(f"ACL link not found: {link}")
         AccessLog.objects.create(user=None, server="Unknown", action="Failed",
                                  data=f"ACL not found for link: {link}")
         return JsonResponse({"error": "Not allowed"}, status=403)
 
     try:
         server_user = acl.server.get_user(acl.user, raw=True)
+        logger.info(f"Successfully retrieved user credentials for {acl.user.username} from {acl.server.name}")
     except Exception as e:
+        logger.error(f"Failed to get user credentials for {acl.user.username} from {acl.server.name}: {e}")
         AccessLog.objects.create(user=acl.user, server=acl.server.name, action="Failed",
-                                 data=f"{e}")
-        return JsonResponse({"error": f"Couldn't get credentials from server. {e}"})
+                                 data=f"Failed to get credentials: {e}")
+        return JsonResponse({"error": f"Couldn't get credentials from server. {e}"}, status=500)
 
     if request.GET.get('mode') == 'json':
       config = {
