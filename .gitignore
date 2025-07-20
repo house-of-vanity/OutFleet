@@ -5,5 +5,4 @@ debug.log
 *.pyc
 staticfiles/
 *.__pycache__.*
-vpn/migrations/
 celerybeat-schedule

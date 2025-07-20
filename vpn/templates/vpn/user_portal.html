@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VPN Access Portal - {{ user.username }}</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -73,6 +72,18 @@
             font-size: 0.9rem;
         }
 
+        .stats-info {
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .stats-info p {
+            color: #6b7280;
+            font-size: 0.85rem;
+            margin: 0;
+            opacity: 0.8;
+        }
+
         .servers-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -97,17 +108,44 @@
 
         .server-header {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: space-between;
             margin-bottom: 20px;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 15px;
+        }
+
+        .server-info {
+            flex: 1;
         }
 
         .server-name {
             font-size: 1.5rem;
             font-weight: 600;
             color: #fff;
+            margin-bottom: 5px;
+        }
+
+        .server-stats {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .connection-count {
+            color: #9ca3af;
+            font-size: 0.85rem;
+            background: rgba(74, 222, 128, 0.1);
+            padding: 4px 8px;
+            border-radius: 12px;
+            border: 1px solid rgba(74, 222, 128, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .connection-count:hover {
+            background: rgba(74, 222, 128, 0.2);
+            border-color: rgba(74, 222, 128, 0.4);
+            transform: scale(1.05);
         }
 
         .server-type {
@@ -118,6 +156,7 @@
             font-size: 0.8rem;
             font-weight: 600;
             text-transform: uppercase;
+            align-self: flex-start;
         }
 
         .server-status {
@@ -172,32 +211,39 @@
         }
 
         .link-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
             margin-bottom: 15px;
-            flex-wrap: wrap;
-            gap: 10px;
+        }
+
+        .link-info {
+            flex: 1;
         }
 
         .link-comment {
             font-weight: 600;
             color: #fff;
+            margin-bottom: 5px;
         }
 
-        .qr-toggle {
-            background: rgba(74, 222, 128, 0.2);
-            color: #4ade80;
-            border: 1px solid rgba(74, 222, 128, 0.3);
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
+        .link-stats {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .usage-count {
+            color: #9ca3af;
             font-size: 0.8rem;
+            background: rgba(59, 130, 246, 0.1);
+            padding: 3px 8px;
+            border-radius: 10px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
             transition: all 0.3s ease;
         }
 
-        .qr-toggle:hover {
-            background: rgba(74, 222, 128, 0.3);
+        .usage-count:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.4);
+            transform: scale(1.05);
         }
 
         .link-url {
@@ -231,19 +277,6 @@
             background: #22c55e;
         }
 
-        .qr-container {
-            display: none;
-            justify-content: center;
-            padding: 20px;
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 12px;
-            margin-top: 15px;
-        }
-
-        .qr-container.show {
-            display: flex;
-        }
-
         .footer {
             text-align: center;
             padding: 40px 20px;
@@ -271,16 +304,29 @@
             }
 
             .stats {
-                gap: 20px;
+                gap: 15px;
+            }
+
+            .stat {
+                min-width: 120px;
             }
 
             .server-card {
                 padding: 20px;
             }
 
-            .link-header {
+            .server-header {
                 flex-direction: column;
                 align-items: flex-start;
+                gap: 10px;
+            }
+
+            .server-stats {
+                gap: 10px;
+            }
+
+            .link-stats {
+                gap: 8px;
             }
         }
 
@@ -294,12 +340,6 @@
             font-size: 1.5rem;
             margin-bottom: 10px;
             color: #6b7280;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #9ca3af;
         }
     </style>
 </head>
@@ -315,8 +355,19 @@
                 </div>
                 <div class="stat">
                     <span class="stat-number">{{ total_links }}</span>
-                    <span class="stat-label">Active Connections</span>
+                    <span class="stat-label">Active Links</span>
                 </div>
+                <div class="stat">
+                    <span class="stat-number">{{ total_connections }}</span>
+                    <span class="stat-label">Total Uses</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number">{{ recent_connections }}</span>
+                    <span class="stat-label">Last 30 Days</span>
+                </div>
+            </div>
+            <div class="stats-info">
+                <p>📊 Statistics are updated in real-time and show your connection history</p>
             </div>
         </div>
 
@@ -325,7 +376,12 @@
                 {% for server_name, server_data in servers_data.items %}
                 <div class="server-card">
                     <div class="server-header">
-                        <div class="server-name">{{ server_name }}</div>
+                        <div class="server-info">
+                            <div class="server-name">{{ server_name }}</div>
+                            <div class="server-stats">
+                                <span class="connection-count">📊 {{ server_data.total_connections }} uses</span>
+                            </div>
+                        </div>
                         <div class="server-type">{{ server_data.server_type }}</div>
                     </div>
 
@@ -347,17 +403,17 @@
                         {% for link_data in server_data.links %}
                         <div class="link-item">
                             <div class="link-header">
-                                <div class="link-comment">📱 {{ link_data.comment }}</div>
-                                <button class="qr-toggle" onclick="toggleQR('qr-{{ link_data.link.id }}')">Show QR Code</button>
+                                <div class="link-info">
+                                    <div class="link-comment">📱 {{ link_data.comment }}</div>
+                                    <div class="link-stats">
+                                        <span class="usage-count">✨ {{ link_data.connections }} uses</span>
+                                    </div>
+                                </div>
                             </div>
                             
                             <div class="link-url">
                                 {{ link_data.url }}
                                 <button class="copy-btn" onclick="copyToClipboard('{{ link_data.url }}')">Copy</button>
-                            </div>
-                            
-                            <div id="qr-{{ link_data.link.id }}" class="qr-container">
-                                <!-- QR code will be generated here -->
                             </div>
                         </div>
                         {% endfor %}
@@ -379,40 +435,6 @@
     </div>
 
     <script>
-        // QR Code generation and management
-        const qrCodes = {};
-
-        function toggleQR(containerId) {
-            const container = document.getElementById(containerId);
-            const isVisible = container.classList.contains('show');
-
-            if (isVisible) {
-                container.classList.remove('show');
-            } else {
-                container.classList.add('show');
-                
-                // Generate QR code if not already generated
-                if (!qrCodes[containerId]) {
-                    const linkElement = container.previousElementSibling;
-                    const linkText = linkElement.textContent.trim().replace('Copy', '').trim();
-                    
-                    container.innerHTML = '<div class="loading">Generating QR Code...</div>';
-                    
-                    setTimeout(() => {
-                        container.innerHTML = '';
-                        qrCodes[containerId] = new QRCode(container, {
-                            text: linkText,
-                            width: 200,
-                            height: 200,
-                            colorDark: "#000000",
-                            colorLight: "#ffffff",
-                            correctLevel: QRCode.CorrectLevel.M
-                        });
-                    }, 100);
-                }
-            }
-        }
-
         // Copy to clipboard functionality
         async function copyToClipboard(text) {
             try {
@@ -472,6 +494,11 @@
                 from { transform: translateX(0); opacity: 1; }
                 to { transform: translateX(100%); opacity: 0; }
             }
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.1); }
+                100% { transform: scale(1); }
+            }
         `;
         document.head.appendChild(style);
 
@@ -492,6 +519,36 @@
                     card.style.transform = 'translateY(0)';
                 }, index * 150);
             });
+            
+            // Animate stat numbers
+            const statNumbers = document.querySelectorAll('.stat-number');
+            statNumbers.forEach((stat, index) => {
+                const finalValue = parseInt(stat.textContent);
+                if (finalValue > 0) {
+                    stat.textContent = '0';
+                    let current = 0;
+                    const increment = Math.ceil(finalValue / 20);
+                    const timer = setInterval(() => {
+                        current += increment;
+                        if (current >= finalValue) {
+                            stat.textContent = finalValue;
+                            clearInterval(timer);
+                        } else {
+                            stat.textContent = current;
+                        }
+                    }, 50);
+                }
+            });
+            
+            // Add pulse animation to connection counts
+            setTimeout(() => {
+                const connectionCounts = document.querySelectorAll('.connection-count, .usage-count');
+                connectionCounts.forEach((count, index) => {
+                    setTimeout(() => {
+                        count.style.animation = 'pulse 0.6s ease-in-out';
+                    }, index * 100);
+                });
+            }, 1000);
         });
     </script>
 </body>

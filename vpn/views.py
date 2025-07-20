@@ -1,7 +1,8 @@
 def userPortal(request, user_hash):
     """HTML portal for user to view their VPN access links and server information"""
-    from .models import User, ACLLink
+    from .models import User, ACLLink, AccessLog
     import logging
+    from django.db.models import Count, Q
     
     logger = logging.getLogger(__name__)
     
@@ -10,7 +11,6 @@ def userPortal(request, user_hash):
         logger.info(f"User portal accessed for user {user.username}")
     except Http404:
         logger.warning(f"User portal access attempt with invalid hash: {user_hash}")
-        from django.shortcuts import render
         return render(request, 'vpn/user_portal_error.html', {
             'error_title': 'Access Denied',
             'error_message': 'Invalid access link. Please contact your administrator.'
@@ -19,6 +19,45 @@ def userPortal(request, user_hash):
     try:
         # Get all ACL links for the user with server information
         acl_links = ACLLink.objects.filter(acl__user=user).select_related('acl__server', 'acl')
+        
+        # Get connection statistics for all user's links
+        # Count successful connections for each specific link
+        connection_stats = {}
+        total_connections = 0
+        
+        for acl_link in acl_links:
+            # Count successful connections for this specific link by checking if the link appears in the access log data
+            # This is more accurate as it counts actual uses of the specific link
+            link_connections = AccessLog.objects.filter(
+                user=user.username,
+                server=acl_link.acl.server.name,
+                action='Success'
+            ).extra(
+                where=["data LIKE %s"],
+                params=[f'%{acl_link.link}%']
+            ).count()
+            
+            # If no specific link matches found, fall back to general server connection count for this user
+            if link_connections == 0:
+                # This gives a rough estimate based on server connections divided by number of links for this server
+                server_connections = AccessLog.objects.filter(
+                    user=user.username,
+                    server=acl_link.acl.server.name,
+                    action='Success'
+                ).count()
+                
+                # Get number of links for this server for this user
+                user_links_on_server = ACLLink.objects.filter(
+                    acl__user=user,
+                    acl__server=acl_link.acl.server
+                ).count()
+                
+                # Distribute connections evenly among links if we can't track specific usage
+                if user_links_on_server > 0:
+                    link_connections = server_connections // user_links_on_server
+            
+            connection_stats[acl_link.link] = link_connections
+            total_connections += link_connections
         
         # Group links by server
         servers_data = {}
@@ -47,32 +86,45 @@ def userPortal(request, user_hash):
                     'error': server_error,
                     'links': [],
                     'server_type': server.server_type,
+                    'total_connections': 0,
                 }
             
-            # Add link information
+            # Add link information with connection stats
             link_url = f"{EXTERNAL_ADDRESS}/ss/{link.link}#{server_name}"
+            connection_count = connection_stats.get(link.link, 0)
+            
             servers_data[server_name]['links'].append({
                 'link': link,
                 'url': link_url,
-                'qr_data': link_url,  # For QR code generation
                 'comment': link.comment or 'Default',
+                'connections': connection_count,
             })
+            servers_data[server_name]['total_connections'] += connection_count
             total_links += 1
+        
+        # Get recent connection activity (last 30 days)
+        from datetime import datetime, timedelta
+        recent_date = datetime.now() - timedelta(days=30)
+        recent_connections = AccessLog.objects.filter(
+            user=user.username,
+            action='Success',
+            timestamp__gte=recent_date
+        ).count()
         
         context = {
             'user': user,
             'servers_data': servers_data,
             'total_servers': len(servers_data),
             'total_links': total_links,
+            'total_connections': total_connections,
+            'recent_connections': recent_connections,
             'external_address': EXTERNAL_ADDRESS,
         }
         
-        from django.shortcuts import render
         return render(request, 'vpn/user_portal.html', context)
         
     except Exception as e:
         logger.error(f"Error loading user portal for {user.username}: {e}")
-        from django.shortcuts import render
         return render(request, 'vpn/user_portal_error.html', {
             'error_title': 'Server Error',
             'error_message': 'Unable to load your VPN information. Please try again later or contact support.'
