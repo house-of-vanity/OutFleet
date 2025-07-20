@@ -276,7 +276,7 @@
             padding: 12px;
             border-radius: 12px;
             border: 1px solid rgba(255, 255, 255, 0.1);
-            min-width: 120px;
+            min-width: 170px;
         }
 
         .chart-title {
@@ -290,15 +290,15 @@
         .chart-bars {
             display: flex;
             align-items: end;
-            gap: 2px;
+            gap: 1px;
             height: 30px;
-            width: 70px;
+            width: 150px;
         }
 
         .chart-bar {
             background: linear-gradient(to top, #4ade80, #22c55e);
-            width: 8px;
-            border-radius: 2px 2px 0 0;
+            width: 4px;
+            border-radius: 1px 1px 0 0;
             transition: all 0.3s ease;
             min-height: 2px;
             opacity: 0.7;
@@ -400,17 +400,17 @@
             }
             
             .usage-chart {
-                min-width: 100px;
+                min-width: 160px;
                 padding: 8px;
             }
             
             .chart-bars {
-                width: 60px;
+                width: 120px;
                 height: 25px;
             }
             
             .chart-bar {
-                width: 6px;
+                width: 3px;
             }
         }
 
@@ -495,7 +495,7 @@
                                     </div>
                                 </div>
                                 <div class="usage-chart" data-usage="{{ link_data.daily_usage|join:',' }}" data-max="{{ link_data.max_daily }}">
-                                    <div class="chart-title">7-day activity</div>
+                                    <div class="chart-title">30-day activity</div>
                                     <div class="chart-bars">
                                         {% for day_usage in link_data.daily_usage %}
                                         <div class="chart-bar" data-height="{{ day_usage }}" data-max="{{ link_data.max_daily }}"></div>

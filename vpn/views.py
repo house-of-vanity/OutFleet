@@ -28,36 +28,44 @@ def userPortal(request, user_hash):
         total_connections = 0
         
         # Get date ranges for analysis
-        from datetime import datetime, timedelta
-        now = datetime.now()
+        from django.utils import timezone
+        from datetime import timedelta
+        now = timezone.now()
         recent_date = now - timedelta(days=30)
         
         for acl_link in acl_links:
-            # Count successful connections for this specific link by checking if the link appears in the access log data
-            link_connections = AccessLog.objects.filter(
+            # Since we can't reliably track individual link usage from AccessLog.data,
+            # we'll count all successful connections to the server for this user
+            # and distribute them among all links for this server
+            
+            # Get all successful connections for this user on this server
+            server_connections = AccessLog.objects.filter(
                 user=user.username,
                 server=acl_link.acl.server.name,
                 action='Success'
-            ).extra(
-                where=["data LIKE %s"],
-                params=[f'%{acl_link.link}%']
             ).count()
             
             # Get recent connections (last 30 days)
-            recent_connections = AccessLog.objects.filter(
+            server_recent_connections = AccessLog.objects.filter(
                 user=user.username,
                 server=acl_link.acl.server.name,
                 action='Success',
                 timestamp__gte=recent_date
-            ).extra(
-                where=["data LIKE %s"],
-                params=[f'%{acl_link.link}%']
             ).count()
             
-            # Calculate usage frequency (connections per week over last 30 days)
-            # Get daily usage for the last 7 days for mini chart
+            # Get number of links for this server for this user
+            user_links_on_server = ACLLink.objects.filter(
+                acl__user=user,
+                acl__server=acl_link.acl.server
+            ).count()
+            
+            # Distribute connections evenly among links
+            link_connections = server_connections // user_links_on_server if user_links_on_server > 0 else 0
+            recent_connections = server_recent_connections // user_links_on_server if user_links_on_server > 0 else 0
+            
+            # Calculate daily usage for the last 30 days
             daily_usage = []
-            for i in range(7):
+            for i in range(30):
                 day_start = now - timedelta(days=i+1)
                 day_end = now - timedelta(days=i)
                 
@@ -67,47 +75,14 @@ def userPortal(request, user_hash):
                     action='Success',
                     timestamp__gte=day_start,
                     timestamp__lt=day_end
-                ).extra(
-                    where=["data LIKE %s"],
-                    params=[f'%{acl_link.link}%']
                 ).count()
                 
-                daily_usage.append(day_connections)
+                # Distribute daily connections among links
+                day_link_connections = day_connections // user_links_on_server if user_links_on_server > 0 else 0
+                daily_usage.append(day_link_connections)
             
             # Reverse to show oldest to newest
             daily_usage.reverse()
-            
-            # If no specific link matches found, fall back to general server connection count for this user
-            if link_connections == 0:
-                server_connections = AccessLog.objects.filter(
-                    user=user.username,
-                    server=acl_link.acl.server.name,
-                    action='Success'
-                ).count()
-                
-                server_recent_connections = AccessLog.objects.filter(
-                    user=user.username,
-                    server=acl_link.acl.server.name,
-                    action='Success',
-                    timestamp__gte=recent_date
-                ).count()
-                
-                # Get number of links for this server for this user
-                user_links_on_server = ACLLink.objects.filter(
-                    acl__user=user,
-                    acl__server=acl_link.acl.server
-                ).count()
-                
-                # Distribute connections evenly among links if we can't track specific usage
-                if user_links_on_server > 0:
-                    link_connections = server_connections // user_links_on_server
-                    recent_connections = server_recent_connections // user_links_on_server
-                    # Distribute daily usage as well
-                    if sum(daily_usage) == 0:  # If no activity, create empty chart
-                        daily_usage = [0] * 7
-                    else:
-                        avg_daily = max(1, sum(daily_usage) // (user_links_on_server * 7))
-                        daily_usage = [avg_daily if sum(daily_usage) > 0 else 0 for _ in range(7)]
             
             connection_stats[acl_link.link] = link_connections
             recent_connection_stats[acl_link.link] = recent_connections
@@ -148,7 +123,7 @@ def userPortal(request, user_hash):
             link_url = f"{EXTERNAL_ADDRESS}/ss/{link.link}#{server_name}"
             connection_count = connection_stats.get(link.link, 0)
             recent_count = recent_connection_stats.get(link.link, 0)
-            daily_usage = usage_frequency.get(link.link, [0] * 7)
+            daily_usage = usage_frequency.get(link.link, [0] * 30)
             
             servers_data[server_name]['links'].append({
                 'link': link,
