@@ -12,7 +12,7 @@ app = Celery('mysite')
 app.conf.beat_schedule = {
     'periodical_servers_sync': {
         'task': 'sync_all_servers',
-        'schedule': crontab(minute='*'),
+        'schedule': crontab(minute=0, hour='*/3'),  # Every 3 hours
     },
     'cleanup_old_task_logs': {
         'task': 'cleanup_task_logs',

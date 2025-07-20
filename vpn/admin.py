@@ -497,7 +497,9 @@ try:
         IntervalSchedule, 
         SolarSchedule
     )
+    from django.contrib.auth.models import Group
     
+    # Unregister celery models that we don't want in admin
     admin.site.unregister(GroupResult)
     admin.site.unregister(PeriodicTask)
     admin.site.unregister(ClockedSchedule)
@@ -506,13 +508,15 @@ try:
     admin.site.unregister(SolarSchedule)
     admin.site.unregister(TaskResult)
     
+    # Unregister Django's default Group model
+    admin.site.unregister(Group)
+    
 except (ImportError, admin.sites.NotRegistered):
     pass
 
 # Custom Celery admin interfaces
 try:
     from django_celery_results.models import TaskResult
-    from django_celery_beat.models import PeriodicTask
     
     @admin.register(TaskResult)
     class CustomTaskResultAdmin(admin.ModelAdmin):
@@ -604,13 +608,6 @@ try:
         
         def has_change_permission(self, request, obj=None):
             return False
-    
-    @admin.register(PeriodicTask)
-    class CustomPeriodicTaskAdmin(admin.ModelAdmin):
-        list_display = ('name', 'task', 'enabled', 'last_run_at', 'total_run_count')
-        list_filter = ('enabled', 'last_run_at')
-        search_fields = ('name', 'task')
-        readonly_fields = ('last_run_at', 'total_run_count')
         
 except ImportError:
     pass
