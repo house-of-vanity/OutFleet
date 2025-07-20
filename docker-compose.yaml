@@ -8,9 +8,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - POSTGRES_HOST=172.17.0.1
-      - POSTGRES_USER=outfleet
-      - POSTGRES_PASSWORD='3u!DCZm4%AD$kGij2'
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
       - EXTERNAL_ADDRESS=http://127.0.0.1:8000
       - CELERY_BROKER_URL=redis://redis:6379/0
     depends_on:
