@@ -211,11 +211,17 @@
         }
 
         .link-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
             margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 15px;
         }
 
         .link-info {
             flex: 1;
+            min-width: 200px;
         }
 
         .link-comment {
@@ -244,6 +250,70 @@
             background: rgba(59, 130, 246, 0.2);
             border-color: rgba(59, 130, 246, 0.4);
             transform: scale(1.05);
+        }
+
+        .recent-count {
+            color: #9ca3af;
+            font-size: 0.8rem;
+            background: rgba(168, 85, 247, 0.1);
+            padding: 3px 8px;
+            border-radius: 10px;
+            border: 1px solid rgba(168, 85, 247, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .recent-count:hover {
+            background: rgba(168, 85, 247, 0.2);
+            border-color: rgba(168, 85, 247, 0.4);
+            transform: scale(1.05);
+        }
+
+        .usage-chart {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            min-width: 120px;
+        }
+
+        .chart-title {
+            color: #9ca3af;
+            font-size: 0.7rem;
+            margin-bottom: 8px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .chart-bars {
+            display: flex;
+            align-items: end;
+            gap: 2px;
+            height: 30px;
+            width: 70px;
+        }
+
+        .chart-bar {
+            background: linear-gradient(to top, #4ade80, #22c55e);
+            width: 8px;
+            border-radius: 2px 2px 0 0;
+            transition: all 0.3s ease;
+            min-height: 2px;
+            opacity: 0.7;
+            transform-origin: bottom;
+        }
+
+        .chart-bar:hover {
+            opacity: 1;
+            transform: scaleY(1.1);
+            background: linear-gradient(to top, #22c55e, #16a34a);
+        }
+
+        .chart-bar.zero {
+            background: rgba(107, 114, 128, 0.3);
+            height: 2px !important;
         }
 
         .link-url {
@@ -328,6 +398,20 @@
             .link-stats {
                 gap: 8px;
             }
+            
+            .usage-chart {
+                min-width: 100px;
+                padding: 8px;
+            }
+            
+            .chart-bars {
+                width: 60px;
+                height: 25px;
+            }
+            
+            .chart-bar {
+                width: 6px;
+            }
         }
 
         .no-servers {
@@ -407,6 +491,15 @@
                                     <div class="link-comment">📱 {{ link_data.comment }}</div>
                                     <div class="link-stats">
                                         <span class="usage-count">✨ {{ link_data.connections }} uses</span>
+                                        <span class="recent-count">📅 {{ link_data.recent_connections }} last 30 days</span>
+                                    </div>
+                                </div>
+                                <div class="usage-chart" data-usage="{{ link_data.daily_usage|join:',' }}" data-max="{{ link_data.max_daily }}">
+                                    <div class="chart-title">7-day activity</div>
+                                    <div class="chart-bars">
+                                        {% for day_usage in link_data.daily_usage %}
+                                        <div class="chart-bar" data-height="{{ day_usage }}" data-max="{{ link_data.max_daily }}"></div>
+                                        {% endfor %}
                                     </div>
                                 </div>
                             </div>
@@ -499,6 +592,10 @@
                 50% { transform: scale(1.1); }
                 100% { transform: scale(1); }
             }
+            @keyframes barGrow {
+                from { transform: scaleY(0); }
+                to { transform: scaleY(1); }
+            }
         `;
         document.head.appendChild(style);
 
@@ -507,6 +604,9 @@
         
         // Add some interactivity on load
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize chart bars
+            initializeCharts();
+            
             // Animate cards on load
             const cards = document.querySelectorAll('.server-card');
             cards.forEach((card, index) => {
@@ -542,14 +642,51 @@
             
             // Add pulse animation to connection counts
             setTimeout(() => {
-                const connectionCounts = document.querySelectorAll('.connection-count, .usage-count');
+                const connectionCounts = document.querySelectorAll('.connection-count, .usage-count, .recent-count');
                 connectionCounts.forEach((count, index) => {
                     setTimeout(() => {
                         count.style.animation = 'pulse 0.6s ease-in-out';
                     }, index * 100);
                 });
             }, 1000);
+            
+            // Animate chart bars
+            setTimeout(() => {
+                const chartBars = document.querySelectorAll('.chart-bar');
+                chartBars.forEach((bar, index) => {
+                    setTimeout(() => {
+                        bar.style.animation = 'barGrow 0.8s ease-out';
+                    }, index * 50);
+                });
+            }, 1500);
         });
+        
+        function initializeCharts() {
+            const charts = document.querySelectorAll('.usage-chart');
+            
+            charts.forEach(chart => {
+                const maxValue = parseInt(chart.dataset.max) || 1;
+                const bars = chart.querySelectorAll('.chart-bar');
+                
+                bars.forEach(bar => {
+                    const height = parseInt(bar.dataset.height) || 0;
+                    const maxHeight = parseInt(bar.dataset.max) || 1;
+                    
+                    if (height === 0) {
+                        bar.classList.add('zero');
+                        bar.style.height = '2px';
+                    } else {
+                        // Calculate height as percentage of container (30px max)
+                        const percentage = Math.max(10, (height / Math.max(maxHeight, 1)) * 100);
+                        const pixelHeight = Math.max(3, (percentage / 100) * 28); // 28px max for padding
+                        bar.style.height = pixelHeight + 'px';
+                        
+                        // Add tooltip
+                        bar.title = `${height} connections`;
+                    }
+                });
+            });
+        }
     </script>
 </body>
 </html>
