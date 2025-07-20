@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ error_title }} - VPN Portal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0c0c0c 0%, #1a1a1a 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.6;
+        }
+
+        .error-container {
+            max-width: 500px;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .error-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            animation: fadeInUp 0.6s ease;
+        }
+
+        .error-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.7;
+        }
+
+        .error-title {
+            color: #f87171;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+
+        .error-message {
+            color: #9ca3af;
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .back-link {
+            display: inline-block;
+            background: #4ade80;
+            color: #000;
+            padding: 12px 24px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .back-link:hover {
+            background: #22c55e;
+            transform: translateY(-2px);
+        }
+
+        .footer {
+            margin-top: 40px;
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+        .footer a {
+            color: #4ade80;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .error-container {
+                padding: 20px;
+            }
+
+            .error-card {
+                padding: 30px 20px;
+            }
+
+            .error-title {
+                font-size: 1.5rem;
+            }
+
+            .error-message {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-card">
+            <div class="error-icon">🚫</div>
+            <h1 class="error-title">{{ error_title }}</h1>
+            <p class="error-message">{{ error_message }}</p>
+            
+            <a href="javascript:history.back()" class="back-link">← Go Back</a>
+        </div>
+
+        <div class="footer">
+            <p>Powered by <a href="https://github.com/house-of-vanity/OutFleet" target="_blank">OutFleet VPN Manager</a></p>
+        </div>
+    </div>
+
+    <script>
+        // Add some interactivity
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-refresh every 30 seconds for server errors
+            {% if 'Server Error' in error_title %}
+            setTimeout(() => {
+                window.location.reload();
+            }, 30000);
+            {% endif %}
+        });
+    </script>
+</body>
+</html>

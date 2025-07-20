@@ -1,6 +1,86 @@
+def userPortal(request, user_hash):
+    """HTML portal for user to view their VPN access links and server information"""
+    from .models import User, ACLLink
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        user = get_object_or_404(User, hash=user_hash)
+        logger.info(f"User portal accessed for user {user.username}")
+    except Http404:
+        logger.warning(f"User portal access attempt with invalid hash: {user_hash}")
+        from django.shortcuts import render
+        return render(request, 'vpn/user_portal_error.html', {
+            'error_title': 'Access Denied',
+            'error_message': 'Invalid access link. Please contact your administrator.'
+        }, status=403)
+    
+    try:
+        # Get all ACL links for the user with server information
+        acl_links = ACLLink.objects.filter(acl__user=user).select_related('acl__server', 'acl')
+        
+        # Group links by server
+        servers_data = {}
+        total_links = 0
+        
+        for link in acl_links:
+            server = link.acl.server
+            server_name = server.name
+            
+            if server_name not in servers_data:
+                # Get server status and info
+                try:
+                    server_status = server.get_server_status()
+                    server_accessible = True
+                    server_error = None
+                except Exception as e:
+                    logger.warning(f"Could not get status for server {server_name}: {e}")
+                    server_status = {}
+                    server_accessible = False
+                    server_error = str(e)
+                
+                servers_data[server_name] = {
+                    'server': server,
+                    'status': server_status,
+                    'accessible': server_accessible,
+                    'error': server_error,
+                    'links': [],
+                    'server_type': server.server_type,
+                }
+            
+            # Add link information
+            link_url = f"{EXTERNAL_ADDRESS}/ss/{link.link}#{server_name}"
+            servers_data[server_name]['links'].append({
+                'link': link,
+                'url': link_url,
+                'qr_data': link_url,  # For QR code generation
+                'comment': link.comment or 'Default',
+            })
+            total_links += 1
+        
+        context = {
+            'user': user,
+            'servers_data': servers_data,
+            'total_servers': len(servers_data),
+            'total_links': total_links,
+            'external_address': EXTERNAL_ADDRESS,
+        }
+        
+        from django.shortcuts import render
+        return render(request, 'vpn/user_portal.html', context)
+        
+    except Exception as e:
+        logger.error(f"Error loading user portal for {user.username}: {e}")
+        from django.shortcuts import render
+        return render(request, 'vpn/user_portal_error.html', {
+            'error_title': 'Server Error',
+            'error_message': 'Unable to load your VPN information. Please try again later or contact support.'
+        }, status=500)
 import yaml
 import json
-from django.shortcuts import get_object_or_404
+import logging
+from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse, HttpResponse, Http404
 from mysite.settings import EXTERNAL_ADDRESS
 

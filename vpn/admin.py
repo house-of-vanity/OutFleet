@@ -386,10 +386,17 @@ class UserAdmin(admin.ModelAdmin):
     search_fields = ('username', 'hash')
     readonly_fields = ('hash_link',)
 
-    @admin.display(description='API access', ordering='hash')
+    @admin.display(description='User Portal', ordering='hash')
     def hash_link(self, obj):
-        url = f"{EXTERNAL_ADDRESS}/stat/{obj.hash}"
-        return format_html('<a href="{}">JSON server list</a>', url, obj.hash)
+        portal_url = f"{EXTERNAL_ADDRESS}/u/{obj.hash}"
+        json_url = f"{EXTERNAL_ADDRESS}/stat/{obj.hash}"
+        return format_html(
+            '<div style="display: flex; gap: 10px; flex-wrap: wrap;">' + 
+            '<a href="{}" target="_blank" style="background: #4ade80; color: #000; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: bold;">🌐 Portal</a>' +
+            '<a href="{}" target="_blank" style="background: #3b82f6; color: #fff; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: bold;">📄 JSON</a>' +
+            '</div>',
+            portal_url, json_url
+        )
 
     @admin.display(description='Allowed servers', ordering='server_count')
     def server_count(self, obj):
@@ -482,11 +489,23 @@ class ACLAdmin(admin.ModelAdmin):
             logger.error(f"Failed to get user info for {user.username} on {server.name}: {e}")
             return mark_safe(f"<span style='color: red;'>Server connection error: {e}</span>")
 
-    @admin.display(description='Dynamic Config Links')
+    @admin.display(description='User Links')
     def display_links(self, obj):
         links = obj.links.all()
-        formatted_links = [f"{link.comment} - {EXTERNAL_ADDRESS}/ss/{link.link}#{link.acl.server.name}" for link in links]
-        return mark_safe('<br>'.join(formatted_links))
+        portal_url = f"{EXTERNAL_ADDRESS}/u/{obj.user.hash}"
+        
+        links_html = []
+        for link in links:
+            link_url = f"{EXTERNAL_ADDRESS}/ss/{link.link}#{obj.server.name}"
+            links_html.append(f"{link.comment} - {link_url}")
+        
+        links_text = '<br>'.join(links_html) if links_html else 'No links'
+        
+        return format_html(
+            '<div style="margin-bottom: 10px;">{}</div>' +
+            '<a href="{}" target="_blank" style="background: #4ade80; color: #000; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: bold;">🌐 User Portal</a>',
+            links_text, portal_url
+        )
 
 try:
     from django_celery_results.models import GroupResult, TaskResult

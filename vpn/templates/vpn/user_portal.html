@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VPN Access Portal - {{ user.username }}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0c0c0c 0%, #1a1a1a 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #4ade80;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header .subtitle {
+            color: #9ca3af;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-number {
+            display: block;
+            font-size: 2rem;
+            font-weight: bold;
+            color: #4ade80;
+        }
+
+        .stat-label {
+            color: #9ca3af;
+            font-size: 0.9rem;
+        }
+
+        .servers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .server-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            transition: all 0.3s ease;
+        }
+
+        .server-card:hover {
+            transform: translateY(-5px);
+            border-color: #4ade80;
+            box-shadow: 0 20px 40px rgba(74, 222, 128, 0.1);
+        }
+
+        .server-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .server-name {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .server-type {
+            background: #4ade80;
+            color: #000;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .server-status {
+            margin-bottom: 20px;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .status-online {
+            background: rgba(74, 222, 128, 0.2);
+            color: #4ade80;
+            border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+
+        .status-offline {
+            background: rgba(248, 113, 113, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(248, 113, 113, 0.3);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .links-container {
+            display: grid;
+            gap: 15px;
+        }
+
+        .link-item {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .link-item:hover {
+            background: rgba(0, 0, 0, 0.5);
+            border-color: rgba(74, 222, 128, 0.5);
+        }
+
+        .link-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .link-comment {
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .qr-toggle {
+            background: rgba(74, 222, 128, 0.2);
+            color: #4ade80;
+            border: 1px solid rgba(74, 222, 128, 0.3);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+        }
+
+        .qr-toggle:hover {
+            background: rgba(74, 222, 128, 0.3);
+        }
+
+        .link-url {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9rem;
+            color: #4ade80;
+            word-break: break-all;
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #4ade80;
+            color: #000;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .copy-btn:hover {
+            background: #22c55e;
+        }
+
+        .qr-container {
+            display: none;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            margin-top: 15px;
+        }
+
+        .qr-container.show {
+            display: flex;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6b7280;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            margin-top: 40px;
+        }
+
+        .footer a {
+            color: #4ade80;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .servers-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .stats {
+                gap: 20px;
+            }
+
+            .server-card {
+                padding: 20px;
+            }
+
+            .link-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+
+        .no-servers {
+            text-align: center;
+            padding: 60px 20px;
+            color: #9ca3af;
+        }
+
+        .no-servers h3 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: #6b7280;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #9ca3af;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 VPN Access Portal</h1>
+            <div class="subtitle">Welcome back, <strong>{{ user.username }}</strong></div>
+            <div class="stats">
+                <div class="stat">
+                    <span class="stat-number">{{ total_servers }}</span>
+                    <span class="stat-label">Available Servers</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number">{{ total_links }}</span>
+                    <span class="stat-label">Active Connections</span>
+                </div>
+            </div>
+        </div>
+
+        {% if servers_data %}
+            <div class="servers-grid">
+                {% for server_name, server_data in servers_data.items %}
+                <div class="server-card">
+                    <div class="server-header">
+                        <div class="server-name">{{ server_name }}</div>
+                        <div class="server-type">{{ server_data.server_type }}</div>
+                    </div>
+
+                    <div class="server-status">
+                        {% if server_data.accessible %}
+                            <div class="status-indicator status-online">
+                                <div class="status-dot"></div>
+                                Online & Ready
+                            </div>
+                        {% else %}
+                            <div class="status-indicator status-offline">
+                                <div class="status-dot"></div>
+                                Connection Issues
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="links-container">
+                        {% for link_data in server_data.links %}
+                        <div class="link-item">
+                            <div class="link-header">
+                                <div class="link-comment">📱 {{ link_data.comment }}</div>
+                                <button class="qr-toggle" onclick="toggleQR('qr-{{ link_data.link.id }}')">Show QR Code</button>
+                            </div>
+                            
+                            <div class="link-url">
+                                {{ link_data.url }}
+                                <button class="copy-btn" onclick="copyToClipboard('{{ link_data.url }}')">Copy</button>
+                            </div>
+                            
+                            <div id="qr-{{ link_data.link.id }}" class="qr-container">
+                                <!-- QR code will be generated here -->
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="no-servers">
+                <h3>No VPN Access Available</h3>
+                <p>You don't have access to any VPN servers yet. Please contact your administrator.</p>
+            </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>Powered by <a href="https://github.com/house-of-vanity/OutFleet" target="_blank">OutFleet VPN Manager</a></p>
+            <p>Keep this link secure and don't share it with others</p>
+        </div>
+    </div>
+
+    <script>
+        // QR Code generation and management
+        const qrCodes = {};
+
+        function toggleQR(containerId) {
+            const container = document.getElementById(containerId);
+            const isVisible = container.classList.contains('show');
+
+            if (isVisible) {
+                container.classList.remove('show');
+            } else {
+                container.classList.add('show');
+                
+                // Generate QR code if not already generated
+                if (!qrCodes[containerId]) {
+                    const linkElement = container.previousElementSibling;
+                    const linkText = linkElement.textContent.trim().replace('Copy', '').trim();
+                    
+                    container.innerHTML = '<div class="loading">Generating QR Code...</div>';
+                    
+                    setTimeout(() => {
+                        container.innerHTML = '';
+                        qrCodes[containerId] = new QRCode(container, {
+                            text: linkText,
+                            width: 200,
+                            height: 200,
+                            colorDark: "#000000",
+                            colorLight: "#ffffff",
+                            correctLevel: QRCode.CorrectLevel.M
+                        });
+                    }, 100);
+                }
+            }
+        }
+
+        // Copy to clipboard functionality
+        async function copyToClipboard(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                
+                // Visual feedback
+                const event = new CustomEvent('copied');
+                document.dispatchEvent(event);
+                
+                // Show temporary feedback
+                showCopyFeedback();
+            } catch (err) {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showCopyFeedback();
+            }
+        }
+
+        function showCopyFeedback() {
+            // Create and show a toast notification
+            const toast = document.createElement('div');
+            toast.textContent = 'Link copied to clipboard! ✓';
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #4ade80;
+                color: #000;
+                padding: 12px 20px;
+                border-radius: 8px;
+                font-weight: 600;
+                z-index: 1000;
+                animation: slideIn 0.3s ease;
+            `;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => document.body.removeChild(toast), 300);
+            }, 2000);
+        }
+
+        // Add animation styles
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Update page title with username
+        document.title = `VPN Portal - {{ user.username }}`;
+        
+        // Add some interactivity on load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animate cards on load
+            const cards = document.querySelectorAll('.server-card');
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'all 0.6s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 150);
+            });
+        });
+    </script>
+</body>
+</html>
