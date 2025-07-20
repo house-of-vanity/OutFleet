@@ -86,15 +86,34 @@ class OutlineServer(Server):
         from vpn.models import User, ACL
         logger = logging.getLogger(__name__)
         logger.debug(f"[{self.name}] Sync all users")
-        keys = self.client.get_keys()
+        
+        try:
+            keys = self.client.get_keys()
+        except Exception as e:
+            logger.error(f"[{self.name}] Failed to get keys from server: {e}")
+            return False
+            
         acls = ACL.objects.filter(server=self)
         acl_users = set(acl.user for acl in acls)
 
+        # Log user synchronization details
+        user_list = ", ".join([user.username for user in acl_users])
+        logger.info(f"[{self.name}] Syncing {len(acl_users)} users: {user_list[:200]}{'...' if len(user_list) > 200 else ''}")
+
         for user in User.objects.all():
             if user in acl_users:
-                self.add_user(user=user)
+                try:
+                    result = self.add_user(user=user)
+                    logger.debug(f"[{self.name}] Added user {user.username}: {result}")
+                except Exception as e:
+                    logger.error(f"[{self.name}] Failed to add user {user.username}: {e}")
             else:
-                self.delete_user(user=user)
+                try:
+                    result = self.delete_user(user=user)
+                    if result and 'status' in result and 'deleted' in result['status']:
+                        logger.debug(f"[{self.name}] Removed user {user.username}")
+                except Exception as e:
+                    logger.error(f"[{self.name}] Failed to remove user {user.username}: {e}")
 
         return True
 

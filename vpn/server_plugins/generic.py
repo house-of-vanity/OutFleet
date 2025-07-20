@@ -1,6 +1,5 @@
 from polymorphic.models import PolymorphicModel
 from django.db import models
-from vpn.tasks import sync_server
 
 
 class Server(PolymorphicModel):
@@ -18,8 +17,19 @@ class Server(PolymorphicModel):
         super().__init__(*args, **kwargs)
 
     def save(self, *args, **kwargs):
-        sync_server.delay(self.id)
+        # Only sync if the server actually exists and is valid
+        is_new = self.pk is None
         super().save(*args, **kwargs)
+        
+        # Schedule sync task for existing servers only
+        if not is_new:
+            try:
+                from vpn.tasks import sync_server
+                sync_server.delay(self.id)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to schedule sync for server {self.name}: {e}")
 
     def get_server_status(self, *args, **kwargs):
         return {"name": self.name}

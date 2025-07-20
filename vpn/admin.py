@@ -12,7 +12,7 @@ from django.urls import path, reverse
 from django.http import HttpResponseRedirect
 
 from django.contrib.auth.admin import UserAdmin
-from .models import User, AccessLog
+from .models import User, AccessLog, TaskExecutionLog
 from django.utils.timezone import localtime
 from vpn.models import User, ACL, ACLLink
 from vpn.forms import UserForm
@@ -23,6 +23,70 @@ from .server_plugins import (
     WireguardServerAdmin,
     OutlineServer,
     OutlineServerAdmin)
+
+@admin.register(TaskExecutionLog)
+class TaskExecutionLogAdmin(admin.ModelAdmin):
+    list_display = ('task_name_display', 'action', 'status_display', 'server', 'user', 'execution_time_display', 'created_at')
+    list_filter = ('task_name', 'status', 'server', 'created_at')
+    search_fields = ('task_id', 'task_name', 'action', 'user__username', 'server__name', 'message')
+    readonly_fields = ('task_id', 'task_name', 'server', 'user', 'action', 'status', 'message_formatted', 'execution_time', 'created_at')
+    ordering = ('-created_at',)
+    list_per_page = 100
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('Task Information', {
+            'fields': ('task_id', 'task_name', 'action', 'status')
+        }),
+        ('Related Objects', {
+            'fields': ('server', 'user')
+        }),
+        ('Execution Details', {
+            'fields': ('message_formatted', 'execution_time', 'created_at')
+        }),
+    )
+    
+    @admin.display(description='Task', ordering='task_name')
+    def task_name_display(self, obj):
+        task_names = {
+            'sync_all_servers': '🔄 Sync All',
+            'sync_all_users_on_server': '👥 Server Sync',
+            'sync_server_info': '⚙️ Server Info',
+            'sync_user_on_server': '👤 User Sync',
+            'cleanup_task_logs': '🧹 Cleanup',
+        }
+        return task_names.get(obj.task_name, obj.task_name)
+    
+    @admin.display(description='Status', ordering='status')
+    def status_display(self, obj):
+        status_icons = {
+            'STARTED': '🟡 Started',
+            'SUCCESS': '✅ Success',
+            'FAILURE': '❌ Failed',
+            'RETRY': '🔄 Retry',
+        }
+        return status_icons.get(obj.status, obj.status)
+    
+    @admin.display(description='Time', ordering='execution_time')
+    def execution_time_display(self, obj):
+        if obj.execution_time:
+            if obj.execution_time < 1:
+                return f"{obj.execution_time*1000:.0f}ms"
+            else:
+                return f"{obj.execution_time:.2f}s"
+        return '-'
+    
+    @admin.display(description='Message')
+    def message_formatted(self, obj):
+        if obj.message:
+            return mark_safe(f"<pre style='white-space: pre-wrap; max-width: 800px;'>{obj.message}</pre>")
+        return '-'
+    
+    def has_add_permission(self, request):
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 admin.site.site_title = "VPN Manager"
@@ -425,7 +489,7 @@ class ACLAdmin(admin.ModelAdmin):
         return mark_safe('<br>'.join(formatted_links))
 
 try:
-    from django_celery_results.models import GroupResult
+    from django_celery_results.models import GroupResult, TaskResult
     from django_celery_beat.models import (
         PeriodicTask, 
         ClockedSchedule, 
@@ -440,6 +504,113 @@ try:
     admin.site.unregister(CrontabSchedule)
     admin.site.unregister(IntervalSchedule)
     admin.site.unregister(SolarSchedule)
+    admin.site.unregister(TaskResult)
     
 except (ImportError, admin.sites.NotRegistered):
+    pass
+
+# Custom Celery admin interfaces
+try:
+    from django_celery_results.models import TaskResult
+    from django_celery_beat.models import PeriodicTask
+    
+    @admin.register(TaskResult)
+    class CustomTaskResultAdmin(admin.ModelAdmin):
+        list_display = ('task_name_display', 'status', 'date_created', 'date_done', 'worker', 'result_display', 'traceback_display')
+        list_filter = ('status', 'date_created', 'worker', 'task_name')
+        search_fields = ('task_name', 'task_id', 'worker')
+        readonly_fields = ('task_id', 'task_name', 'status', 'result_formatted', 'date_created', 'date_done', 'traceback', 'worker', 'task_args', 'task_kwargs', 'meta')
+        ordering = ('-date_created',)
+        list_per_page = 50
+        
+        fieldsets = (
+            ('Task Information', {
+                'fields': ('task_id', 'task_name', 'status', 'worker')
+            }),
+            ('Timing', {
+                'fields': ('date_created', 'date_done')
+            }),
+            ('Result', {
+                'fields': ('result_formatted',),
+                'classes': ('collapse',)
+            }),
+            ('Arguments', {
+                'fields': ('task_args', 'task_kwargs'),
+                'classes': ('collapse',)
+            }),
+            ('Error Details', {
+                'fields': ('traceback',),
+                'classes': ('collapse',)
+            }),
+            ('Metadata', {
+                'fields': ('meta',),
+                'classes': ('collapse',)
+            }),
+        )
+        
+        @admin.display(description='Task Name', ordering='task_name')
+        def task_name_display(self, obj):
+            task_names = {
+                'sync_all_servers': '🔄 Sync All Servers',
+                'sync_all_users_on_server': '👥 Sync Users on Server',
+                'sync_server_info': '⚙️ Sync Server Info',
+                'sync_user_on_server': '👤 Sync User on Server',
+                'cleanup_task_logs': '🧹 Cleanup Old Logs',
+            }
+            return task_names.get(obj.task_name, obj.task_name)
+        
+        @admin.display(description='Result')
+        def result_display(self, obj):
+            if obj.status == 'SUCCESS' and obj.result:
+                try:
+                    import json
+                    result = json.loads(obj.result) if isinstance(obj.result, str) else obj.result
+                    if isinstance(result, str):
+                        return result[:100] + '...' if len(result) > 100 else result
+                    elif isinstance(result, dict):
+                        return ', '.join(f'{k}: {v}' for k, v in result.items())[:100]
+                except:
+                    return str(obj.result)[:100] if obj.result else '-'
+            elif obj.status == 'FAILURE':
+                return '❌ Failed'
+            elif obj.status == 'PENDING':
+                return '⏳ Pending'
+            elif obj.status == 'RETRY':
+                return '🔄 Retrying'
+            return '-'
+        
+        @admin.display(description='Result Details')
+        def result_formatted(self, obj):
+            if obj.result:
+                try:
+                    import json
+                    result = json.loads(obj.result) if isinstance(obj.result, str) else obj.result
+                    formatted = json.dumps(result, indent=2)
+                    return mark_safe(f"<pre>{formatted}</pre>")
+                except:
+                    return mark_safe(f"<pre>{obj.result}</pre>")
+            return '-'
+        
+        @admin.display(description='Error Info')
+        def traceback_display(self, obj):
+            if obj.traceback:
+                # Show first 200 chars of traceback
+                short_tb = obj.traceback[:200] + '...' if len(obj.traceback) > 200 else obj.traceback
+                return mark_safe(f"<pre style='color: red; font-size: 12px;'>{short_tb}</pre>")
+            return '-'
+        
+        def has_add_permission(self, request):
+            return False
+        
+        def has_change_permission(self, request, obj=None):
+            return False
+    
+    @admin.register(PeriodicTask)
+    class CustomPeriodicTaskAdmin(admin.ModelAdmin):
+        list_display = ('name', 'task', 'enabled', 'last_run_at', 'total_run_count')
+        list_filter = ('enabled', 'last_run_at')
+        search_fields = ('name', 'task')
+        readonly_fields = ('last_run_at', 'total_run_count')
+        
+except ImportError:
     pass

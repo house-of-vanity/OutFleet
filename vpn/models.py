@@ -11,6 +11,36 @@ from django.contrib.auth.models import AbstractUser
 
 logger = logging.getLogger(__name__)
 
+class TaskExecutionLog(models.Model):
+    task_id = models.CharField(max_length=255, help_text="Celery task ID")
+    task_name = models.CharField(max_length=100, help_text="Task name")
+    server = models.ForeignKey('Server', on_delete=models.SET_NULL, null=True, blank=True)
+    user = models.ForeignKey('User', on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=100, help_text="Action performed")
+    status = models.CharField(max_length=20, choices=[
+        ('STARTED', 'Started'),
+        ('SUCCESS', 'Success'),
+        ('FAILURE', 'Failure'),
+        ('RETRY', 'Retry'),
+    ], default='STARTED')
+    message = models.TextField(help_text="Detailed execution message")
+    execution_time = models.FloatField(null=True, blank=True, help_text="Execution time in seconds")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Task Execution Log'
+        verbose_name_plural = 'Task Execution Logs'
+        indexes = [
+            models.Index(fields=['task_id']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.task_name} - {self.action} ({self.status})"
+
+
 class AccessLog(models.Model):
     user = models.CharField(max_length=256, blank=True, null=True, editable=False)
     server = models.CharField(max_length=256, blank=True, null=True, editable=False)
