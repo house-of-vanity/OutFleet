@@ -447,18 +447,22 @@ class ServerAdmin(PolymorphicParentModelAdmin):
         
         for server in queryset:
             try:
-                # Check if this is an Outline server by checking the actual type
+                # Get the real polymorphic instance
+                real_server = server.get_real_instance()
+                server_type = type(real_server).__name__
+                
+                # Check if this is an Outline server
                 from vpn.server_plugins.outline import OutlineServer
                 
-                if isinstance(server, OutlineServer) and hasattr(server, 'client'):
+                if isinstance(real_server, OutlineServer) and hasattr(real_server, 'client'):
                     # For Outline servers, get all keys and delete them
                     try:
-                        keys = server.client.get_keys()
+                        keys = real_server.client.get_keys()
                         keys_count = len(keys)
                         
                         for key in keys:
                             try:
-                                server.client.delete_key(key.key_id)
+                                real_server.client.delete_key(key.key_id)
                             except Exception as e:
                                 self.message_user(
                                     request, 
@@ -482,8 +486,6 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                             level=messages.ERROR
                         )
                 else:
-                    # Show server type for debugging
-                    server_type = type(server).__name__
                     self.message_user(
                         request,
                         f"Key purging only supported for Outline servers. Skipping '{server.name}' (type: {server_type}).",

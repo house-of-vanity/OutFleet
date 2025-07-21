@@ -48,6 +48,14 @@ class AccessLog(models.Model):
     data = models.TextField(default="", blank=True, editable=False)
     timestamp = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['user']),
+            models.Index(fields=['server']),
+            models.Index(fields=['timestamp']),
+            models.Index(fields=['action', 'timestamp']),
+        ]
+
     def __str__(self):
         return f"{self.action} {self.user} request for {self.server} at {self.timestamp}"
 
