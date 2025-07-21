@@ -165,18 +165,41 @@ class OutlineServer(Server):
                 raise OutlineServerErrorException(f"Error searching for key: {e}")
 
     def get_user(self, user, raw=False):
-        user_info = self._get_key(user)
-        if raw:
-            return user_info
-        else:
-            outline_key_dict = user_info.__dict__
+        try:
+            user_info = self._get_key(user)
+            if raw:
+                return user_info
+            else:
+                outline_key_dict = user_info.__dict__
 
-            outline_key_dict = {
-                key: value 
-                for key, value in user_info.__dict__.items() 
-                if not key.startswith('_') and key not in [] # fields to mask
-            }
-            return outline_key_dict
+                outline_key_dict = {
+                    key: value 
+                    for key, value in user_info.__dict__.items() 
+                    if not key.startswith('_') and key not in [] # fields to mask
+                }
+                return outline_key_dict
+        except OutlineServerErrorException as e:
+            # If user key not found, try to create it automatically
+            if "Key not found" in str(e):
+                self.logger.warning(f"[{self.name}] Key not found for user {user.username}, attempting to create")
+                try:
+                    self.add_user(user)
+                    # Try to get the key again after creation
+                    user_info = self._get_key(user)
+                    if raw:
+                        return user_info
+                    else:
+                        outline_key_dict = {
+                            key: value 
+                            for key, value in user_info.__dict__.items() 
+                            if not key.startswith('_') and key not in []
+                        }
+                        return outline_key_dict
+                except Exception as create_error:
+                    self.logger.error(f"[{self.name}] Failed to create missing key for user {user.username}: {create_error}")
+                    raise OutlineServerErrorException(f"Failed to get credentials: {e}")
+            else:
+                raise
         
 
     def add_user(self, user):
@@ -195,9 +218,9 @@ class OutlineServer(Server):
             # Check if user needs update - but don't delete immediately
             needs_update = (
                 server_user.method != "chacha20-ietf-poly1305" or 
-                server_user.port != int(self.client_port) or 
                 server_user.name != user.username or 
                 server_user.password != user.hash
+                # Don't check port as Outline can assign different ports automatically
             )
             
             if needs_update:
@@ -215,8 +238,8 @@ class OutlineServer(Server):
                         name=user.username,
                         method="chacha20-ietf-poly1305",
                         password=user.hash,
-                        data_limit=None,
-                        port=int(self.client_port)
+                        data_limit=None
+                        # Don't specify port - let server assign automatically
                     )
                     logger.info(f"[{self.name}] User {user.username} updated")
                 except OutlineServerErrorException as e:
@@ -233,8 +256,8 @@ class OutlineServer(Server):
                     name=user.username,
                     method="chacha20-ietf-poly1305",
                     password=user.hash,
-                    data_limit=None,
-                    port=int(self.client_port)
+                    data_limit=None
+                    # Don't specify port - let server assign automatically
                 )
                 logger.info(f"[{self.name}] User {user.username} created")
             except OutlineServerErrorException as e:

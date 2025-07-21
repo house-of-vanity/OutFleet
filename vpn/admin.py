@@ -1347,20 +1347,29 @@ class ACLLinkAdmin(admin.ModelAdmin):
             if not stats.daily_usage:
                 return mark_safe('<span style="color: #9ca3af; font-size: 11px;">No data</span>')
             
-            # Create mini chart
+            # Create wider mini chart for better visibility
             max_val = max(stats.daily_usage) if stats.daily_usage else 1
-            chart_html = '<div style="display: flex; align-items: end; gap: 1px; height: 20px; width: 60px;">'
+            chart_html = '<div style="display: flex; align-items: end; gap: 1px; height: 35px; width: 180px;">'
             
-            for day_count in stats.daily_usage[-14:]:  # Last 14 days for compact view
+            # Show last 30 days with wider bars for better visibility
+            for day_count in stats.daily_usage[-30:]:  # Last 30 days
                 if max_val > 0:
                     height_percent = (day_count / max_val) * 100
                 else:
                     height_percent = 0
                 
                 color = '#4ade80' if day_count > 0 else '#e5e7eb'
-                chart_html += f'<div style="background: {color}; width: 2px; height: {height_percent}%; min-height: 1px;" title="{day_count} connections"></div>'
+                chart_html += f'<div style="background: {color}; width: 5px; height: {height_percent}%; min-height: 1px; border-radius: 1px;" title="{day_count} connections"></div>'
             
             chart_html += '</div>'
+            
+            # Add summary info below chart
+            total_last_30 = sum(stats.daily_usage[-30:]) if stats.daily_usage else 0
+            avg_daily = total_last_30 / 30 if total_last_30 > 0 else 0
+            chart_html += f'<div style="font-size: 10px; color: #6b7280; margin-top: 2px;">'
+            chart_html += f'Max: {max_val} | Avg: {avg_daily:.1f}'
+            chart_html += f'</div>'
+            
             return mark_safe(chart_html)
         except:
             return mark_safe('<span style="color: #dc2626; font-size: 11px;">-</span>')

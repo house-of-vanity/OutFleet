@@ -119,8 +119,8 @@ def sync_users(self, server_id):
             server = Server.objects.get(id=server_id)
         except Server.DoesNotExist:
             error_message = f"Server with id {server_id} not found - may have been deleted"
-            logger.error(error_message)
-            create_task_log(task_id, "sync_all_users_on_server", "Server not found", 'FAILURE', message=error_message, execution_time=time.time() - start_time)
+            logger.warning(error_message)
+            create_task_log(task_id, "sync_all_users_on_server", "Server not found", 'SUCCESS', message=error_message, execution_time=time.time() - start_time)
             return error_message  # Don't raise exception for deleted servers
         
         # Test server connectivity before proceeding
