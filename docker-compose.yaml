@@ -1,6 +1,5 @@
 services:
   web_ui:
-    #image: ultradesu/outfleet:v2
     image: outfleet:local
     container_name: outfleet-web
     build:
@@ -18,17 +17,19 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - .:/app
+    working_dir: /app
     command: >
       sh -c "sleep 1 &&
              python manage.py makemigrations &&
              python manage.py migrate &&
              python manage.py create_admin &&
              python manage.py runserver 0.0.0.0:8000"
+
   worker:
     image: outfleet:local
     container_name: outfleet-worker
-#    volumes:
-#      - .:/app
     build:
       context: .
     environment:
@@ -41,13 +42,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - .:/app
+    working_dir: /app
     command: >
       sh -c "sleep 3 && celery -A mysite worker"
+
   beat:
     image: outfleet:local
     container_name: outfleet-beat
-#    volumes:
-#      - .:/app
     build:
       context: .
     environment:
@@ -60,6 +63,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - .:/app
+    working_dir: /app
     command: >
       sh -c "sleep 3 && celery -A mysite beat"
 
@@ -93,3 +99,4 @@ services:
 
 volumes:
   postgres_data:
+

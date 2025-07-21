@@ -28,7 +28,7 @@ from celery.schedules import crontab
 CELERY_BEAT_SCHEDULE = {
     'update-user-statistics': {
         'task': 'update_user_statistics',
-        'schedule': crontab(minute=0, hour='*/3'),  # Every 3 hours
+        'schedule': crontab(minute='*/5'),  # Every 5 minutes
     },
     'cleanup-task-logs': {
         'task': 'cleanup_task_logs',

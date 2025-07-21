@@ -25,102 +25,6 @@ from .server_plugins import (
     OutlineServer,
     OutlineServerAdmin)
 
-@admin.register(UserStatistics)
-class UserStatisticsAdmin(admin.ModelAdmin):
-    list_display = ('user_display', 'server_name', 'link_display', 'total_connections', 'recent_connections', 'max_daily', 'updated_at_display')
-    list_filter = ('server_name', 'updated_at', 'user__username')
-    search_fields = ('user__username', 'server_name', 'acl_link_id')
-    readonly_fields = ('user', 'server_name', 'acl_link_id', 'total_connections', 'recent_connections', 'daily_usage_chart', 'max_daily', 'updated_at')
-    ordering = ('-updated_at', 'user__username', 'server_name')
-    list_per_page = 100
-    
-    fieldsets = (
-        ('Basic Information', {
-            'fields': ('user', 'server_name', 'acl_link_id')
-        }),
-        ('Statistics', {
-            'fields': ('total_connections', 'recent_connections', 'max_daily')
-        }),
-        ('Usage Chart', {
-            'fields': ('daily_usage_chart',)
-        }),
-        ('Metadata', {
-            'fields': ('updated_at',)
-        }),
-    )
-    
-    @admin.display(description='User', ordering='user__username')
-    def user_display(self, obj):
-        return obj.user.username
-    
-    @admin.display(description='Link', ordering='acl_link_id')
-    def link_display(self, obj):
-        if obj.acl_link_id:
-            link_url = f"{EXTERNAL_ADDRESS}/ss/{obj.acl_link_id}#{obj.server_name}"
-            return format_html(
-                '<a href="{}" target="_blank" style="color: #2563eb; text-decoration: none; font-family: monospace;">{}</a>',
-                link_url, obj.acl_link_id[:12] + '...' if len(obj.acl_link_id) > 12 else obj.acl_link_id
-            )
-        return '-'
-    
-    @admin.display(description='Last Updated', ordering='updated_at')
-    def updated_at_display(self, obj):
-        from django.utils import timezone
-        local_time = localtime(obj.updated_at)
-        now = timezone.now()
-        diff = now - obj.updated_at
-        
-        formatted_date = local_time.strftime('%Y-%m-%d %H:%M')
-        
-        # Color coding based on freshness
-        if diff.total_seconds() < 3600:  # Less than 1 hour
-            color = '#16a34a'  # green
-            relative = 'Fresh'
-        elif diff.total_seconds() < 7200:  # Less than 2 hours
-            color = '#eab308'  # yellow
-            relative = f'{int(diff.total_seconds() // 3600)}h ago'
-        else:
-            color = '#dc2626'  # red
-            relative = f'{diff.days}d ago' if diff.days > 0 else f'{int(diff.total_seconds() // 3600)}h ago'
-        
-        return mark_safe(
-            f'<span style="color: {color}; font-weight: bold;">{formatted_date}</span>'
-            f'<br><small style="color: {color};">{relative}</small>'
-        )
-    
-    @admin.display(description='Daily Usage Chart')
-    def daily_usage_chart(self, obj):
-        if not obj.daily_usage:
-            return mark_safe('<span style="color: #9ca3af;">No data</span>')
-        
-        # Create a simple ASCII-style chart
-        max_val = max(obj.daily_usage) if obj.daily_usage else 1
-        chart_html = '<div style="font-family: monospace; background: #f9fafb; padding: 10px; border-radius: 4px;">'
-        chart_html += f'<div style="margin-bottom: 5px; font-size: 12px; color: #6b7280;">Last 30 days (max: {max_val})</div>'
-        
-        # Create bar chart
-        chart_html += '<div style="display: flex; align-items: end; gap: 1px; height: 40px;">'
-        for day_count in obj.daily_usage:
-            if max_val > 0:
-                height_percent = (day_count / max_val) * 100
-            else:
-                height_percent = 0
-            
-            color = '#4ade80' if day_count > 0 else '#e5e7eb'
-            chart_html += f'<div style="background: {color}; width: 3px; height: {height_percent}%; min-height: 2px;" title="{day_count} connections"></div>'
-        
-        chart_html += '</div></div>'
-        return mark_safe(chart_html)
-    
-    def has_add_permission(self, request):
-        return False
-    
-    def has_change_permission(self, request, obj=None):
-        return False
-    
-    def has_delete_permission(self, request, obj=None):
-        return True  # Allow deletion to clear cache
-
 
 @admin.register(TaskExecutionLog)
 class TaskExecutionLogAdmin(admin.ModelAdmin):
@@ -807,13 +711,15 @@ class ACLAdmin(admin.ModelAdmin):
         )
 
 
+# Note: UserStatistics is not registered separately as admin model.
+# All user statistics functionality is integrated into ACLLinkAdmin below.
 @admin.register(ACLLink)
 class ACLLinkAdmin(admin.ModelAdmin):
-    list_display = ('link_display', 'user_display', 'server_display', 'comment_display', 'last_access_display', 'created_display')
+    list_display = ('link_display', 'user_display', 'server_display', 'comment_display', 'stats_display', 'usage_chart_display', 'last_access_display', 'created_display')
     list_filter = ('acl__server__name', 'acl__server__server_type', LastAccessFilter, 'acl__user__username')
     search_fields = ('link', 'comment', 'acl__user__username', 'acl__server__name')
     list_per_page = 100
-    actions = ['delete_selected_links']
+    actions = ['delete_selected_links', 'update_statistics_action']
     list_select_related = ('acl__user', 'acl__server')
 
     def get_queryset(self, request):
@@ -847,6 +753,66 @@ class ACLLinkAdmin(admin.ModelAdmin):
         if obj.comment:
             return obj.comment[:50] + '...' if len(obj.comment) > 50 else obj.comment
         return '-'
+
+    @admin.display(description='Statistics')
+    def stats_display(self, obj):
+        try:
+            from .models import UserStatistics
+            stats = UserStatistics.objects.get(
+                user=obj.acl.user,
+                server_name=obj.acl.server.name,
+                acl_link_id=obj.link
+            )
+            
+            # Color coding based on usage
+            if stats.total_connections > 100:
+                color = '#16a34a'  # green - high usage
+            elif stats.total_connections > 10:
+                color = '#eab308'  # yellow - medium usage
+            elif stats.total_connections > 0:
+                color = '#f97316'  # orange - low usage
+            else:
+                color = '#9ca3af'  # gray - no usage
+            
+            return mark_safe(
+                f'<div style="font-size: 12px;">'
+                f'<span style="color: {color}; font-weight: bold;">✨ {stats.total_connections} total</span><br>'
+                f'<span style="color: #6b7280;">📅 {stats.recent_connections} last 30d</span>'
+                f'</div>'
+            )
+        except:
+            return mark_safe('<span style="color: #dc2626; font-size: 12px;">No cache</span>')
+
+    @admin.display(description='30-day Chart')
+    def usage_chart_display(self, obj):
+        try:
+            from .models import UserStatistics
+            stats = UserStatistics.objects.get(
+                user=obj.acl.user,
+                server_name=obj.acl.server.name,
+                acl_link_id=obj.link
+            )
+            
+            if not stats.daily_usage:
+                return mark_safe('<span style="color: #9ca3af; font-size: 11px;">No data</span>')
+            
+            # Create mini chart
+            max_val = max(stats.daily_usage) if stats.daily_usage else 1
+            chart_html = '<div style="display: flex; align-items: end; gap: 1px; height: 20px; width: 60px;">'
+            
+            for day_count in stats.daily_usage[-14:]:  # Last 14 days for compact view
+                if max_val > 0:
+                    height_percent = (day_count / max_val) * 100
+                else:
+                    height_percent = 0
+                
+                color = '#4ade80' if day_count > 0 else '#e5e7eb'
+                chart_html += f'<div style="background: {color}; width: 2px; height: {height_percent}%; min-height: 1px;" title="{day_count} connections"></div>'
+            
+            chart_html += '</div>'
+            return mark_safe(chart_html)
+        except:
+            return mark_safe('<span style="color: #dc2626; font-size: 11px;">-</span>')
 
     @admin.display(description='Last Access', ordering='last_access_time')
     def last_access_display(self, obj):
@@ -883,10 +849,10 @@ class ACLLinkAdmin(admin.ModelAdmin):
                 relative = 'Recently'
             
             return mark_safe(
-                f'<span style="color: {color}; font-weight: bold;">{formatted_date}</span>'
-                f'<br><small style="color: {color};">{relative}</small>'
+                f'<span style="color: {color}; font-weight: bold; font-size: 12px;">{formatted_date}</span>'
+                f'<br><small style="color: {color}; font-size: 10px;">{relative}</small>'
             )
-        return mark_safe('<span style="color: #dc2626; font-weight: bold;">Never</span>')
+        return mark_safe('<span style="color: #dc2626; font-weight: bold; font-size: 12px;">Never</span>')
 
     @admin.display(description='Created', ordering='acl__created_at')
     def created_display(self, obj):
@@ -898,6 +864,31 @@ class ACLLinkAdmin(admin.ModelAdmin):
         queryset.delete()
         self.message_user(request, f'Successfully deleted {count} ACL link(s).')
     delete_selected_links.short_description = "Delete selected ACL links"
+    
+    def update_statistics_action(self, request, queryset):
+        """Trigger comprehensive statistics update for all users and links"""
+        # This action doesn't require selected items
+        try:
+            from vpn.tasks import update_user_statistics
+            
+            # Start the statistics update task
+            task = update_user_statistics.delay()
+            
+            self.message_user(
+                request,
+                f'📊 Statistics update started successfully! Task ID: {task.id}. '
+                f'This will recalculate usage statistics for all users and links. '
+                f'Refresh this page in a few moments to see updated data.',
+                level=messages.SUCCESS
+            )
+            
+        except Exception as e:
+            self.message_user(
+                request,
+                f'❌ Failed to start statistics update: {e}',
+                level=messages.ERROR
+            )
+    update_statistics_action.short_description = "📊 Update all user statistics and usage data"
 
     def get_actions(self, request):
         """Remove default delete action and keep only custom one"""
@@ -916,7 +907,16 @@ class ACLLinkAdmin(admin.ModelAdmin):
         return True
     
     def changelist_view(self, request, extra_context=None):
-        # Add summary statistics to the changelist
+        # Handle actions that don't require item selection
+        if 'action' in request.POST:
+            action = request.POST['action']
+            if action == 'update_statistics_action':
+                # Call the action directly without queryset requirement
+                self.update_statistics_action(request, None)
+                # Return redirect to prevent AttributeError
+                return redirect(request.get_full_path())
+        
+        # Add comprehensive statistics to the changelist
         extra_context = extra_context or {}
         
         # Get queryset for statistics
@@ -927,15 +927,79 @@ class ACLLinkAdmin(admin.ModelAdmin):
         
         from django.utils import timezone
         from datetime import timedelta
-        three_months_ago = timezone.now() - timedelta(days=90)
+        from django.db.models import Count, Max, Min
+        
+        now = timezone.now()
+        one_week_ago = now - timedelta(days=7)
+        one_month_ago = now - timedelta(days=30)
+        three_months_ago = now - timedelta(days=90)
+        
+        # Access time statistics
         old_links = queryset.filter(
             Q(last_access_time__lt=three_months_ago) | Q(last_access_time__isnull=True)
         ).count()
+        
+        recent_week = queryset.filter(last_access_time__gte=one_week_ago).count()
+        recent_month = queryset.filter(last_access_time__gte=one_month_ago).count()
+        
+        # Calculate comprehensive statistics from cache
+        try:
+            from .models import UserStatistics
+            from django.db import models
+            
+            # Total usage statistics
+            cached_stats = UserStatistics.objects.aggregate(
+                total_uses=models.Sum('total_connections'),
+                recent_uses=models.Sum('recent_connections'),
+                max_daily_peak=models.Max('max_daily')
+            )
+            total_uses = cached_stats['total_uses'] or 0
+            recent_uses = cached_stats['recent_uses'] or 0
+            max_daily_peak = cached_stats['max_daily_peak'] or 0
+            
+            # Server and user breakdown
+            server_stats = UserStatistics.objects.values('server_name').annotate(
+                total_connections=models.Sum('total_connections'),
+                link_count=models.Count('id')
+            ).order_by('-total_connections')[:5]  # Top 5 servers
+            
+            user_stats = UserStatistics.objects.values('user__username').annotate(
+                total_connections=models.Sum('total_connections'),
+                link_count=models.Count('id')
+            ).order_by('-total_connections')[:5]  # Top 5 users
+            
+            # Links with cache data count
+            cached_links_count = UserStatistics.objects.filter(
+                acl_link_id__isnull=False
+            ).count()
+            
+        except Exception as e:
+            total_uses = 0
+            recent_uses = 0
+            max_daily_peak = 0
+            server_stats = []
+            user_stats = []
+            cached_links_count = 0
+        
+        # Active vs inactive breakdown
+        active_links = total_links - never_accessed - old_links
+        if active_links < 0:
+            active_links = 0
         
         extra_context.update({
             'total_links': total_links,
             'never_accessed': never_accessed,
             'old_links': old_links,
+            'active_links': active_links,
+            'recent_week': recent_week,
+            'recent_month': recent_month,
+            'total_uses': total_uses,
+            'recent_uses': recent_uses,
+            'max_daily_peak': max_daily_peak,
+            'server_stats': server_stats,
+            'user_stats': user_stats,
+            'cached_links_count': cached_links_count,
+            'cache_coverage_percent': (cached_links_count * 100 // total_links) if total_links > 0 else 0,
         })
         
         return super().changelist_view(request, extra_context)
@@ -947,8 +1011,8 @@ class ACLLinkAdmin(admin.ModelAdmin):
         if order_var:
             try:
                 field_index = int(order_var.lstrip('-'))
-                # Check if this corresponds to the last_access column (index 4 in list_display)
-                if field_index == 4:  # last_access_display is at index 4
+                # Check if this corresponds to the last_access column (index 6 in list_display)
+                if field_index == 6:  # last_access_display is at index 6
                     if order_var.startswith('-'):
                         return ['-last_access_time']
                     else:
