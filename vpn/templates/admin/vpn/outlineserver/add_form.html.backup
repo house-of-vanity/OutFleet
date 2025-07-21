@@ -1,0 +1,176 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls static %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add JSON Import tab
+        const tabList = document.getElementById('jazzy-tabs');
+        const tabContent = document.querySelector('.tab-content');
+        
+        if (tabList && tabContent) {
+            // Add new tab
+            const newTab = document.createElement('li');
+            newTab.className = 'nav-item';
+            newTab.innerHTML = `
+                <a class="nav-link" data-toggle="pill" role="tab" aria-controls="json-import-tab" aria-selected="false" href="#json-import-tab">
+                    📥 JSON Import
+                </a>
+            `;
+            tabList.insertBefore(newTab, tabList.firstChild);
+            
+            // Add tab content
+            const newTabContent = document.createElement('div');
+            newTabContent.id = 'json-import-tab';
+            newTabContent.className = 'tab-pane fade';
+            newTabContent.setAttribute('role', 'tabpanel');
+            newTabContent.setAttribute('aria-labelledby', 'json-import-tab');
+            newTabContent.innerHTML = `
+                <div class="card">
+                    <div class="p-5 card-body">
+                        <h4 style="color: #007cba; margin-bottom: 1rem;">📥 Quick Import from JSON</h4>
+                        <p style="font-size: 0.875rem; color: #6c757d; margin-bottom: 1rem;">
+                            Paste the JSON configuration from your Outline server setup to automatically fill the fields:
+                        </p>
+                        
+                        <div class="form-group">
+                            <label for="import-json-config">JSON Configuration:</label>
+                            <textarea id="import-json-config" class="form-control" rows="8" 
+                                      placeholder='{
+  "apiUrl": "https://your-server:port/path",
+  "certSha256": "your-certificate-hash",
+  "serverName": "My Outline Server",
+  "clientHostname": "your-server.com",
+  "clientPort": 1257,
+  "comment": "Server description"
+}' style="font-family: 'Courier New', monospace; font-size: 0.875rem;"></textarea>
+                        </div>
+                        
+                        <button type="button" id="import-json-btn" class="btn btn-primary">
+                            Import Configuration
+                        </button>
+                        
+                        <div style="margin-top: 1rem; padding: 0.75rem; background: #e7f3ff; border-left: 4px solid #007cba; border-radius: 4px;">
+                            <strong>Required fields:</strong>
+                            <ul style="margin: 0.5rem 0; padding-left: 20px;">
+                                <li><code>apiUrl</code> - Server management URL</li>
+                                <li><code>certSha256</code> - Certificate fingerprint</li>
+                            </ul>
+                            <strong>Optional fields:</strong>
+                            <ul style="margin: 0.5rem 0; padding-left: 20px;">
+                                <li><code>serverName</code> - Display name</li>
+                                <li><code>clientHostname</code> - Client hostname</li>
+                                <li><code>clientPort</code> - Client port</li>
+                                <li><code>comment</code> - Description</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+            tabContent.insertBefore(newTabContent, tabContent.firstChild);
+            
+            // Make first tab (JSON Import) active
+            document.querySelector('#jazzy-tabs .nav-link').classList.remove('active');
+            newTab.querySelector('.nav-link').classList.add('active');
+            document.querySelector('.tab-pane.active').classList.remove('active', 'show');
+            newTabContent.classList.add('active', 'show');
+        }
+        
+        // Import functionality
+        function tryAutoFillFromJson() {
+            const importJsonTextarea = document.getElementById('import-json-config');
+            
+            try {
+                const jsonText = importJsonTextarea.value.trim();
+                if (!jsonText) {
+                    alert('Please enter JSON configuration');
+                    return;
+                }
+                
+                const config = JSON.parse(jsonText);
+                
+                // Validate required fields
+                if (!config.apiUrl || !config.certSha256) {
+                    alert('Invalid JSON format. Required fields: apiUrl, certSha256');
+                    return;
+                }
+                
+                // Parse apiUrl to extract components
+                const url = new URL(config.apiUrl);
+                
+                // Fill form fields
+                const adminUrlField = document.getElementById('id_admin_url');
+                const adminCertField = document.getElementById('id_admin_access_cert');
+                const clientHostnameField = document.getElementById('id_client_hostname');
+                const clientPortField = document.getElementById('id_client_port');
+                const nameField = document.getElementById('id_name');
+                const commentField = document.getElementById('id_comment');
+                
+                if (adminUrlField) adminUrlField.value = config.apiUrl;
+                if (adminCertField) adminCertField.value = config.certSha256;
+                
+                // Use provided hostname or extract from URL
+                const hostname = config.clientHostname || config.hostnameForAccessKeys || url.hostname;
+                if (clientHostnameField) clientHostnameField.value = hostname;
+                
+                // Use provided port or extract from various sources
+                const clientPort = config.clientPort || config.portForNewAccessKeys || url.port || '1257';
+                if (clientPortField) clientPortField.value = clientPort;
+                
+                // Generate server name if not provided and field is empty
+                if (nameField && !nameField.value) {
+                    const serverName = config.serverName || config.name || `Outline-${hostname}`;
+                    nameField.value = serverName;
+                }
+                
+                // Fill comment if provided and field exists
+                if (commentField && config.comment) {
+                    commentField.value = config.comment;
+                }
+                
+                // Clear the JSON input
+                importJsonTextarea.value = '';
+                
+                // Show success message
+                alert('✅ Configuration imported successfully! Review the fields and save.');
+                
+                // Switch to Server Configuration tab
+                const serverConfigTab = document.querySelector('a[href="#server-configuration-tab"]');
+                if (serverConfigTab) {
+                    serverConfigTab.click();
+                }
+                
+                // Focus on name field
+                if (nameField) {
+                    setTimeout(() => {
+                        nameField.focus();
+                        nameField.select();
+                    }, 300);
+                }
+                
+            } catch (error) {
+                alert(`Invalid JSON format: ${error.message}`);
+            }
+        }
+        
+        // Wait a bit for DOM to be ready, then add event listeners
+        setTimeout(() => {
+            const importBtn = document.getElementById('import-json-btn');
+            const importTextarea = document.getElementById('import-json-config');
+            
+            if (importBtn) {
+                importBtn.addEventListener('click', tryAutoFillFromJson);
+            }
+            
+            if (importTextarea) {
+                importTextarea.addEventListener('paste', function(e) {
+                    setTimeout(() => {
+                        tryAutoFillFromJson();
+                    }, 100);
+                });
+            }
+        }, 500);
+    });
+    </script>
+{% endblock %}

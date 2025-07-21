@@ -247,10 +247,10 @@ class LastAccessFilter(admin.SimpleListFilter):
 class ServerAdmin(PolymorphicParentModelAdmin):
     base_model = Server
     child_models = (OutlineServer, WireguardServer)
-    list_display = ('name', 'server_type', 'comment', 'registration_date', 'user_count', 'server_status_inline')
+    list_display = ('name_with_icon', 'server_type', 'comment_short', 'user_stats', 'activity_summary', 'server_status_compact', 'registration_date')
     search_fields = ('name', 'comment')
     list_filter = ('server_type', )
-    actions = ['move_clients_action', 'purge_all_keys_action']
+    actions = ['move_clients_action', 'purge_all_keys_action', 'sync_all_selected_servers']
 
     def get_urls(self):
         urls = super().get_urls()
@@ -549,24 +549,213 @@ class ServerAdmin(PolymorphicParentModelAdmin):
             )
     
     purge_all_keys_action.short_description = "🗑️ Purge all keys from server (database unchanged)"
+    
+    def sync_all_selected_servers(self, request, queryset):
+        """Trigger sync for all users on selected servers"""
+        if queryset.count() == 0:
+            self.message_user(request, "Please select at least one server.", level=messages.ERROR)
+            return
+        
+        try:
+            from vpn.tasks import sync_all_users_on_server
+            
+            tasks_started = 0
+            errors = []
+            
+            for server in queryset:
+                try:
+                    task = sync_all_users_on_server.delay(server.id)
+                    tasks_started += 1
+                    self.message_user(
+                        request,
+                        f"🔄 Sync task started for '{server.name}' (Task ID: {task.id})",
+                        level=messages.SUCCESS
+                    )
+                except Exception as e:
+                    errors.append(f"'{server.name}': {e}")
+            
+            if tasks_started > 0:
+                self.message_user(
+                    request,
+                    f"✅ Started sync tasks for {tasks_started} server(s). Check Task Execution Logs for progress.",
+                    level=messages.SUCCESS
+                )
+            
+            if errors:
+                for error in errors:
+                    self.message_user(
+                        request,
+                        f"❌ Failed to sync {error}",
+                        level=messages.ERROR
+                    )
+                    
+        except Exception as e:
+            self.message_user(
+                request,
+                f"❌ Failed to start sync tasks: {e}",
+                level=messages.ERROR
+            )
+    
+    sync_all_selected_servers.short_description = "🔄 Sync all users on selected servers"
 
-    @admin.display(description='User Count', ordering='user_count')
-    def user_count(self, obj):
-        return obj.user_count
-
+    @admin.display(description='Server', ordering='name')
+    def name_with_icon(self, obj):
+        """Display server name with type icon"""
+        icons = {
+            'outline': '🔵',
+            'wireguard': '🟢',
+        }
+        icon = icons.get(obj.server_type, '')
+        name_part = f"{icon} {obj.name}" if icon else obj.name
+        return name_part
+    
+    @admin.display(description='Comment')
+    def comment_short(self, obj):
+        """Display shortened comment"""
+        if obj.comment:
+            short_comment = obj.comment[:40] + '...' if len(obj.comment) > 40 else obj.comment
+            return mark_safe(f'<span title="{obj.comment}" style="font-size: 12px;">{short_comment}</span>')
+        return '-'
+    
+    @admin.display(description='Users & Links')
+    def user_stats(self, obj):
+        """Display user count and active links statistics"""
+        try:
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            user_count = obj.user_count if hasattr(obj, 'user_count') else 0
+            
+            # Get total links count
+            total_links = ACLLink.objects.filter(acl__server=obj).count()
+            
+            # Get recently accessed links (last 30 days) - exclude None values
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            active_links = ACLLink.objects.filter(
+                acl__server=obj,
+                last_access_time__isnull=False,
+                last_access_time__gte=thirty_days_ago
+            ).count()
+            
+            # Color coding based on activity
+            if user_count == 0:
+                color = '#9ca3af'  # gray - no users
+            elif total_links == 0:
+                color = '#dc2626'  # red - no links
+            elif active_links > total_links * 0.7:  # High activity
+                color = '#16a34a'  # green
+            elif active_links > total_links * 0.3:  # Medium activity
+                color = '#eab308'  # yellow
+            else:
+                color = '#f97316'  # orange - low activity
+            
+            return mark_safe(
+                f'<div style="font-size: 12px;">' +
+                f'<div style="color: {color}; font-weight: bold;">👥 {user_count} users</div>' +
+                f'<div style="color: #6b7280;">🔗 {active_links}/{total_links} active</div>' +
+                f'</div>'
+            )
+        except Exception as e:
+            return mark_safe(f'<span style="color: #dc2626; font-size: 11px;">Stats error: {e}</span>')
+    
+    @admin.display(description='Activity')
+    def activity_summary(self, obj):
+        """Display recent activity summary"""
+        try:
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            # Get recent access logs for this server
+            seven_days_ago = timezone.now() - timedelta(days=7)
+            recent_logs = AccessLog.objects.filter(
+                server=obj.name,
+                timestamp__gte=seven_days_ago
+            )
+            
+            total_access = recent_logs.count()
+            success_access = recent_logs.filter(action='Success').count()
+            
+            # Get latest access
+            latest_log = AccessLog.objects.filter(server=obj.name).order_by('-timestamp').first()
+            
+            if latest_log:
+                local_time = localtime(latest_log.timestamp)
+                latest_str = local_time.strftime('%m-%d %H:%M')
+                
+                # Time since last access
+                time_diff = timezone.now() - latest_log.timestamp
+                if time_diff.days > 0:
+                    time_ago = f'{time_diff.days}d ago'
+                elif time_diff.seconds > 3600:
+                    time_ago = f'{time_diff.seconds // 3600}h ago'
+                else:
+                    time_ago = 'Recent'
+            else:
+                latest_str = 'Never'
+                time_ago = ''
+            
+            # Color coding
+            if total_access == 0:
+                color = '#dc2626'  # red - no activity
+            elif total_access > 50:
+                color = '#16a34a'  # green - high activity
+            elif total_access > 10:
+                color = '#eab308'  # yellow - medium activity
+            else:
+                color = '#f97316'  # orange - low activity
+            
+            return mark_safe(
+                f'<div style="font-size: 11px;">' +
+                f'<div style="color: {color}; font-weight: bold;">📊 {total_access} uses (7d)</div>' +
+                f'<div style="color: #6b7280;">✅ {success_access} success</div>' +
+                f'<div style="color: #6b7280;">🕒 {latest_str} {time_ago}</div>' +
+                f'</div>'
+            )
+        except Exception as e:
+            return mark_safe(f'<span style="color: #dc2626; font-size: 11px;">Activity unavailable</span>')
+    
     @admin.display(description='Status')
-    def server_status_inline(self, obj):
+    def server_status_compact(self, obj):
+        """Display server status in compact format"""
         try:
             status = obj.get_server_status()
             if 'error' in status:
-                return mark_safe(f"<span style='color: red;'>Error: {status['error']}</span>")
-            import json
-            pretty_status = ", ".join(f"{key}: {value}" for key, value in status.items())
-            return mark_safe(f"<pre>{pretty_status}</pre>")
+                return mark_safe(
+                    f'<div style="color: #dc2626; font-size: 11px; font-weight: bold;">' +
+                    f'❌ Error<br>' +
+                    f'<span style="font-weight: normal;" title="{status["error"]}">' +
+                    f'{status["error"][:30]}...</span>' +
+                    f'</div>'
+                )
+            
+            # Extract key metrics
+            status_items = []
+            if 'name' in status:
+                status_items.append(f"📛 {status['name'][:15]}")
+            if 'version' in status:
+                status_items.append(f"🔄 {status['version']}")
+            if 'keys' in status:
+                status_items.append(f"🔑 {status['keys']} keys")
+            if 'accessUrl' in status:
+                status_items.append("🌐 Available")
+            
+            status_display = '<br>'.join(status_items) if status_items else 'Unknown'
+            
+            return mark_safe(
+                f'<div style="color: #16a34a; font-size: 11px;">' +
+                f'✅ Online<br>' +
+                f'<span style="color: #6b7280;">{status_display}</span>' +
+                f'</div>'
+            )
         except Exception as e:
             # Don't let server connectivity issues break the admin interface
-            return mark_safe(f"<span style='color: orange;'>Status unavailable: {e}</span>")
-    server_status_inline.short_description = "Status"
+            return mark_safe(
+                f'<div style="color: #f97316; font-size: 11px; font-weight: bold;">' +
+                f'⚠️ Unavailable<br>' +
+                f'<span style="font-weight: normal;" title="{str(e)}">' +
+                f'{str(e)[:25]}...</span>' +
+                f'</div>'
+            )
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -608,6 +797,7 @@ class UserAdmin(admin.ModelAdmin):
     
     @admin.display(description='User Statistics Summary')
     def user_statistics_summary(self, obj):
+        """Display user statistics with integrated server management"""
         try:
             from .models import UserStatistics
             from django.db import models
@@ -626,71 +816,219 @@ class UserAdmin(admin.ModelAdmin):
                 links=models.Count('id')
             ).order_by('-connections')
             
-            html = '<div style="background: #f8f9fa; padding: 12px; border-radius: 6px; margin: 8px 0;">'
-            html += f'<div style="display: flex; gap: 20px; margin-bottom: 12px; flex-wrap: wrap;">'
+            # Get all ACLs and links for this user
+            user_acls = ACL.objects.filter(user=obj).select_related('server').prefetch_related('links')
+            
+            # Get available servers not yet assigned
+            all_servers = Server.objects.all()
+            assigned_server_ids = [acl.server.id for acl in user_acls]
+            unassigned_servers = all_servers.exclude(id__in=assigned_server_ids)
+            
+            html = '<div class="user-management-section">'
+            
+            # Overall Statistics
+            html += '<div style="background: #e7f3ff; border-left: 4px solid #007cba; padding: 12px; margin-bottom: 16px; border-radius: 4px;">'
+            html += f'<div style="display: flex; gap: 20px; margin-bottom: 8px; flex-wrap: wrap;">'
             html += f'<div><strong>Total Uses:</strong> {user_stats["total_connections"] or 0}</div>'
             html += f'<div><strong>Recent (30d):</strong> {user_stats["recent_connections"] or 0}</div>'
             html += f'<div><strong>Total Links:</strong> {user_stats["total_links"] or 0}</div>'
             if user_stats["max_daily_peak"]:
                 html += f'<div><strong>Daily Peak:</strong> {user_stats["max_daily_peak"]}</div>'
             html += f'</div>'
-            
-            if server_breakdown:
-                html += '<div><strong>By Server:</strong></div>'
-                html += '<ul style="margin: 8px 0; padding-left: 20px;">'
-                for server in server_breakdown:
-                    html += f'<li>{server["server_name"]}: {server["connections"]} uses ({server["links"]} links)</li>'
-                html += '</ul>'
-            
             html += '</div>'
+            
+            # Server Management
+            if user_acls:
+                html += '<h4 style="color: #007cba; margin: 16px 0 8px 0;">🔗 Server Access & Links</h4>'
+                
+                for acl in user_acls:
+                    server = acl.server
+                    links = list(acl.links.all())
+                    
+                    # Server status check
+                    try:
+                        server_status = server.get_server_status()
+                        server_accessible = True
+                        server_error = None
+                    except Exception as e:
+                        server_status = {}
+                        server_accessible = False
+                        server_error = str(e)
+                    
+                    html += '<div class="server-section">'
+                    
+                    # Server header
+                    status_icon = '✅' if server_accessible else '❌'
+                    type_icon = '🔵' if server.server_type == 'outline' else '🟢' if server.server_type == 'wireguard' else ''
+                    html += f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">'
+                    html += f'<h5 style="margin: 0; color: #333; font-size: 14px; font-weight: 600;">{type_icon} {server.name} {status_icon}</h5>'
+                    
+                    # Server stats
+                    server_stat = next((s for s in server_breakdown if s['server_name'] == server.name), None)
+                    if server_stat:
+                        html += f'<span style="background: #f8f9fa; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: #6c757d;">'
+                        html += f'📊 {server_stat["connections"]} uses ({server_stat["links"]} links)'
+                        html += f'</span>'
+                    html += f'</div>'
+                    
+                    # Server error display
+                    if server_error:
+                        html += f'<div style="background: #f8d7da; color: #721c24; padding: 8px; border-radius: 4px; margin-bottom: 8px; font-size: 12px;">'
+                        html += f'⚠️ Error: {server_error[:80]}...'
+                        html += f'</div>'
+                    
+                    # Links display
+                    if links:
+                        for link in links:
+                            # Get link stats
+                            link_stats = UserStatistics.objects.filter(
+                                user=obj, server_name=server.name, acl_link_id=link.link
+                            ).first()
+                            
+                            html += '<div class="link-item">'
+                            html += f'<div style="flex: 1;">'
+                            html += f'<div style="font-family: monospace; font-size: 13px; color: #007cba; font-weight: 500;">'
+                            html += f'{link.link[:16]}...' if len(link.link) > 16 else link.link
+                            html += f'</div>'
+                            if link.comment:
+                                html += f'<div style="font-size: 11px; color: #6c757d;">{link.comment}</div>'
+                            html += f'</div>'
+                            
+                            # Link stats and actions
+                            html += f'<div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">'
+                            if link_stats:
+                                html += f'<span style="background: #d4edda; color: #155724; padding: 2px 6px; border-radius: 3px; font-size: 10px;">'
+                                html += f'✨ {link_stats.total_connections}'
+                                html += f'</span>'
+                            
+                            # Test link button
+                            html += f'<a href="{EXTERNAL_ADDRESS}/ss/{link.link}#{server.name}" target="_blank" '
+                            html += f'class="btn btn-sm btn-primary btn-sm-custom">🔗</a>'
+                            
+                            # Delete button
+                            html += f'<button type="button" class="btn btn-sm btn-danger btn-sm-custom delete-link-btn" '
+                            html += f'data-link-id="{link.id}" data-link-name="{link.link[:12]}">🗑️</button>'
+                            
+                            # Last access
+                            if link.last_access_time:
+                                local_time = localtime(link.last_access_time)
+                                html += f'<span style="background: #f8f9fa; padding: 2px 6px; border-radius: 3px; font-size: 10px; color: #6c757d;">'
+                                html += f'{local_time.strftime("%m-%d %H:%M")}'
+                                html += f'</span>'
+                            else:
+                                html += f'<span style="background: #f8d7da; color: #721c24; padding: 2px 6px; border-radius: 3px; font-size: 10px;">'
+                                html += f'Never'
+                                html += f'</span>'
+                            
+                            html += f'</div></div>'
+                    
+                    # Add link button
+                    html += f'<div style="text-align: center; margin-top: 12px;">'
+                    html += f'<button type="button" class="btn btn-sm btn-success add-link-btn" '
+                    html += f'data-server-id="{server.id}" data-server-name="{server.name}">'
+                    html += f'➕ Add Link'
+                    html += f'</button>'
+                    html += f'</div>'
+                    
+                    html += '</div>'  # End server-section
+            
+            # Add server access section
+            if unassigned_servers:
+                html += '<div style="background: #d1ecf1; border-left: 4px solid #bee5eb; padding: 12px; margin-top: 16px; border-radius: 4px;">'
+                html += '<h5 style="margin: 0 0 8px 0; color: #0c5460; font-size: 13px;">➕ Available Servers</h5>'
+                html += '<div style="display: flex; gap: 8px; flex-wrap: wrap;">'
+                for server in unassigned_servers:
+                    type_icon = '🔵' if server.server_type == 'outline' else '🟢' if server.server_type == 'wireguard' else ''
+                    html += f'<button type="button" class="btn btn-sm btn-outline-info btn-sm-custom add-server-btn" '
+                    html += f'data-server-id="{server.id}" data-server-name="{server.name}">'
+                    html += f'{type_icon} {server.name}'
+                    html += f'</button>'
+                html += '</div></div>'
+            
+            html += '</div>'  # End user-management-section
             return mark_safe(html)
+            
         except Exception as e:
-            return mark_safe(f'<span style="color: #dc2626;">Error loading statistics: {e}</span>')
+            return mark_safe(f'<span style="color: #dc3545;">Error loading management interface: {e}</span>')
     
     @admin.display(description='Recent Activity')
     def recent_activity_display(self, obj):
+        """Display recent activity in compact admin-friendly format"""
         try:
             from datetime import timedelta
             from django.utils import timezone
             
-            # Get recent access logs for this user
+            # Get recent access logs for this user (last 7 days, limited)
+            seven_days_ago = timezone.now() - timedelta(days=7)
             recent_logs = AccessLog.objects.filter(
                 user=obj.username,
-                timestamp__gte=timezone.now() - timedelta(days=7)
-            ).order_by('-timestamp')[:10]
+                timestamp__gte=seven_days_ago
+            ).order_by('-timestamp')[:15]  # Limit to 15 most recent
             
             if not recent_logs:
-                return mark_safe('<div style="color: #6b7280; font-style: italic;">No recent activity</div>')
+                return mark_safe('<div style="color: #6c757d; font-style: italic; padding: 12px; background: #f8f9fa; border-radius: 4px;">No recent activity (last 7 days)</div>')
             
-            html = '<div style="background: #f8f9fa; padding: 12px; border-radius: 6px; margin: 8px 0;">'
-            html += '<div style="font-weight: bold; margin-bottom: 8px;">Last 7 days:</div>'
+            html = '<div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0; max-height: 300px; overflow-y: auto;">'
             
-            for log in recent_logs:
+            # Header
+            html += '<div style="background: #e9ecef; padding: 8px 12px; border-bottom: 1px solid #dee2e6; font-weight: 600; font-size: 12px; color: #495057;">'
+            html += f'📊 Recent Activity ({recent_logs.count()} entries, last 7 days)'
+            html += '</div>'
+            
+            # Activity entries
+            for i, log in enumerate(recent_logs):
+                bg_color = '#ffffff' if i % 2 == 0 else '#f8f9fa'
                 local_time = localtime(log.timestamp)
-                time_str = local_time.strftime('%Y-%m-%d %H:%M')
                 
-                # Status color coding
+                # Status icon and color
                 if log.action == 'Success':
-                    color = '#16a34a'
                     icon = '✅'
+                    status_color = '#28a745'
                 elif log.action == 'Failed':
-                    color = '#dc2626'
                     icon = '❌'
+                    status_color = '#dc3545'
                 else:
-                    color = '#6b7280'
                     icon = 'ℹ️'
+                    status_color = '#6c757d'
                 
-                link_display = log.acl_link_id[:12] + '...' if log.acl_link_id and len(log.acl_link_id) > 12 else log.acl_link_id or 'N/A'
+                html += f'<div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; border-bottom: 1px solid #f1f3f4; background: {bg_color};">' 
                 
-                html += f'<div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #e5e7eb; font-size: 12px;">'
-                html += f'<span><span style="color: {color};">{icon}</span> {log.server} / {link_display}</span>'
-                html += f'<span style="color: #6b7280;">{time_str}</span>'
+                # Left side - server and link info
+                html += f'<div style="display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0;">'
+                html += f'<span style="color: {status_color}; font-size: 14px;">{icon}</span>'
+                html += f'<div style="overflow: hidden;">'
+                html += f'<div style="font-weight: 500; font-size: 12px; color: #495057; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{log.server}</div>'
+                
+                if log.acl_link_id:
+                    link_short = log.acl_link_id[:12] + '...' if len(log.acl_link_id) > 12 else log.acl_link_id
+                    html += f'<div style="font-family: monospace; font-size: 10px; color: #6c757d;">{link_short}</div>'
+                
+                html += f'</div></div>'
+                
+                # Right side - timestamp and status
+                html += f'<div style="text-align: right; flex-shrink: 0;">'
+                html += f'<div style="font-size: 10px; color: #6c757d;">{local_time.strftime("%m-%d %H:%M")}</div>'
+                html += f'<div style="font-size: 9px; color: {status_color}; font-weight: 500;">{log.action}</div>'
+                html += f'</div>'
+                
+                html += f'</div>'
+            
+            # Footer with summary if there are more entries
+            total_recent = AccessLog.objects.filter(
+                user=obj.username,
+                timestamp__gte=seven_days_ago
+            ).count()
+            
+            if total_recent > 15:
+                html += f'<div style="background: #e9ecef; padding: 6px 12px; font-size: 11px; color: #6c757d; text-align: center;">'
+                html += f'Showing 15 of {total_recent} entries from last 7 days'
                 html += f'</div>'
             
             html += '</div>'
             return mark_safe(html)
+            
         except Exception as e:
-            return mark_safe(f'<span style="color: #dc2626;">Error loading activity: {e}</span>')
+            return mark_safe(f'<span style="color: #dc3545; font-size: 12px;">Error loading activity: {e}</span>')
 
     @admin.display(description='Allowed servers', ordering='server_count')
     def server_count(self, obj):
@@ -798,74 +1136,14 @@ class UserAdmin(admin.ModelAdmin):
         return JsonResponse({'error': 'Invalid request method'}, status=405)
     
     def change_view(self, request, object_id, form_url='', extra_context=None):
-        """Override change view to add extensive user management data"""
+        """Override change view to add user management data to context"""
         extra_context = extra_context or {}
         
         if object_id:
             try:
                 user = User.objects.get(pk=object_id)
-                
-                # Get all ACLs and links for this user
-                user_acls = ACL.objects.filter(user=user).select_related('server').prefetch_related('links')
-                
-                # Get all available servers
-                all_servers = Server.objects.all()
-                
-                # Get user statistics
-                try:
-                    from .models import UserStatistics
-                    user_stats = UserStatistics.objects.filter(user=user).select_related('user')
-                except:
-                    user_stats = []
-                
-                # Get recent access logs
-                from django.utils import timezone
-                from datetime import timedelta
-                recent_logs = AccessLog.objects.filter(
-                    user=user.username,
-                    timestamp__gte=timezone.now() - timedelta(days=30)
-                ).order_by('-timestamp')[:50]
-                
-                # Organize data by server
-                servers_data = {}
-                for acl in user_acls:
-                    server = acl.server
-                    
-                    # Get server status
-                    try:
-                        server_status = server.get_server_status()
-                        server_accessible = True
-                        server_error = None
-                    except Exception as e:
-                        server_status = {}
-                        server_accessible = False
-                        server_error = str(e)
-                    
-                    # Get links for this ACL
-                    links = list(acl.links.all())
-                    
-                    # Get statistics for this server
-                    server_stats = [s for s in user_stats if s.server_name == server.name]
-                    
-                    servers_data[server.name] = {
-                        'server': server,
-                        'acl': acl,
-                        'links': links,
-                        'statistics': server_stats,
-                        'status': server_status,
-                        'accessible': server_accessible,
-                        'error': server_error,
-                    }
-                
-                # Get available servers not yet assigned
-                assigned_server_ids = [acl.server.id for acl in user_acls]
-                unassigned_servers = all_servers.exclude(id__in=assigned_server_ids)
-                
                 extra_context.update({
                     'user_object': user,
-                    'servers_data': servers_data,
-                    'unassigned_servers': unassigned_servers,
-                    'recent_logs': recent_logs,
                     'external_address': EXTERNAL_ADDRESS,
                 })
                 

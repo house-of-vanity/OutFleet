@@ -1,0 +1,23 @@
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block content_title %}
+    <h1 class="h4 m-0 pr-3 mr-3 border-right">
+        {% if original %}
+            🔵 Outline Server: {{ original.name }}
+        {% else %}
+            🔵 Add Outline Server
+        {% endif %}
+    </h1>
+{% endblock %}
+
+{% block admin_change_form_document_ready %}
+    {{ block.super }}
+    <script>
+    // All JavaScript functionality is now handled by generate_link.js
+    </script>
+{% endblock %}
+
+{% block field_sets %}
+    {{ block.super }}
+{% endblock %}
