@@ -130,6 +130,7 @@ class ACLLink(models.Model):
     acl = models.ForeignKey(ACL, related_name='links', on_delete=models.CASCADE)
     comment = models.TextField(default="", blank=True, help_text="ACL link comment, device name, etc...")
     link = models.CharField(max_length=1024, default="", unique=True, blank=True, null=True, verbose_name="Access link", help_text="Access link to get dynamic configuration")
+    last_access_time = models.DateTimeField(null=True, blank=True, help_text="Last time this link was accessed")
 
     def save(self, *args, **kwargs):
         if self.link == "":

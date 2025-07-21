@@ -1,8 +1,7 @@
 def userPortal(request, user_hash):
     """HTML portal for user to view their VPN access links and server information"""
-    from .models import User, ACLLink, AccessLog
+    from .models import User, ACLLink
     import logging
-    from django.db.models import Count, Q
     
     logger = logging.getLogger(__name__)
     
@@ -20,78 +19,10 @@ def userPortal(request, user_hash):
         # Get all ACL links for the user with server information
         acl_links = ACLLink.objects.filter(acl__user=user).select_related('acl__server', 'acl')
         
-        # Get connection statistics for all user's links
-        # Count successful connections for each specific link
-        connection_stats = {}
-        recent_connection_stats = {}
-        usage_frequency = {}
-        total_connections = 0
-        
-        # Get date ranges for analysis
-        from django.utils import timezone
-        from datetime import timedelta
-        now = timezone.now()
-        recent_date = now - timedelta(days=30)
-        
-        for acl_link in acl_links:
-            # Since we can't reliably track individual link usage from AccessLog.data,
-            # we'll count all successful connections to the server for this user
-            # and distribute them among all links for this server
-            
-            # Get all successful connections for this user on this server
-            server_connections = AccessLog.objects.filter(
-                user=user.username,
-                server=acl_link.acl.server.name,
-                action='Success'
-            ).count()
-            
-            # Get recent connections (last 30 days)
-            server_recent_connections = AccessLog.objects.filter(
-                user=user.username,
-                server=acl_link.acl.server.name,
-                action='Success',
-                timestamp__gte=recent_date
-            ).count()
-            
-            # Get number of links for this server for this user
-            user_links_on_server = ACLLink.objects.filter(
-                acl__user=user,
-                acl__server=acl_link.acl.server
-            ).count()
-            
-            # Distribute connections evenly among links
-            link_connections = server_connections // user_links_on_server if user_links_on_server > 0 else 0
-            recent_connections = server_recent_connections // user_links_on_server if user_links_on_server > 0 else 0
-            
-            # Calculate daily usage for the last 30 days
-            daily_usage = []
-            for i in range(30):
-                day_start = now - timedelta(days=i+1)
-                day_end = now - timedelta(days=i)
-                
-                day_connections = AccessLog.objects.filter(
-                    user=user.username,
-                    server=acl_link.acl.server.name,
-                    action='Success',
-                    timestamp__gte=day_start,
-                    timestamp__lt=day_end
-                ).count()
-                
-                # Distribute daily connections among links
-                day_link_connections = day_connections // user_links_on_server if user_links_on_server > 0 else 0
-                daily_usage.append(day_link_connections)
-            
-            # Reverse to show oldest to newest
-            daily_usage.reverse()
-            
-            connection_stats[acl_link.link] = link_connections
-            recent_connection_stats[acl_link.link] = recent_connections
-            usage_frequency[acl_link.link] = daily_usage
-            total_connections += link_connections
-        
         # Group links by server
         servers_data = {}
         total_links = 0
+        total_connections = 0  # Can be calculated from AccessLog if needed
         
         for link in acl_links:
             server = link.acl.server
@@ -119,34 +50,22 @@ def userPortal(request, user_hash):
                     'total_connections': 0,
                 }
             
-            # Add link information with connection stats
+            # Add link information with simple last access from denormalized field
             link_url = f"{EXTERNAL_ADDRESS}/ss/{link.link}#{server_name}"
-            connection_count = connection_stats.get(link.link, 0)
-            recent_count = recent_connection_stats.get(link.link, 0)
-            daily_usage = usage_frequency.get(link.link, [0] * 30)
             
             servers_data[server_name]['links'].append({
                 'link': link,
                 'url': link_url,
                 'comment': link.comment or 'Default',
-                'connections': connection_count,
-                'recent_connections': recent_count,
-                'daily_usage': daily_usage,
-                'max_daily': max(daily_usage) if daily_usage else 0,
+                'last_access': link.last_access_time,
             })
-            servers_data[server_name]['total_connections'] += connection_count
             total_links += 1
-        
-        # Calculate total recent connections from all links
-        total_recent_connections = sum(recent_connection_stats.values())
         
         context = {
             'user': user,
             'servers_data': servers_data,
             'total_servers': len(servers_data),
             'total_links': total_links,
-            'total_connections': total_connections,
-            'recent_connections': total_recent_connections,
             'external_address': EXTERNAL_ADDRESS,
         }
         
@@ -184,6 +103,7 @@ def userFrontend(request, user_hash):
 def shadowsocks(request, link):
     from .models import ACLLink, AccessLog
     import logging
+    from django.utils import timezone
     
     logger = logging.getLogger(__name__)
     
@@ -244,6 +164,11 @@ def shadowsocks(request, link):
       }
       response = yaml.dump(config, allow_unicode=True)
 
+    # Update last access time for this specific link
+    acl_link.last_access_time = timezone.now()
+    acl_link.save(update_fields=['last_access_time'])
+    
+    # Still create AccessLog for audit purposes
     AccessLog.objects.create(user=acl.user, server=acl.server.name, action="Success", data=response)
 
     return HttpResponse(response, content_type=f"{ 'application/json; charset=utf-8' if request.GET.get('mode') == 'json' else 'text/html' }")

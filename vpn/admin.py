@@ -195,20 +195,20 @@ class LastAccessFilter(admin.SimpleListFilter):
         from datetime import timedelta
         
         if self.value() == 'never':
-            # Links that have no access logs
-            return queryset.filter(last_access__isnull=True)
+            # Links that have never been accessed
+            return queryset.filter(last_access_time__isnull=True)
         elif self.value() == 'week':
             # Links accessed in the last week
             week_ago = timezone.now() - timedelta(days=7)
-            return queryset.filter(last_access__gte=week_ago)
+            return queryset.filter(last_access_time__gte=week_ago)
         elif self.value() == 'month':
             # Links accessed in the last month
             month_ago = timezone.now() - timedelta(days=30)
-            return queryset.filter(last_access__gte=month_ago)
+            return queryset.filter(last_access_time__gte=month_ago)
         elif self.value() == 'old':
             # Links not accessed for more than 3 months
             three_months_ago = timezone.now() - timedelta(days=90)
-            return queryset.filter(last_access__lt=three_months_ago)
+            return queryset.filter(last_access_time__lt=three_months_ago)
         return queryset
 
 @admin.register(Server)
@@ -683,17 +683,6 @@ class ACLLinkAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         qs = qs.select_related('acl__user', 'acl__server')
-        
-        # Add last access annotation
-        qs = qs.annotate(
-            last_access=Subquery(
-                AccessLog.objects.filter(
-                    user=OuterRef('acl__user__username'),
-                    server=OuterRef('acl__server__name')
-                ).order_by('-timestamp').values('timestamp')[:1]
-            )
-        )
-        
         return qs
 
     @admin.display(description='Link', ordering='link')
@@ -723,15 +712,15 @@ class ACLLinkAdmin(admin.ModelAdmin):
             return obj.comment[:50] + '...' if len(obj.comment) > 50 else obj.comment
         return '-'
 
-    @admin.display(description='Last Access', ordering='last_access')
+    @admin.display(description='Last Access', ordering='last_access_time')
     def last_access_display(self, obj):
-        if hasattr(obj, 'last_access') and obj.last_access:
+        if obj.last_access_time:
             from django.utils import timezone
             from datetime import timedelta
             
-            local_time = localtime(obj.last_access)
+            local_time = localtime(obj.last_access_time)
             now = timezone.now()
-            diff = now - obj.last_access
+            diff = now - obj.last_access_time
             
             # Color coding based on age
             if diff <= timedelta(days=7):
@@ -794,17 +783,17 @@ class ACLLinkAdmin(admin.ModelAdmin):
         # Add summary statistics to the changelist
         extra_context = extra_context or {}
         
-        # Get queryset with annotations for statistics
+        # Get queryset for statistics
         queryset = self.get_queryset(request)
         
         total_links = queryset.count()
-        never_accessed = queryset.filter(last_access__isnull=True).count()
+        never_accessed = queryset.filter(last_access_time__isnull=True).count()
         
         from django.utils import timezone
         from datetime import timedelta
         three_months_ago = timezone.now() - timedelta(days=90)
         old_links = queryset.filter(
-            Q(last_access__lt=three_months_ago) | Q(last_access__isnull=True)
+            Q(last_access_time__lt=three_months_ago) | Q(last_access_time__isnull=True)
         ).count()
         
         extra_context.update({
@@ -817,7 +806,7 @@ class ACLLinkAdmin(admin.ModelAdmin):
     
     def get_ordering(self, request):
         """Allow sorting by annotated fields"""
-        # Handle sorting by last_access if requested
+        # Handle sorting by last_access_time if requested
         order_var = request.GET.get('o')
         if order_var:
             try:
@@ -825,9 +814,9 @@ class ACLLinkAdmin(admin.ModelAdmin):
                 # Check if this corresponds to the last_access column (index 4 in list_display)
                 if field_index == 4:  # last_access_display is at index 4
                     if order_var.startswith('-'):
-                        return ['-last_access']
+                        return ['-last_access_time']
                     else:
-                        return ['last_access']
+                        return ['last_access_time']
             except (ValueError, IndexError):
                 pass
         
