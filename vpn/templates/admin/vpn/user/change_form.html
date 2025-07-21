@@ -1,0 +1,412 @@
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block content_title %}
+    <h1 class="h4 m-0 pr-3 mr-3 border-right">
+        {% if original %}
+            👤 User: {{ original.username }}
+        {% else %}
+            👤 Add User
+        {% endif %}
+    </h1>
+{% endblock %}
+
+{% block content %}
+    {{ block.super }}
+    
+    {% if original and servers_data %}
+    <!-- User Access Management Panel -->
+    <div class="user-access-management" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 24px 0;">
+        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 18px;">🔗 User Access Management</h3>
+        
+        <!-- User Portal Links -->
+        <div style="background: #eff6ff; border: 1px solid #dbeafe; border-radius: 6px; padding: 16px; margin-bottom: 20px;">
+            <h4 style="margin: 0 0 12px 0; color: #1e40af; font-size: 14px;">📱 User Portal Access</h4>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <a href="{{ external_address }}/u/{{ original.hash }}" target="_blank" 
+                   style="background: #4ade80; color: #000; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+                    🌐 Open User Portal
+                </a>
+                <a href="{{ external_address }}/stat/{{ original.hash }}" target="_blank" 
+                   style="background: #3b82f6; color: #fff; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+                    📄 JSON API
+                </a>
+                <span style="background: #f3f4f6; padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 12px; color: #6b7280;">
+                    Hash: {{ original.hash }}
+                </span>
+            </div>
+        </div>
+        
+        <!-- Servers & Links Management -->
+        <div style="display: grid; gap: 20px;">
+            {% for server_name, data in servers_data.items %}
+            <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h4 style="margin: 0; color: #1f2937; font-size: 16px;">
+                        {% if data.server.server_type == 'outline' %}🔵{% elif data.server.server_type == 'wireguard' %}🟢{% else %}⚪{% endif %}
+                        {{ server_name }}
+                    </h4>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        {% if data.accessible %}
+                            <span style="background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                                ✅ Online
+                            </span>
+                        {% else %}
+                            <span style="background: #fef2f2; color: #dc2626; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                                ❌ Offline
+                            </span>
+                        {% endif %}
+                        
+                        <!-- Server Statistics -->
+                        {% for stat in data.statistics %}
+                            {% if not stat.acl_link_id %}
+                                <span style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                                    📊 {{ stat.total_connections }} uses
+                                </span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                {% if data.error %}
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+                    <div style="color: #dc2626; font-size: 14px;">⚠️ Server Error:</div>
+                    <div style="color: #7f1d1d; font-size: 12px; margin-top: 4px;">{{ data.error }}</div>
+                </div>
+                {% endif %}
+                
+                <!-- Server Status Info -->
+                {% if data.status %}
+                <div style="background: #f8fafc; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+                    <div style="font-weight: bold; color: #374151; margin-bottom: 8px;">Server Status:</div>
+                    <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px;">
+                        {% for key, value in data.status.items %}
+                            <span><strong>{{ key }}:</strong> {{ value }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Links for this server -->
+                <div>
+                    <div style="font-weight: bold; color: #374151; margin-bottom: 12px;">
+                        Access Links ({{ data.links|length }}):
+                    </div>
+                    
+                    {% if data.links %}
+                        <div style="display: grid; gap: 12px;">
+                            {% for link in data.links %}
+                            <div class="link-container" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <div style="display: flex; gap: 12px; align-items: center; flex: 1;">
+                                        <span style="font-family: monospace; font-size: 14px; color: #2563eb; font-weight: bold;">
+                                            {{ link.link|slice:":16" }}{% if link.link|length > 16 %}...{% endif %}
+                                        </span>
+                                        <span style="color: #6b7280; font-size: 12px;">
+                                            {{ link.comment|default:"No comment" }}
+                                        </span>
+                                    </div>
+                                    
+                                    <!-- Link Statistics -->
+                                    {% for stat in data.statistics %}
+                                        {% if stat.acl_link_id == link.link %}
+                                            <div style="display: flex; gap: 8px; align-items: center;">
+                                                <span style="background: #eff6ff; color: #1d4ed8; padding: 2px 6px; border-radius: 3px; font-size: 11px;">
+                                                    ✨ {{ stat.total_connections }} total
+                                                </span>
+                                                <span style="background: #f0fdf4; color: #166534; padding: 2px 6px; border-radius: 3px; font-size: 11px;">
+                                                    📅 {{ stat.recent_connections }} recent
+                                                </span>
+                                                {% if stat.max_daily > 0 %}
+                                                <span style="background: #fef3c7; color: #d97706; padding: 2px 6px; border-radius: 3px; font-size: 11px;">
+                                                    📈 {{ stat.max_daily }} peak
+                                                </span>
+                                                {% endif %}
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                                
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <a href="{{ external_address }}/ss/{{ link.link }}#{{ server_name }}" target="_blank"
+                                       style="background: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 11px;">
+                                        🔗 Test Link
+                                    </a>
+                                    
+                                    <button type="button" class="delete-link-btn" 
+                                            data-link-id="{{ link.id }}" data-link-name="{{ link.link|slice:":16" }}"
+                                            style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; border: none; font-size: 11px; cursor: pointer;">
+                                        🗑️ Delete
+                                    </button>
+                                    
+                                    {% if link.last_access_time %}
+                                        <span style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #6b7280;">
+                                            Last used: {{ link.last_access_time|date:"Y-m-d H:i" }}
+                                        </span>
+                                    {% else %}
+                                        <span style="background: #fef2f2; color: #dc2626; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
+                                            Never used
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div style="color: #6b7280; font-style: italic; text-align: center; padding: 20px; background: #f9fafb; border-radius: 6px;">
+                            No access links configured for this server
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Add New Link Button -->
+                    <div style="margin-top: 16px; text-align: center;">
+                        <button type="button" class="add-link-btn" 
+                                data-server-id="{{ data.server.id }}" data-server-name="{{ server_name }}"
+                                style="background: #10b981; color: white; padding: 8px 16px; border-radius: 6px; border: none; font-size: 12px; cursor: pointer; font-weight: bold;">
+                            ➕ Add New Link
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Add Server Access -->
+        {% if unassigned_servers %}
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 16px; margin-top: 20px;">
+            <h4 style="margin: 0 0 12px 0; color: #166534; font-size: 14px;">➕ Available Servers</h4>
+            <div style="color: #166534; font-size: 12px; margin-bottom: 12px;">
+                Click to instantly add access to these servers:
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                {% for server in unassigned_servers %}
+                    <button type="button" class="add-server-btn" 
+                            data-server-id="{{ server.id }}" data-server-name="{{ server.name }}"
+                            style="background: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid #bbf7d0; cursor: pointer; font-weight: bold;">
+                        {% if server.server_type == 'outline' %}🔵{% elif server.server_type == 'wireguard' %}🟢{% else %}⚪{% endif %}
+                        {{ server.name }}
+                    </button>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <!-- Recent Activity Panel -->
+    {% if original and recent_logs %}
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 24px 0;">
+        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 18px;">📈 Recent Activity (Last 30 days)</h3>
+        
+        <div style="background: #fff; border-radius: 6px; overflow: hidden; border: 1px solid #e5e7eb;">
+            <div style="background: #f9fafb; padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold; font-size: 14px;">
+                Activity Log
+            </div>
+            
+            <div style="max-height: 400px; overflow-y: auto;">
+                {% for log in recent_logs %}
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f3f4f6;">
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        {% if log.action == 'Success' %}
+                            <span style="color: #16a34a; font-size: 16px;">✅</span>
+                        {% elif log.action == 'Failed' %}
+                            <span style="color: #dc2626; font-size: 16px;">❌</span>
+                        {% else %}
+                            <span style="color: #6b7280; font-size: 16px;">ℹ️</span>
+                        {% endif %}
+                        
+                        <div>
+                            <div style="font-weight: 500; font-size: 14px;">{{ log.server }}</div>
+                            {% if log.acl_link_id %}
+                                <div style="font-family: monospace; font-size: 12px; color: #6b7280;">
+                                    {{ log.acl_link_id|slice:":16" }}{% if log.acl_link_id|length > 16 %}...{% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: right;">
+                        <div style="font-size: 12px; color: #6b7280;">
+                            {{ log.timestamp|date:"Y-m-d H:i:s" }}
+                        </div>
+                        <div style="font-size: 11px; color: #9ca3af;">
+                            {{ log.action }}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        .btn-hover:hover {
+            opacity: 0.8;
+            transform: translateY(-1px);
+        }
+        .btn-loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style>
+{% endblock %}
+
+{% block admin_change_form_document_ready %}
+    {{ block.super }}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const userId = {{ original.id|default:"null" }};
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        // Show success/error messages
+        function showMessage(message, type = 'info') {
+            const alertClass = type === 'error' ? 'alert-danger' : 'alert-success';
+            const alertHtml = `
+                <div class="alert ${alertClass} alert-dismissible fade show" role="alert" style="margin: 16px 0;">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            // Find a good place to insert the message
+            const target = document.querySelector('.user-access-management') || document.querySelector('.content');
+            if (target) {
+                target.insertAdjacentHTML('afterbegin', alertHtml);
+                // Auto-remove after 5 seconds
+                setTimeout(() => {
+                    const alert = target.querySelector('.alert');
+                    if (alert) alert.remove();
+                }, 5000);
+            }
+        }
+        
+        // Add new link functionality
+        document.querySelectorAll('.add-link-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const serverId = this.dataset.serverId;
+                const serverName = this.dataset.serverName;
+                
+                const comment = prompt(`Add comment for new link on ${serverName} (optional):`, '');
+                if (comment === null) return; // User cancelled
+                
+                const originalText = this.textContent;
+                this.textContent = '⏳ Adding...';
+                this.classList.add('btn-loading');
+                
+                try {
+                    const response = await fetch(`/admin/vpn/user/${userId}/add-link/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: `server_id=${serverId}&comment=${encodeURIComponent(comment)}`
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showMessage(`✅ New link created successfully: ${data.link}`, 'success');
+                        // Refresh the page to show the new link
+                        window.location.reload();
+                    } else {
+                        showMessage(`❌ Error: ${data.error}`, 'error');
+                    }
+                } catch (error) {
+                    showMessage(`❌ Network error: ${error.message}`, 'error');
+                } finally {
+                    this.textContent = originalText;
+                    this.classList.remove('btn-loading');
+                }
+            });
+        });
+        
+        // Delete link functionality
+        document.querySelectorAll('.delete-link-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const linkId = this.dataset.linkId;
+                const linkName = this.dataset.linkName;
+                
+                if (!confirm(`Are you sure you want to delete link ${linkName}?`)) {
+                    return;
+                }
+                
+                const originalText = this.textContent;
+                this.textContent = '⏳ Deleting...';
+                this.classList.add('btn-loading');
+                
+                try {
+                    const response = await fetch(`/admin/vpn/user/${userId}/delete-link/${linkId}/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': csrfToken
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showMessage(`✅ Link ${linkName} deleted successfully`, 'success');
+                        // Remove the link element from DOM
+                        this.closest('.link-container')?.remove() || window.location.reload();
+                    } else {
+                        showMessage(`❌ Error: ${data.error}`, 'error');
+                    }
+                } catch (error) {
+                    showMessage(`❌ Network error: ${error.message}`, 'error');
+                } finally {
+                    this.textContent = originalText;
+                    this.classList.remove('btn-loading');
+                }
+            });
+        });
+        
+        // Add server access functionality
+        document.querySelectorAll('.add-server-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const serverId = this.dataset.serverId;
+                const serverName = this.dataset.serverName;
+                
+                if (!confirm(`Add access to server ${serverName}?`)) {
+                    return;
+                }
+                
+                const originalText = this.textContent;
+                this.textContent = '⏳ Adding...';
+                this.classList.add('btn-loading');
+                
+                try {
+                    const response = await fetch(`/admin/vpn/user/${userId}/add-server-access/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: `server_id=${serverId}`
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showMessage(`✅ Access to ${serverName} added successfully`, 'success');
+                        // Refresh the page to show the new server section
+                        window.location.reload();
+                    } else {
+                        showMessage(`❌ Error: ${data.error}`, 'error');
+                    }
+                } catch (error) {
+                    showMessage(`❌ Network error: ${error.message}`, 'error');
+                } finally {
+                    this.textContent = originalText;
+                    this.classList.remove('btn-loading');
+                }
+            });
+        });
+    });
+    </script>
+{% endblock %}

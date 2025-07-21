@@ -1,4 +1,5 @@
 import json
+import shortuuid
 from polymorphic.admin import (
     PolymorphicParentModelAdmin,
 )
@@ -578,7 +579,20 @@ class UserAdmin(admin.ModelAdmin):
     form = UserForm
     list_display = ('username', 'comment', 'registration_date', 'hash_link', 'server_count')
     search_fields = ('username', 'hash')
-    readonly_fields = ('hash_link',)
+    readonly_fields = ('hash_link', 'user_statistics_summary', 'recent_activity_display')
+    
+    fieldsets = (
+        ('User Information', {
+            'fields': ('username', 'first_name', 'last_name', 'email', 'comment')
+        }),
+        ('Access Information', {
+            'fields': ('hash_link', 'is_active')
+        }),
+        ('Statistics & Activity', {
+            'fields': ('user_statistics_summary', 'recent_activity_display'),
+            'classes': ('collapse',)
+        }),
+    )
 
     @admin.display(description='User Portal', ordering='hash')
     def hash_link(self, obj):
@@ -591,15 +605,274 @@ class UserAdmin(admin.ModelAdmin):
             '</div>',
             portal_url, json_url
         )
+    
+    @admin.display(description='User Statistics Summary')
+    def user_statistics_summary(self, obj):
+        try:
+            from .models import UserStatistics
+            from django.db import models
+            
+            # Get statistics for this user
+            user_stats = UserStatistics.objects.filter(user=obj).aggregate(
+                total_connections=models.Sum('total_connections'),
+                recent_connections=models.Sum('recent_connections'),
+                total_links=models.Count('id'),
+                max_daily_peak=models.Max('max_daily')
+            )
+            
+            # Get server breakdown
+            server_breakdown = UserStatistics.objects.filter(user=obj).values('server_name').annotate(
+                connections=models.Sum('total_connections'),
+                links=models.Count('id')
+            ).order_by('-connections')
+            
+            html = '<div style="background: #f8f9fa; padding: 12px; border-radius: 6px; margin: 8px 0;">'
+            html += f'<div style="display: flex; gap: 20px; margin-bottom: 12px; flex-wrap: wrap;">'
+            html += f'<div><strong>Total Uses:</strong> {user_stats["total_connections"] or 0}</div>'
+            html += f'<div><strong>Recent (30d):</strong> {user_stats["recent_connections"] or 0}</div>'
+            html += f'<div><strong>Total Links:</strong> {user_stats["total_links"] or 0}</div>'
+            if user_stats["max_daily_peak"]:
+                html += f'<div><strong>Daily Peak:</strong> {user_stats["max_daily_peak"]}</div>'
+            html += f'</div>'
+            
+            if server_breakdown:
+                html += '<div><strong>By Server:</strong></div>'
+                html += '<ul style="margin: 8px 0; padding-left: 20px;">'
+                for server in server_breakdown:
+                    html += f'<li>{server["server_name"]}: {server["connections"]} uses ({server["links"]} links)</li>'
+                html += '</ul>'
+            
+            html += '</div>'
+            return mark_safe(html)
+        except Exception as e:
+            return mark_safe(f'<span style="color: #dc2626;">Error loading statistics: {e}</span>')
+    
+    @admin.display(description='Recent Activity')
+    def recent_activity_display(self, obj):
+        try:
+            from datetime import timedelta
+            from django.utils import timezone
+            
+            # Get recent access logs for this user
+            recent_logs = AccessLog.objects.filter(
+                user=obj.username,
+                timestamp__gte=timezone.now() - timedelta(days=7)
+            ).order_by('-timestamp')[:10]
+            
+            if not recent_logs:
+                return mark_safe('<div style="color: #6b7280; font-style: italic;">No recent activity</div>')
+            
+            html = '<div style="background: #f8f9fa; padding: 12px; border-radius: 6px; margin: 8px 0;">'
+            html += '<div style="font-weight: bold; margin-bottom: 8px;">Last 7 days:</div>'
+            
+            for log in recent_logs:
+                local_time = localtime(log.timestamp)
+                time_str = local_time.strftime('%Y-%m-%d %H:%M')
+                
+                # Status color coding
+                if log.action == 'Success':
+                    color = '#16a34a'
+                    icon = '✅'
+                elif log.action == 'Failed':
+                    color = '#dc2626'
+                    icon = '❌'
+                else:
+                    color = '#6b7280'
+                    icon = 'ℹ️'
+                
+                link_display = log.acl_link_id[:12] + '...' if log.acl_link_id and len(log.acl_link_id) > 12 else log.acl_link_id or 'N/A'
+                
+                html += f'<div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #e5e7eb; font-size: 12px;">'
+                html += f'<span><span style="color: {color};">{icon}</span> {log.server} / {link_display}</span>'
+                html += f'<span style="color: #6b7280;">{time_str}</span>'
+                html += f'</div>'
+            
+            html += '</div>'
+            return mark_safe(html)
+        except Exception as e:
+            return mark_safe(f'<span style="color: #dc2626;">Error loading activity: {e}</span>')
 
     @admin.display(description='Allowed servers', ordering='server_count')
     def server_count(self, obj):
         return obj.server_count
-
+    
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         qs = qs.annotate(server_count=Count('acl'))
         return qs
+    
+    def get_urls(self):
+        """Add custom URLs for link management"""
+        urls = super().get_urls()
+        custom_urls = [
+            path('<int:user_id>/add-link/', self.admin_site.admin_view(self.add_link_view), name='user_add_link'),
+            path('<int:user_id>/delete-link/<int:link_id>/', self.admin_site.admin_view(self.delete_link_view), name='user_delete_link'),
+            path('<int:user_id>/add-server-access/', self.admin_site.admin_view(self.add_server_access_view), name='user_add_server_access'),
+        ]
+        return custom_urls + urls
+    
+    def add_link_view(self, request, user_id):
+        """AJAX view to add a new link for user on specific server"""
+        from django.http import JsonResponse
+        
+        if request.method == 'POST':
+            try:
+                user = User.objects.get(pk=user_id)
+                server_id = request.POST.get('server_id')
+                comment = request.POST.get('comment', '')
+                
+                if not server_id:
+                    return JsonResponse({'error': 'Server ID is required'}, status=400)
+                
+                server = Server.objects.get(pk=server_id)
+                acl = ACL.objects.get(user=user, server=server)
+                
+                # Create new link
+                new_link = ACLLink.objects.create(
+                    acl=acl,
+                    comment=comment,
+                    link=shortuuid.ShortUUID().random(length=16)
+                )
+                
+                return JsonResponse({
+                    'success': True,
+                    'link_id': new_link.id,
+                    'link': new_link.link,
+                    'comment': new_link.comment,
+                    'url': f"{EXTERNAL_ADDRESS}/ss/{new_link.link}#{server.name}"
+                })
+                
+            except Exception as e:
+                return JsonResponse({'error': str(e)}, status=500)
+        
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
+    
+    def delete_link_view(self, request, user_id, link_id):
+        """AJAX view to delete a specific link"""
+        from django.http import JsonResponse
+        
+        if request.method == 'POST':
+            try:
+                user = User.objects.get(pk=user_id)
+                link = ACLLink.objects.get(pk=link_id, acl__user=user)
+                link.delete()
+                
+                return JsonResponse({'success': True})
+                
+            except Exception as e:
+                return JsonResponse({'error': str(e)}, status=500)
+        
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
+    
+    def add_server_access_view(self, request, user_id):
+        """AJAX view to add server access for user"""
+        from django.http import JsonResponse
+        
+        if request.method == 'POST':
+            try:
+                user = User.objects.get(pk=user_id)
+                server_id = request.POST.get('server_id')
+                
+                if not server_id:
+                    return JsonResponse({'error': 'Server ID is required'}, status=400)
+                
+                server = Server.objects.get(pk=server_id)
+                
+                # Check if ACL already exists
+                if ACL.objects.filter(user=user, server=server).exists():
+                    return JsonResponse({'error': 'User already has access to this server'}, status=400)
+                
+                # Create new ACL (with default link)
+                acl = ACL.objects.create(user=user, server=server)
+                
+                return JsonResponse({
+                    'success': True,
+                    'server_name': server.name,
+                    'server_type': server.server_type,
+                    'acl_id': acl.id
+                })
+                
+            except Exception as e:
+                return JsonResponse({'error': str(e)}, status=500)
+        
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
+    
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        """Override change view to add extensive user management data"""
+        extra_context = extra_context or {}
+        
+        if object_id:
+            try:
+                user = User.objects.get(pk=object_id)
+                
+                # Get all ACLs and links for this user
+                user_acls = ACL.objects.filter(user=user).select_related('server').prefetch_related('links')
+                
+                # Get all available servers
+                all_servers = Server.objects.all()
+                
+                # Get user statistics
+                try:
+                    from .models import UserStatistics
+                    user_stats = UserStatistics.objects.filter(user=user).select_related('user')
+                except:
+                    user_stats = []
+                
+                # Get recent access logs
+                from django.utils import timezone
+                from datetime import timedelta
+                recent_logs = AccessLog.objects.filter(
+                    user=user.username,
+                    timestamp__gte=timezone.now() - timedelta(days=30)
+                ).order_by('-timestamp')[:50]
+                
+                # Organize data by server
+                servers_data = {}
+                for acl in user_acls:
+                    server = acl.server
+                    
+                    # Get server status
+                    try:
+                        server_status = server.get_server_status()
+                        server_accessible = True
+                        server_error = None
+                    except Exception as e:
+                        server_status = {}
+                        server_accessible = False
+                        server_error = str(e)
+                    
+                    # Get links for this ACL
+                    links = list(acl.links.all())
+                    
+                    # Get statistics for this server
+                    server_stats = [s for s in user_stats if s.server_name == server.name]
+                    
+                    servers_data[server.name] = {
+                        'server': server,
+                        'acl': acl,
+                        'links': links,
+                        'statistics': server_stats,
+                        'status': server_status,
+                        'accessible': server_accessible,
+                        'error': server_error,
+                    }
+                
+                # Get available servers not yet assigned
+                assigned_server_ids = [acl.server.id for acl in user_acls]
+                unassigned_servers = all_servers.exclude(id__in=assigned_server_ids)
+                
+                extra_context.update({
+                    'user_object': user,
+                    'servers_data': servers_data,
+                    'unassigned_servers': unassigned_servers,
+                    'recent_logs': recent_logs,
+                    'external_address': EXTERNAL_ADDRESS,
+                })
+                
+            except User.DoesNotExist:
+                pass
+        
+        return super().change_view(request, object_id, form_url, extra_context)
 
     def save_model(self, request, obj, form, change):
         import logging
