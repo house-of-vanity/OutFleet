@@ -69,6 +69,7 @@ class TaskExecutionLog(models.Model):
 class AccessLog(models.Model):
     user = models.CharField(max_length=256, blank=True, null=True, editable=False)
     server = models.CharField(max_length=256, blank=True, null=True, editable=False)
+    acl_link_id = models.CharField(max_length=1024, blank=True, null=True, editable=False, help_text="ID of the ACL link used")
     action = models.CharField(max_length=100, editable=False)
     data = models.TextField(default="", blank=True, editable=False)
     timestamp = models.DateTimeField(auto_now_add=True)
@@ -77,12 +78,14 @@ class AccessLog(models.Model):
         indexes = [
             models.Index(fields=['user']),
             models.Index(fields=['server']),
+            models.Index(fields=['acl_link_id']),
             models.Index(fields=['timestamp']),
             models.Index(fields=['action', 'timestamp']),
         ]
 
     def __str__(self):
-        return f"{self.action} {self.user} request for {self.server} at {self.timestamp}"
+        link_part = f" (link: {self.acl_link_id})" if self.acl_link_id else ""
+        return f"{self.action} {self.user} request for {self.server}{link_part} at {self.timestamp}"
 
 class User(AbstractUser):
     #is_active = False

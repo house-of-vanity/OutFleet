@@ -719,10 +719,19 @@ class UserAdmin(admin.ModelAdmin):
 
 @admin.register(AccessLog)
 class AccessLogAdmin(admin.ModelAdmin):
-    list_display = ('user', 'server', 'action', 'formatted_timestamp')
+    list_display = ('user', 'server', 'acl_link_display', 'action', 'formatted_timestamp')
     list_filter = ('user', 'server', 'action', 'timestamp')
-    search_fields = ('user', 'server', 'action', 'timestamp', 'data')
-    readonly_fields = ('server', 'user', 'formatted_timestamp', 'action', 'formated_data')
+    search_fields = ('user', 'server', 'acl_link_id', 'action', 'timestamp', 'data')
+    readonly_fields = ('server', 'user', 'acl_link_id', 'formatted_timestamp', 'action', 'formated_data')
+
+    @admin.display(description='Link', ordering='acl_link_id')
+    def acl_link_display(self, obj):
+        if obj.acl_link_id:
+            return format_html(
+                '<span style="font-family: monospace; color: #2563eb;">{}</span>',
+                obj.acl_link_id[:12] + '...' if len(obj.acl_link_id) > 12 else obj.acl_link_id
+            )
+        return '-'
 
     @admin.display(description='Timestamp')
     def formatted_timestamp(self, obj):

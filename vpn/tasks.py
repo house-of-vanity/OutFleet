@@ -252,10 +252,11 @@ def update_user_statistics(self):
                 for link in acl_links:
                     server_name = link.acl.server.name
                     
-                    # Calculate total connections for this server (all time)
+                    # Calculate total connections for this specific link (all time)
                     total_connections = AccessLog.objects.filter(
                         user=user.username,
                         server=server_name,
+                        acl_link_id=link.link,
                         action='Success'
                     ).count()
                     
@@ -263,6 +264,7 @@ def update_user_statistics(self):
                     recent_connections = AccessLog.objects.filter(
                         user=user.username,
                         server=server_name,
+                        acl_link_id=link.link,
                         action='Success',
                         timestamp__gte=thirty_days_ago
                     ).count()
@@ -278,6 +280,7 @@ def update_user_statistics(self):
                         day_connections = AccessLog.objects.filter(
                             user=user.username,
                             server=server_name,
+                            acl_link_id=link.link,
                             action='Success',
                             timestamp__gte=day_start,
                             timestamp__lt=day_end
@@ -300,7 +303,7 @@ def update_user_statistics(self):
                     )
                     
                     action = "created" if created else "updated"
-                    logger.debug(f"{action} stats for {user.username} on {server_name} (link: {link.link})")
+                    logger.debug(f"{action} stats for {user.username} on {server_name} (link: {link.link}): {total_connections} total, {recent_connections} recent")
                     
                     updated_count += 1
                 

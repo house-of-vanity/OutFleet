@@ -203,8 +203,13 @@ def shadowsocks(request, link):
         logger.info(f"Found ACL link for user {acl.user.username} on server {acl.server.name}")
     except Http404:
         logger.warning(f"ACL link not found: {link}")
-        AccessLog.objects.create(user=None, server="Unknown", action="Failed",
-                                 data=f"ACL not found for link: {link}")
+        AccessLog.objects.create(
+            user=None, 
+            server="Unknown", 
+            acl_link_id=link,
+            action="Failed",
+            data=f"ACL not found for link: {link}"
+        )
         return JsonResponse({"error": "Not allowed"}, status=403)
 
     try:
@@ -212,8 +217,13 @@ def shadowsocks(request, link):
         logger.info(f"Successfully retrieved user credentials for {acl.user.username} from {acl.server.name}")
     except Exception as e:
         logger.error(f"Failed to get user credentials for {acl.user.username} from {acl.server.name}: {e}")
-        AccessLog.objects.create(user=acl.user, server=acl.server.name, action="Failed",
-                                 data=f"Failed to get credentials: {e}")
+        AccessLog.objects.create(
+            user=acl.user.username, 
+            server=acl.server.name, 
+            acl_link_id=acl_link.link,
+            action="Failed",
+            data=f"Failed to get credentials: {e}"
+        )
         return JsonResponse({"error": f"Couldn't get credentials from server. {e}"}, status=500)
 
     if request.GET.get('mode') == 'json':
@@ -258,8 +268,14 @@ def shadowsocks(request, link):
     acl_link.last_access_time = timezone.now()
     acl_link.save(update_fields=['last_access_time'])
     
-    # Still create AccessLog for audit purposes
-    AccessLog.objects.create(user=acl.user, server=acl.server.name, action="Success", data=response)
+    # Create AccessLog with specific link tracking
+    AccessLog.objects.create(
+        user=acl.user.username, 
+        server=acl.server.name, 
+        acl_link_id=acl_link.link,
+        action="Success", 
+        data=response
+    )
 
     return HttpResponse(response, content_type=f"{ 'application/json; charset=utf-8' if request.GET.get('mode') == 'json' else 'text/html' }")
 
