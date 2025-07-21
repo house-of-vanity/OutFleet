@@ -53,24 +53,6 @@ class TaskExecutionLogAdmin(admin.ModelAdmin):
         # This action doesn't require selected items
         try:
             from vpn.tasks import sync_all_users
-            from datetime import timedelta
-            from django.utils import timezone
-            
-            # Check if sync is already running (last 10 minutes)
-            recent_cutoff = timezone.now() - timedelta(minutes=10)
-            running_syncs = TaskExecutionLog.objects.filter(
-                created_at__gte=recent_cutoff,
-                task_name='sync_all_servers',
-                status='STARTED'
-            )
-            
-            if running_syncs.exists():
-                self.message_user(
-                    request,
-                    'Synchronization is already running. Please wait for completion.',
-                    level=messages.WARNING
-                )
-                return
             
             # Start the sync task
             task = sync_all_users.delay()
@@ -140,7 +122,7 @@ class TaskExecutionLogAdmin(admin.ModelAdmin):
         return False
     
     def changelist_view(self, request, extra_context=None):
-        """Override to handle actions that don't require item selection and add sync status"""
+        """Override to handle actions that don't require item selection"""
         # Handle actions that don't require selection
         if 'action' in request.POST:
             action = request.POST['action']
@@ -149,36 +131,6 @@ class TaskExecutionLogAdmin(admin.ModelAdmin):
                 self.trigger_full_sync(request, None)
                 # Return redirect to prevent AttributeError
                 return redirect(request.get_full_path())
-        
-        # Add sync status and controls to the changelist
-        extra_context = extra_context or {}
-        
-        # Add sync statistics
-        from datetime import timedelta
-        from django.utils import timezone
-        
-        # Get recent sync tasks (last 24 hours)
-        recent_cutoff = timezone.now() - timedelta(hours=24)
-        recent_syncs = TaskExecutionLog.objects.filter(
-            created_at__gte=recent_cutoff,
-            task_name='sync_all_servers'
-        )
-        
-        total_recent = recent_syncs.count()
-        successful_recent = recent_syncs.filter(status='SUCCESS').count()
-        failed_recent = recent_syncs.filter(status='FAILURE').count()
-        running_recent = recent_syncs.filter(status='STARTED').count()
-        
-        # Check if sync is currently running
-        currently_running = recent_syncs.filter(status='STARTED').exists()
-        
-        extra_context.update({
-            'total_recent_syncs': total_recent,
-            'successful_recent_syncs': successful_recent,
-            'failed_recent_syncs': failed_recent,
-            'running_recent_syncs': running_recent,
-            'sync_currently_running': currently_running,
-        })
         
         return super().changelist_view(request, extra_context)
 
