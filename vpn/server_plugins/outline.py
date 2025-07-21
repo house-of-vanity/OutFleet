@@ -580,6 +580,9 @@ class OutlineServerAdmin(PolymorphicChildModelAdmin):
             html += f'<div><strong>Total Links:</strong> {total_links}</div>'
             html += f'<div><strong>Server Keys:</strong> {server_keys_count}</div>'
             html += '</div>'
+            html += '<div style="margin-top: 8px; font-size: 11px; color: #6c757d;">'
+            html += '📊 User activity data is from cached statistics for fast loading. Status indicators show usage patterns.'
+            html += '</div>'
             html += '</div>'
             
             # Get users data with ACL information
@@ -599,17 +602,28 @@ class OutlineServerAdmin(PolymorphicChildModelAdmin):
                             if last_access is None or link.last_access_time > last_access:
                                 last_access = link.last_access_time
                     
-                    # Check if user has key on server
-                    server_key = False
-                    try:
-                        obj.get_user(user)
-                        server_key = True
-                    except Exception:
-                        pass
+                    # Use cached statistics instead of live server check for performance
+                    user_stats = UserStatistics.objects.filter(user=user, server_name=obj.name)
+                    server_key_status = "unknown"
+                    total_user_connections = 0
+                    recent_user_connections = 0
+                    
+                    if user_stats.exists():
+                        # User has cached data, likely has server access
+                        total_user_connections = sum(stat.total_connections for stat in user_stats)
+                        recent_user_connections = sum(stat.recent_connections for stat in user_stats)
+                        
+                        if total_user_connections > 0:
+                            server_key_status = "cached_active"
+                        else:
+                            server_key_status = "cached_inactive"
+                    else:
+                        # No cached data - either new user or no access
+                        server_key_status = "no_cache"
                     
                     html += '<div style="background: #ffffff; border: 1px solid #e9ecef; border-radius: 0.25rem; padding: 0.75rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">'
                     
-                    # User info
+                    # User info section
                     html += '<div style="flex: 1;">'
                     html += f'<div style="font-weight: 500; font-size: 14px; color: #495057;">{user.username}'
                     if user.comment:
@@ -622,19 +636,30 @@ class OutlineServerAdmin(PolymorphicChildModelAdmin):
                         html += f' | Last access: {local_time.strftime("%Y-%m-%d %H:%M")}'
                     else:
                         html += ' | Never accessed'
-                    html += '</div>'
-                    html += '</div>'
                     
-                    # Status and actions
+                    # Add usage statistics inside the same div
+                    if total_user_connections > 0:
+                        html += f' | {total_user_connections} total uses'
+                        if recent_user_connections > 0:
+                            html += f' ({recent_user_connections} recent)'
+                    
+                    html += '</div>'  # End user info
+                    html += '</div>'  # End flex-1 div
+                    
+                    # Status and actions section
                     html += '<div style="display: flex; gap: 8px; align-items: center;">'
-                    if server_key:
-                        html += '<span style="background: #d4edda; color: #155724; padding: 2px 6px; border-radius: 3px; font-size: 10px;">✅ On Server</span>'
+                    
+                    # Status indicator based on cached data
+                    if server_key_status == "cached_active":
+                        html += '<span style="background: #d4edda; color: #155724; padding: 2px 6px; border-radius: 3px; font-size: 10px;">📊 Active User</span>'
+                    elif server_key_status == "cached_inactive":
+                        html += '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px;">📊 Inactive</span>'
                     else:
-                        html += '<span style="background: #f8d7da; color: #721c24; padding: 2px 6px; border-radius: 3px; font-size: 10px;">❌ Missing</span>'
+                        html += '<span style="background: #f8d7da; color: #721c24; padding: 2px 6px; border-radius: 3px; font-size: 10px;">❓ No Data</span>'
                     
                     html += f'<a href="/admin/vpn/user/{user.id}/change/" class="btn btn-sm btn-outline-primary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 0.2rem; margin: 0 0.1rem;">👤 Edit</a>'
-                    html += '</div>'
-                    html += '</div>'
+                    html += '</div>'  # End actions div
+                    html += '</div>'  # End main user div
             else:
                 html += '<div style="color: #6c757d; font-style: italic; text-align: center; padding: 20px; background: #f9fafb; border-radius: 6px;">'
                 html += 'No users assigned to this server'

@@ -247,10 +247,15 @@ class LastAccessFilter(admin.SimpleListFilter):
 class ServerAdmin(PolymorphicParentModelAdmin):
     base_model = Server
     child_models = (OutlineServer, WireguardServer)
-    list_display = ('name_with_icon', 'server_type', 'comment_short', 'user_stats', 'activity_summary', 'server_status_compact', 'registration_date')
+    list_display = ('name_with_icon', 'server_type', 'comment_short', 'user_stats', 'server_status_compact', 'registration_date')
     search_fields = ('name', 'comment')
     list_filter = ('server_type', )
     actions = ['move_clients_action', 'purge_all_keys_action', 'sync_all_selected_servers']
+    
+    class Media:
+        css = {
+            'all': ('admin/css/vpn_server_admin.css',)
+        }
 
     def get_urls(self):
         urls = super().get_urls()
@@ -619,32 +624,44 @@ class ServerAdmin(PolymorphicParentModelAdmin):
     
     @admin.display(description='Users & Links')
     def user_stats(self, obj):
-        """Display user count and active links statistics"""
+        """Display user count and active links statistics (optimized)"""
         try:
             from django.utils import timezone
             from datetime import timedelta
             
             user_count = obj.user_count if hasattr(obj, 'user_count') else 0
             
-            # Get total links count
-            total_links = ACLLink.objects.filter(acl__server=obj).count()
-            
-            # Get recently accessed links (last 30 days) - exclude None values
-            thirty_days_ago = timezone.now() - timedelta(days=30)
-            active_links = ACLLink.objects.filter(
-                acl__server=obj,
-                last_access_time__isnull=False,
-                last_access_time__gte=thirty_days_ago
-            ).count()
+            # Use prefetched data if available
+            if hasattr(obj, 'acl_set'):
+                all_links = []
+                for acl in obj.acl_set.all():
+                    if hasattr(acl, 'links') and hasattr(acl.links, 'all'):
+                        all_links.extend(acl.links.all())
+                
+                total_links = len(all_links)
+                
+                # Count active links from prefetched data
+                thirty_days_ago = timezone.now() - timedelta(days=30)
+                active_links = sum(1 for link in all_links 
+                                 if link.last_access_time and link.last_access_time >= thirty_days_ago)
+            else:
+                # Fallback to direct queries (less efficient)
+                total_links = ACLLink.objects.filter(acl__server=obj).count()
+                thirty_days_ago = timezone.now() - timedelta(days=30)
+                active_links = ACLLink.objects.filter(
+                    acl__server=obj,
+                    last_access_time__isnull=False,
+                    last_access_time__gte=thirty_days_ago
+                ).count()
             
             # Color coding based on activity
             if user_count == 0:
                 color = '#9ca3af'  # gray - no users
             elif total_links == 0:
                 color = '#dc2626'  # red - no links
-            elif active_links > total_links * 0.7:  # High activity
+            elif total_links > 0 and active_links > total_links * 0.7:  # High activity
                 color = '#16a34a'  # green
-            elif active_links > total_links * 0.3:  # Medium activity
+            elif total_links > 0 and active_links > total_links * 0.3:  # Medium activity
                 color = '#eab308'  # yellow
             else:
                 color = '#f97316'  # orange - low activity
@@ -660,55 +677,14 @@ class ServerAdmin(PolymorphicParentModelAdmin):
     
     @admin.display(description='Activity')
     def activity_summary(self, obj):
-        """Display recent activity summary"""
+        """Display recent activity summary (optimized)"""
         try:
-            from django.utils import timezone
-            from datetime import timedelta
-            
-            # Get recent access logs for this server
-            seven_days_ago = timezone.now() - timedelta(days=7)
-            recent_logs = AccessLog.objects.filter(
-                server=obj.name,
-                timestamp__gte=seven_days_ago
-            )
-            
-            total_access = recent_logs.count()
-            success_access = recent_logs.filter(action='Success').count()
-            
-            # Get latest access
-            latest_log = AccessLog.objects.filter(server=obj.name).order_by('-timestamp').first()
-            
-            if latest_log:
-                local_time = localtime(latest_log.timestamp)
-                latest_str = local_time.strftime('%m-%d %H:%M')
-                
-                # Time since last access
-                time_diff = timezone.now() - latest_log.timestamp
-                if time_diff.days > 0:
-                    time_ago = f'{time_diff.days}d ago'
-                elif time_diff.seconds > 3600:
-                    time_ago = f'{time_diff.seconds // 3600}h ago'
-                else:
-                    time_ago = 'Recent'
-            else:
-                latest_str = 'Never'
-                time_ago = ''
-            
-            # Color coding
-            if total_access == 0:
-                color = '#dc2626'  # red - no activity
-            elif total_access > 50:
-                color = '#16a34a'  # green - high activity
-            elif total_access > 10:
-                color = '#eab308'  # yellow - medium activity
-            else:
-                color = '#f97316'  # orange - low activity
-            
+            # Simplified version - avoid heavy DB queries on list page
+            # This could be computed once per page load if needed
             return mark_safe(
-                f'<div style="font-size: 11px;">' +
-                f'<div style="color: {color}; font-weight: bold;">📊 {total_access} uses (7d)</div>' +
-                f'<div style="color: #6b7280;">✅ {success_access} success</div>' +
-                f'<div style="color: #6b7280;">🕒 {latest_str} {time_ago}</div>' +
+                f'<div style="font-size: 11px; color: #6b7280;">' +
+                f'<div>📊 Activity data</div>' +
+                f'<div><small>Click to view details</small></div>' +
                 f'</div>'
             )
         except Exception as e:
@@ -716,42 +692,26 @@ class ServerAdmin(PolymorphicParentModelAdmin):
     
     @admin.display(description='Status')
     def server_status_compact(self, obj):
-        """Display server status in compact format"""
+        """Display server status in compact format (optimized)"""
         try:
-            status = obj.get_server_status()
-            if 'error' in status:
-                return mark_safe(
-                    f'<div style="color: #dc2626; font-size: 11px; font-weight: bold;">' +
-                    f'❌ Error<br>' +
-                    f'<span style="font-weight: normal;" title="{status["error"]}">' +
-                    f'{status["error"][:30]}...</span>' +
-                    f'</div>'
-                )
-            
-            # Extract key metrics
-            status_items = []
-            if 'name' in status:
-                status_items.append(f"📛 {status['name'][:15]}")
-            if 'version' in status:
-                status_items.append(f"🔄 {status['version']}")
-            if 'keys' in status:
-                status_items.append(f"🔑 {status['keys']} keys")
-            if 'accessUrl' in status:
-                status_items.append("🌐 Available")
-            
-            status_display = '<br>'.join(status_items) if status_items else 'Unknown'
+            # Avoid expensive server connectivity checks on list page
+            # Show basic info and let users click to check status
+            server_type_icons = {
+                'outline': '🔵',
+                'wireguard': '🟢',
+            }
+            icon = server_type_icons.get(obj.server_type, '⚪')
             
             return mark_safe(
-                f'<div style="color: #16a34a; font-size: 11px;">' +
-                f'✅ Online<br>' +
-                f'<span style="color: #6b7280;">{status_display}</span>' +
+                f'<div style="color: #6b7280; font-size: 11px;">' +
+                f'{icon} {obj.server_type.title()}<br>' +
+                f'<small>Click to check status</small>' +
                 f'</div>'
             )
         except Exception as e:
-            # Don't let server connectivity issues break the admin interface
             return mark_safe(
                 f'<div style="color: #f97316; font-size: 11px; font-weight: bold;">' +
-                f'⚠️ Unavailable<br>' +
+                f'⚠️ Error<br>' +
                 f'<span style="font-weight: normal;" title="{str(e)}">' +
                 f'{str(e)[:25]}...</span>' +
                 f'</div>'
@@ -760,6 +720,10 @@ class ServerAdmin(PolymorphicParentModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         qs = qs.annotate(user_count=Count('acl'))
+        qs = qs.prefetch_related(
+            'acl_set__links',
+            'acl_set__user'
+        )
         return qs
 
 #admin.site.register(User, UserAdmin)
@@ -768,7 +732,12 @@ class UserAdmin(admin.ModelAdmin):
     form = UserForm
     list_display = ('username', 'comment', 'registration_date', 'hash_link', 'server_count')
     search_fields = ('username', 'hash')
-    readonly_fields = ('hash_link', 'user_statistics_summary', 'recent_activity_display')
+    readonly_fields = ('hash_link', 'user_statistics_summary')
+    
+    class Media:
+        css = {
+            'all': ('admin/css/vpn_server_admin.css',)
+        }
     
     fieldsets = (
         ('User Information', {
@@ -777,9 +746,9 @@ class UserAdmin(admin.ModelAdmin):
         ('Access Information', {
             'fields': ('hash_link', 'is_active')
         }),
-        ('Statistics & Activity', {
-            'fields': ('user_statistics_summary', 'recent_activity_display'),
-            'classes': ('collapse',)
+        ('Statistics & Server Management', {
+            'fields': ('user_statistics_summary',),
+            'classes': ('wide',)
         }),
     )
 
@@ -845,23 +814,10 @@ class UserAdmin(admin.ModelAdmin):
                     server = acl.server
                     links = list(acl.links.all())
                     
-                    # Server status check
-                    try:
-                        server_status = server.get_server_status()
-                        server_accessible = True
-                        server_error = None
-                    except Exception as e:
-                        server_status = {}
-                        server_accessible = False
-                        server_error = str(e)
-                    
-                    html += '<div class="server-section">'
-                    
-                    # Server header
-                    status_icon = '✅' if server_accessible else '❌'
+                    # Server header (no slow server status checks)
                     type_icon = '🔵' if server.server_type == 'outline' else '🟢' if server.server_type == 'wireguard' else ''
                     html += f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">'
-                    html += f'<h5 style="margin: 0; color: #333; font-size: 14px; font-weight: 600;">{type_icon} {server.name} {status_icon}</h5>'
+                    html += f'<h5 style="margin: 0; color: #333; font-size: 14px; font-weight: 600;">{type_icon} {server.name}</h5>'
                     
                     # Server stats
                     server_stat = next((s for s in server_breakdown if s['server_name'] == server.name), None)
@@ -871,11 +827,7 @@ class UserAdmin(admin.ModelAdmin):
                         html += f'</span>'
                     html += f'</div>'
                     
-                    # Server error display
-                    if server_error:
-                        html += f'<div style="background: #f8d7da; color: #721c24; padding: 8px; border-radius: 4px; margin-bottom: 8px; font-size: 12px;">'
-                        html += f'⚠️ Error: {server_error[:80]}...'
-                        html += f'</div>'
+                    html += '<div class="server-section">'
                     
                     # Links display
                     if links:
@@ -1136,7 +1088,7 @@ class UserAdmin(admin.ModelAdmin):
         return JsonResponse({'error': 'Invalid request method'}, status=405)
     
     def change_view(self, request, object_id, form_url='', extra_context=None):
-        """Override change view to add user management data to context"""
+        """Override change view to add user management data and fix layout"""
         extra_context = extra_context or {}
         
         if object_id:
@@ -1235,13 +1187,39 @@ class ACLAdmin(admin.ModelAdmin):
         server = obj.server
         user = obj.user
         try:
-            data = server.get_user(user)
-            return format_object(data)
+            # Use cached statistics instead of direct server requests
+            from .models import UserStatistics
+            user_stats = UserStatistics.objects.filter(
+                user=user,
+                server_name=server.name
+            ).first()
+            
+            if user_stats:
+                # Format cached data nicely
+                data = {
+                    'user': user.username,
+                    'server': server.name,
+                    'total_connections': user_stats.total_connections,
+                    'recent_connections': user_stats.recent_connections,
+                    'max_daily': user_stats.max_daily,
+                    'last_updated': user_stats.updated_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    'status': 'from_cache'
+                }
+                return format_object(data)
+            else:
+                # Fallback to minimal server check (avoid slow API calls on admin pages)
+                return mark_safe(
+                    '<div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 8px; border-radius: 4px;">' +
+                    '<strong>ℹ️ User Statistics:</strong><br>' +
+                    'No cached statistics available.<br>' +
+                    '<small>Run "Update user statistics cache" action to populate data.</small>' +
+                    '</div>'
+                )
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Failed to get user info for {user.username} on {server.name}: {e}")
-            return mark_safe(f"<span style='color: red;'>Server connection error: {e}</span>")
+            logger.error(f"Failed to get cached user info for {user.username} on {server.name}: {e}")
+            return mark_safe(f"<span style='color: red;'>Cache error: {e}</span>")
 
     @admin.display(description='User Links')
     def display_links(self, obj):
