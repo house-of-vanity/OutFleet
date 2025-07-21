@@ -236,6 +236,22 @@
             flex-wrap: wrap;
         }
 
+        .last-used {
+            color: #9ca3af;
+            font-size: 0.8rem;
+            background: rgba(156, 163, 175, 0.1);
+            padding: 3px 8px;
+            border-radius: 10px;
+            border: 1px solid rgba(156, 163, 175, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .last-used:hover {
+            background: rgba(156, 163, 175, 0.2);
+            border-color: rgba(156, 163, 175, 0.4);
+            transform: scale(1.05);
+        }
+
         .usage-count {
             color: #9ca3af;
             font-size: 0.8rem;
@@ -451,7 +467,11 @@
                 </div>
             </div>
             <div class="stats-info">
-                <p>📊 Statistics are updated in real-time and show your connection history</p>
+                {% if total_connections == 0 and total_links > 0 %}
+                <p>📊 Statistics cache is empty. Run update in Admin → Task Execution Logs</p>
+                {% else %}
+                <p>📊 Statistics are updated every 3 hours and show your connection history</p>
+                {% endif %}
             </div>
         </div>
 
@@ -492,6 +512,7 @@
                                     <div class="link-stats">
                                         <span class="usage-count">✨ {{ link_data.connections }} uses</span>
                                         <span class="recent-count">📅 {{ link_data.recent_connections }} last 30 days</span>
+                                        <span class="last-used">🕒 {{ link_data.last_access_display }}</span>
                                     </div>
                                 </div>
                                 <div class="usage-chart" data-usage="{{ link_data.daily_usage|join:',' }}" data-max="{{ link_data.max_daily }}">

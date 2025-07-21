@@ -12,7 +12,7 @@ from django.urls import path, reverse
 from django.http import HttpResponseRedirect
 
 from django.contrib.auth.admin import UserAdmin
-from .models import User, AccessLog, TaskExecutionLog
+from .models import User, AccessLog, TaskExecutionLog, UserStatistics
 from django.utils.timezone import localtime
 from vpn.models import User, ACL, ACLLink
 from vpn.forms import UserForm
@@ -25,6 +25,103 @@ from .server_plugins import (
     OutlineServer,
     OutlineServerAdmin)
 
+@admin.register(UserStatistics)
+class UserStatisticsAdmin(admin.ModelAdmin):
+    list_display = ('user_display', 'server_name', 'link_display', 'total_connections', 'recent_connections', 'max_daily', 'updated_at_display')
+    list_filter = ('server_name', 'updated_at', 'user__username')
+    search_fields = ('user__username', 'server_name', 'acl_link_id')
+    readonly_fields = ('user', 'server_name', 'acl_link_id', 'total_connections', 'recent_connections', 'daily_usage_chart', 'max_daily', 'updated_at')
+    ordering = ('-updated_at', 'user__username', 'server_name')
+    list_per_page = 100
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('user', 'server_name', 'acl_link_id')
+        }),
+        ('Statistics', {
+            'fields': ('total_connections', 'recent_connections', 'max_daily')
+        }),
+        ('Usage Chart', {
+            'fields': ('daily_usage_chart',)
+        }),
+        ('Metadata', {
+            'fields': ('updated_at',)
+        }),
+    )
+    
+    @admin.display(description='User', ordering='user__username')
+    def user_display(self, obj):
+        return obj.user.username
+    
+    @admin.display(description='Link', ordering='acl_link_id')
+    def link_display(self, obj):
+        if obj.acl_link_id:
+            link_url = f"{EXTERNAL_ADDRESS}/ss/{obj.acl_link_id}#{obj.server_name}"
+            return format_html(
+                '<a href="{}" target="_blank" style="color: #2563eb; text-decoration: none; font-family: monospace;">{}</a>',
+                link_url, obj.acl_link_id[:12] + '...' if len(obj.acl_link_id) > 12 else obj.acl_link_id
+            )
+        return '-'
+    
+    @admin.display(description='Last Updated', ordering='updated_at')
+    def updated_at_display(self, obj):
+        from django.utils import timezone
+        local_time = localtime(obj.updated_at)
+        now = timezone.now()
+        diff = now - obj.updated_at
+        
+        formatted_date = local_time.strftime('%Y-%m-%d %H:%M')
+        
+        # Color coding based on freshness
+        if diff.total_seconds() < 3600:  # Less than 1 hour
+            color = '#16a34a'  # green
+            relative = 'Fresh'
+        elif diff.total_seconds() < 7200:  # Less than 2 hours
+            color = '#eab308'  # yellow
+            relative = f'{int(diff.total_seconds() // 3600)}h ago'
+        else:
+            color = '#dc2626'  # red
+            relative = f'{diff.days}d ago' if diff.days > 0 else f'{int(diff.total_seconds() // 3600)}h ago'
+        
+        return mark_safe(
+            f'<span style="color: {color}; font-weight: bold;">{formatted_date}</span>'
+            f'<br><small style="color: {color};">{relative}</small>'
+        )
+    
+    @admin.display(description='Daily Usage Chart')
+    def daily_usage_chart(self, obj):
+        if not obj.daily_usage:
+            return mark_safe('<span style="color: #9ca3af;">No data</span>')
+        
+        # Create a simple ASCII-style chart
+        max_val = max(obj.daily_usage) if obj.daily_usage else 1
+        chart_html = '<div style="font-family: monospace; background: #f9fafb; padding: 10px; border-radius: 4px;">'
+        chart_html += f'<div style="margin-bottom: 5px; font-size: 12px; color: #6b7280;">Last 30 days (max: {max_val})</div>'
+        
+        # Create bar chart
+        chart_html += '<div style="display: flex; align-items: end; gap: 1px; height: 40px;">'
+        for day_count in obj.daily_usage:
+            if max_val > 0:
+                height_percent = (day_count / max_val) * 100
+            else:
+                height_percent = 0
+            
+            color = '#4ade80' if day_count > 0 else '#e5e7eb'
+            chart_html += f'<div style="background: {color}; width: 3px; height: {height_percent}%; min-height: 2px;" title="{day_count} connections"></div>'
+        
+        chart_html += '</div></div>'
+        return mark_safe(chart_html)
+    
+    def has_add_permission(self, request):
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        return True  # Allow deletion to clear cache
+
+
 @admin.register(TaskExecutionLog)
 class TaskExecutionLogAdmin(admin.ModelAdmin):
     list_display = ('task_name_display', 'action', 'status_display', 'server', 'user', 'execution_time_display', 'created_at')
@@ -34,7 +131,7 @@ class TaskExecutionLogAdmin(admin.ModelAdmin):
     ordering = ('-created_at',)
     list_per_page = 100
     date_hierarchy = 'created_at'
-    actions = ['trigger_full_sync']
+    actions = ['trigger_full_sync', 'trigger_statistics_update']
     
     fieldsets = (
         ('Task Information', {
@@ -72,6 +169,30 @@ class TaskExecutionLogAdmin(admin.ModelAdmin):
     
     trigger_full_sync.short_description = "🔄 Trigger full sync of all servers"
     
+    def trigger_statistics_update(self, request, queryset):
+        """Trigger manual update of user statistics cache"""
+        # This action doesn't require selected items
+        try:
+            from vpn.tasks import update_user_statistics
+            
+            # Start the statistics update task
+            task = update_user_statistics.delay()
+            
+            self.message_user(
+                request,
+                f'User statistics update started successfully. Task ID: {task.id}. Check logs below for progress.',
+                level=messages.SUCCESS
+            )
+            
+        except Exception as e:
+            self.message_user(
+                request,
+                f'Failed to start statistics update: {e}',
+                level=messages.ERROR
+            )
+    
+    trigger_statistics_update.short_description = "📊 Update user statistics cache"
+    
     def get_actions(self, request):
         """Remove default delete action for logs"""
         actions = super().get_actions(request)
@@ -87,6 +208,7 @@ class TaskExecutionLogAdmin(admin.ModelAdmin):
             'sync_server_info': '⚙️ Server Info',
             'sync_user_on_server': '👤 User Sync',
             'cleanup_task_logs': '🧹 Cleanup',
+            'update_user_statistics': '📊 Statistics',
         }
         return task_names.get(obj.task_name, obj.task_name)
     
@@ -129,6 +251,11 @@ class TaskExecutionLogAdmin(admin.ModelAdmin):
             if action == 'trigger_full_sync':
                 # Call the action directly without queryset requirement
                 self.trigger_full_sync(request, None)
+                # Return redirect to prevent AttributeError
+                return redirect(request.get_full_path())
+            elif action == 'trigger_statistics_update':
+                # Call the statistics update action
+                self.trigger_statistics_update(request, None)
                 # Return redirect to prevent AttributeError
                 return redirect(request.get_full_path())
         
@@ -896,6 +1023,7 @@ try:
                 'sync_server_info': '⚙️ Sync Server Info',
                 'sync_user_on_server': '👤 Sync User on Server',
                 'cleanup_task_logs': '🧹 Cleanup Old Logs',
+                'update_user_statistics': '📊 Update Statistics',
             }
             return task_names.get(obj.task_name, obj.task_name)
         

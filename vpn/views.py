@@ -1,8 +1,8 @@
 def userPortal(request, user_hash):
     """HTML portal for user to view their VPN access links and server information"""
-    from .models import User, ACLLink, AccessLog
+    from .models import User, ACLLink, UserStatistics, AccessLog
     from django.utils import timezone
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     import logging
     
     logger = logging.getLogger(__name__)
@@ -22,24 +22,17 @@ def userPortal(request, user_hash):
         acl_links = ACLLink.objects.filter(acl__user=user).select_related('acl__server', 'acl')
         logger.info(f"Found {acl_links.count()} ACL links for user {user.username}")
         
-        # Calculate date ranges for statistics
-        now = timezone.now()
-        thirty_days_ago = now - timedelta(days=30)
-        logger.debug(f"Calculating stats from {thirty_days_ago} to {now}")
-        
-        # Calculate total connection statistics
-        total_connections = AccessLog.objects.filter(
-            user=user.username,
-            action='Success'
-        ).count()
-        
-        recent_connections = AccessLog.objects.filter(
-            user=user.username,
-            action='Success',
-            timestamp__gte=thirty_days_ago
-        ).count()
-        
-        logger.info(f"User {user.username} stats: total_connections={total_connections}, recent_connections={recent_connections}")
+        # Calculate overall statistics from cached data (only where cache exists)
+        user_stats = UserStatistics.objects.filter(user=user)
+        if user_stats.exists():
+            total_connections = sum(stat.total_connections for stat in user_stats)
+            recent_connections = sum(stat.recent_connections for stat in user_stats)
+            logger.info(f"User {user.username} cached stats: total_connections={total_connections}, recent_connections={recent_connections}")
+        else:
+            # No cache available, set to zero and suggest cache update
+            total_connections = 0
+            recent_connections = 0
+            logger.warning(f"No cached statistics found for user {user.username}. Run statistics update task.")
         
         # Group links by server
         servers_data = {}
@@ -49,7 +42,6 @@ def userPortal(request, user_hash):
             server = link.acl.server
             server_name = server.name
             logger.debug(f"Processing link {link.link} for server {server_name}")
-            logger.debug(f"Link last_access_time: {link.last_access_time}")
             
             if server_name not in servers_data:
                 # Get server status and info
@@ -64,12 +56,12 @@ def userPortal(request, user_hash):
                     server_accessible = False
                     server_error = str(e)
                 
-                # Calculate server-specific connection stats
-                server_total_connections = AccessLog.objects.filter(
-                    user=user.username,
-                    server=server_name,
-                    action='Success'
-                ).count()
+                # Calculate server-level totals from cached stats (only where cache exists)
+                server_stats = user_stats.filter(server_name=server_name)
+                if server_stats.exists():
+                    server_total_connections = sum(stat.total_connections for stat in server_stats)
+                else:
+                    server_total_connections = 0
                 
                 servers_data[server_name] = {
                     'server': server,
@@ -80,45 +72,52 @@ def userPortal(request, user_hash):
                     'server_type': server.server_type,
                     'total_connections': server_total_connections,
                 }
-                logger.debug(f"Created server data for {server_name} with {server_total_connections} connections")
+                logger.debug(f"Created server data for {server_name} with {server_total_connections} cached connections")
             
-            # Calculate link-specific statistics
-            # Note: AccessLog doesn't have link-specific tracking, so we'll use server-based stats
-            link_connections = AccessLog.objects.filter(
-                user=user.username,
-                server=server_name,
-                action='Success'
-            ).count()
+            # Calculate time since last access
+            last_access_display = "Never used"
+            if link.last_access_time:
+                time_diff = timezone.now() - link.last_access_time
+                if time_diff.days > 0:
+                    last_access_display = f"{time_diff.days} days ago"
+                elif time_diff.seconds > 3600:
+                    hours = time_diff.seconds // 3600
+                    last_access_display = f"{hours} hours ago"
+                elif time_diff.seconds > 60:
+                    minutes = time_diff.seconds // 60
+                    last_access_display = f"{minutes} minutes ago"
+                else:
+                    last_access_display = "Just now"
             
-            link_recent_connections = AccessLog.objects.filter(
-                user=user.username,
-                server=server_name,
-                action='Success',
-                timestamp__gte=thirty_days_ago
-            ).count()
-            
-            # Generate daily usage data for the last 30 days
-            daily_usage = []
-            max_daily = 0
-            
-            for i in range(30):
-                day_start = (now - timedelta(days=29-i)).replace(hour=0, minute=0, second=0, microsecond=0)
-                day_end = day_start + timedelta(days=1)
+            # Get cached statistics for this specific link
+            try:
+                link_stats = UserStatistics.objects.get(
+                    user=user,
+                    server_name=server_name,
+                    acl_link_id=link.link
+                )
+                logger.debug(f"Found cached stats for link {link.link}: {link_stats.total_connections} connections, max_daily={link_stats.max_daily}")
                 
-                day_connections = AccessLog.objects.filter(
-                    user=user.username,
-                    server=server_name,
-                    action='Success',
-                    timestamp__gte=day_start,
-                    timestamp__lt=day_end
-                ).count()
+                link_connections = link_stats.total_connections
+                link_recent_connections = link_stats.recent_connections
+                daily_usage = link_stats.daily_usage or []
+                max_daily = link_stats.max_daily
                 
-                daily_usage.append(day_connections)
-                max_daily = max(max_daily, day_connections)
+            except UserStatistics.DoesNotExist:
+                logger.warning(f"No cached stats found for link {link.link} on server {server_name}, using fallback")
+                
+                # Fallback: Since AccessLog doesn't track specific links, show zero for link-specific stats
+                # but keep server-level stats for context
+                link_connections = 0
+                link_recent_connections = 0
+                daily_usage = [0] * 30  # Empty 30-day chart
+                max_daily = 0
+                
+                logger.warning(f"Using zero stats for uncached link {link.link} - AccessLog doesn't track individual links")
             
             logger.debug(f"Link {link.link} stats: connections={link_connections}, recent={link_recent_connections}, max_daily={max_daily}")
             
-            # Add link information with comprehensive statistics
+            # Add link information with statistics
             link_url = f"{EXTERNAL_ADDRESS}/ss/{link.link}#{server_name}"
             
             link_data = {
@@ -126,6 +125,7 @@ def userPortal(request, user_hash):
                 'url': link_url,
                 'comment': link.comment or 'Default',
                 'last_access': link.last_access_time,
+                'last_access_display': last_access_display,
                 'connections': link_connections,
                 'recent_connections': link_recent_connections,
                 'daily_usage': daily_usage,
@@ -152,13 +152,12 @@ def userPortal(request, user_hash):
         
         logger.debug(f"Context prepared with keys: {list(context.keys())}")
         logger.debug(f"Servers in context: {list(servers_data.keys())}")
-        logger.debug(f"Final context values: total_connections={context['total_connections']}, recent_connections={context['recent_connections']}")
         
         # Log sample server data for debugging
         for server_name, server_data in servers_data.items():
             logger.debug(f"Server {server_name}: total_connections={server_data['total_connections']}, links_count={len(server_data['links'])}")
             for i, link_data in enumerate(server_data['links']):
-                logger.debug(f"  Link {i}: connections={link_data['connections']}, recent={link_data['recent_connections']}, daily_usage_len={len(link_data['daily_usage'])}")
+                logger.debug(f"  Link {i}: connections={link_data['connections']}, recent={link_data['recent_connections']}, last_access='{link_data['last_access_display']}'")
         
         return render(request, 'vpn/user_portal.html', context)
         

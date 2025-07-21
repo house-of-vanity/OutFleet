@@ -11,6 +11,31 @@ from django.contrib.auth.models import AbstractUser
 
 logger = logging.getLogger(__name__)
 
+class UserStatistics(models.Model):
+    user = models.ForeignKey('User', on_delete=models.CASCADE)
+    server_name = models.CharField(max_length=256)
+    acl_link_id = models.CharField(max_length=1024, null=True, blank=True, help_text="None for server-level stats")
+    
+    total_connections = models.IntegerField(default=0)
+    recent_connections = models.IntegerField(default=0)
+    daily_usage = models.JSONField(default=list, help_text="Daily connection counts for last 30 days")
+    max_daily = models.IntegerField(default=0)
+    
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['user', 'server_name', 'acl_link_id']
+        verbose_name = 'User Statistics'
+        verbose_name_plural = 'User Statistics'
+        indexes = [
+            models.Index(fields=['user', 'server_name']),
+            models.Index(fields=['updated_at']),
+        ]
+    
+    def __str__(self):
+        link_part = f" (link: {self.acl_link_id})" if self.acl_link_id else " (server total)"
+        return f"{self.user.username} - {self.server_name}{link_part}"
+
 class TaskExecutionLog(models.Model):
     task_id = models.CharField(max_length=255, help_text="Celery task ID")
     task_name = models.CharField(max_length=100, help_text="Task name")

@@ -23,6 +23,19 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_RESULT_EXTENDED = True
 
+# Celery Beat Schedule
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    'update-user-statistics': {
+        'task': 'update_user_statistics',
+        'schedule': crontab(minute=0, hour='*/3'),  # Every 3 hours
+    },
+    'cleanup-task-logs': {
+        'task': 'cleanup_task_logs',
+        'schedule': crontab(hour=2, minute=0),  # Daily at 2 AM
+    },
+}
+
 AUTH_USER_MODEL = "vpn.User"
 
 DEBUG = ENV('DEBUG')

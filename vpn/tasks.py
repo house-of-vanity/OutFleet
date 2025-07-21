@@ -215,6 +215,131 @@ def sync_server(self, id):
         create_task_log(task_id, "sync_server_info", "Server sync failed after retries", 'FAILURE', server=server, message=error_message, execution_time=time.time() - start_time)
         return {"error": error_message}
 
+@shared_task(name="update_user_statistics", bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def update_user_statistics(self):
+    """Update cached user statistics from AccessLog data"""
+    from .models import User, AccessLog, UserStatistics, ACLLink
+    from django.utils import timezone
+    from datetime import timedelta
+    from django.db.models import Count, Q
+    from django.db import transaction
+    
+    start_time = time.time()
+    task_id = self.request.id
+    
+    create_task_log(task_id, "update_user_statistics", "Starting statistics update", 'STARTED')
+    
+    try:
+        now = timezone.now()
+        thirty_days_ago = now - timedelta(days=30)
+        
+        # Get all users with ACL links
+        users_with_links = User.objects.filter(acl__isnull=False).distinct()
+        total_users = users_with_links.count()
+        
+        create_task_log(task_id, "update_user_statistics", f"Found {total_users} users to process", 'STARTED')
+        logger.info(f"Updating statistics for {total_users} users")
+        
+        updated_count = 0
+        
+        with transaction.atomic():
+            for user in users_with_links:
+                logger.debug(f"Processing user {user.username}")
+                
+                # Get all ACL links for this user
+                acl_links = ACLLink.objects.filter(acl__user=user).select_related('acl__server')
+                
+                for link in acl_links:
+                    server_name = link.acl.server.name
+                    
+                    # Calculate total connections for this server (all time)
+                    total_connections = AccessLog.objects.filter(
+                        user=user.username,
+                        server=server_name,
+                        action='Success'
+                    ).count()
+                    
+                    # Calculate recent connections (last 30 days)
+                    recent_connections = AccessLog.objects.filter(
+                        user=user.username,
+                        server=server_name,
+                        action='Success',
+                        timestamp__gte=thirty_days_ago
+                    ).count()
+                    
+                    # Generate daily usage data for the last 30 days
+                    daily_usage = []
+                    max_daily = 0
+                    
+                    for i in range(30):
+                        day_start = (now - timedelta(days=29-i)).replace(hour=0, minute=0, second=0, microsecond=0)
+                        day_end = day_start + timedelta(days=1)
+                        
+                        day_connections = AccessLog.objects.filter(
+                            user=user.username,
+                            server=server_name,
+                            action='Success',
+                            timestamp__gte=day_start,
+                            timestamp__lt=day_end
+                        ).count()
+                        
+                        daily_usage.append(day_connections)
+                        max_daily = max(max_daily, day_connections)
+                    
+                    # Update or create statistics for this link
+                    stats, created = UserStatistics.objects.update_or_create(
+                        user=user,
+                        server_name=server_name,
+                        acl_link_id=link.link,
+                        defaults={
+                            'total_connections': total_connections,
+                            'recent_connections': recent_connections,
+                            'daily_usage': daily_usage,
+                            'max_daily': max_daily,
+                        }
+                    )
+                    
+                    action = "created" if created else "updated"
+                    logger.debug(f"{action} stats for {user.username} on {server_name} (link: {link.link})")
+                    
+                    updated_count += 1
+                
+                logger.debug(f"Completed processing user {user.username}")
+        
+        success_message = f"Successfully updated statistics for {updated_count} user-server-link combinations"
+        logger.info(success_message)
+        
+        create_task_log(
+            task_id, 
+            "update_user_statistics", 
+            "Statistics update completed", 
+            'SUCCESS', 
+            message=success_message, 
+            execution_time=time.time() - start_time
+        )
+        
+        return success_message
+        
+    except Exception as e:
+        error_message = f"Error updating user statistics: {e}"
+        logger.error(error_message, exc_info=True)
+        
+        if self.request.retries < 3:
+            retry_message = f"Retrying statistics update (attempt {self.request.retries + 1})"
+            logger.info(retry_message)
+            create_task_log(task_id, "update_user_statistics", "Retrying statistics update", 'RETRY', message=retry_message)
+            raise self.retry(countdown=60)
+        
+        create_task_log(
+            task_id, 
+            "update_user_statistics", 
+            "Statistics update failed after retries", 
+            'FAILURE', 
+            message=error_message, 
+            execution_time=time.time() - start_time
+        )
+        raise
+
 @shared_task(name="sync_user_on_server", bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 5, 'countdown': 30})
 def sync_user(self, user_id, server_id):
     from .models import User, ACL
