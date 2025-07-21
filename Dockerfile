@@ -14,9 +14,17 @@ ENV BRANCH_NAME=${BRANCH_NAME}
 
 WORKDIR /app
 
+# Install system dependencies first (this layer will be cached)
+RUN apk update && apk add git
+
+# Copy and install Python dependencies (this layer will be cached when requirements.txt doesn't change)
 COPY ./requirements.txt .
-RUN apk update && apk add git && pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the application code (this layer will change frequently)
 COPY . .
+
+# Run collectstatic
 RUN python manage.py collectstatic --noinput
 
 CMD [ "python", "./manage.py", "runserver", "0.0.0.0:8000" ]

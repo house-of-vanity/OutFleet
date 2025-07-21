@@ -41,6 +41,8 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
           push: true
+          cache-from: type=registry,ref=ultradesu/outfleet:buildcache
+          cache-to: type=registry,ref=ultradesu/outfleet:buildcache,mode=max
           build-args: |
             GIT_COMMIT=${{ steps.vars.outputs.sha_full }}
             GIT_COMMIT_SHORT=${{ steps.vars.outputs.sha_short }}
