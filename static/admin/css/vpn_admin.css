@@ -281,3 +281,55 @@ table.changelist-results td:nth-child(6) {
 .help li {
     margin-bottom: 5px;
 }
+
+/* Make user statistics section wider */
+.field-user_statistics_summary {
+    width: 100% !important;
+}
+
+.field-user_statistics_summary .readonly {
+    max-width: none !important;
+    width: 100% !important;
+}
+
+.field-user_statistics_summary .user-management-section {
+    width: 100% !important;
+    max-width: none !important;
+}
+
+/* Wider fieldset for statistics */
+.wide {
+    width: 100% !important;
+}
+
+.wide .form-row {
+    width: 100% !important;
+}
+
+/* Server status button styles */
+.check-status-btn {
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.check-status-btn:hover {
+    opacity: 0.8;
+    transform: scale(1.05);
+}
+
+.check-status-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Make admin tables more responsive */
+.changelist-results table {
+    width: 100%;
+    table-layout: auto;
+}
+
+/* Improve button spacing */
+.btn-sm-custom {
+    margin: 0 2px;
+    display: inline-block;
+}

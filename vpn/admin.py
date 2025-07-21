@@ -254,13 +254,15 @@ class ServerAdmin(PolymorphicParentModelAdmin):
     
     class Media:
         css = {
-            'all': ('admin/css/vpn_server_admin.css',)
+            'all': ('admin/css/vpn_admin.css',)
         }
+        js = ('admin/js/server_status_check.js',)
 
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
             path('move-clients/', self.admin_site.admin_view(self.move_clients_view), name='server_move_clients'),
+            path('<int:server_id>/check-status/', self.admin_site.admin_view(self.check_server_status_view), name='server_check_status'),
         ]
         return custom_urls + urls
 
@@ -471,6 +473,77 @@ class ServerAdmin(PolymorphicParentModelAdmin):
             except Exception as e:
                 messages.error(request, f"Database error during link transfer: {e}")
                 return redirect('admin:vpn_server_changelist')
+    
+    def check_server_status_view(self, request, server_id):
+        """AJAX view to check server status"""
+        from django.http import JsonResponse
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        if request.method == 'POST':
+            try:
+                logger.info(f"Checking status for server ID: {server_id}")
+                server = Server.objects.get(pk=server_id)
+                real_server = server.get_real_instance()
+                logger.info(f"Server found: {server.name}, type: {type(real_server).__name__}")
+                
+                # Check server status based on type
+                from vpn.server_plugins.outline import OutlineServer
+                
+                if isinstance(real_server, OutlineServer):
+                    try:
+                        logger.info(f"Checking Outline server: {server.name}")
+                        # Try to get server info to check if it's online
+                        info = real_server.client.get_server_information()
+                        if info:
+                            logger.info(f"Server {server.name} is online with {info.get('accessKeyCount', info.get('access_key_count', 'unknown'))} keys")
+                            return JsonResponse({
+                                'success': True,
+                                'status': 'online',
+                                'message': f'Server is online. Keys: {info.get("accessKeyCount", info.get("access_key_count", "unknown"))}'
+                            })
+                        else:
+                            logger.warning(f"Server {server.name} returned no info")
+                            return JsonResponse({
+                                'success': True,
+                                'status': 'offline',
+                                'message': 'Server not responding'
+                            })
+                    except Exception as e:
+                        logger.error(f"Error checking Outline server {server.name}: {e}")
+                        return JsonResponse({
+                            'success': True,
+                            'status': 'error',
+                            'message': f'Connection error: {str(e)[:100]}'
+                        })
+                else:
+                    # For non-Outline servers, just return basic info
+                    logger.info(f"Non-Outline server {server.name}, type: {server.server_type}")
+                    return JsonResponse({
+                        'success': True,
+                        'status': 'unknown',
+                        'message': f'Status check not implemented for {server.server_type} servers'
+                    })
+                    
+            except Server.DoesNotExist:
+                logger.error(f"Server with ID {server_id} not found")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Server not found'
+                }, status=404)
+            except Exception as e:
+                logger.error(f"Unexpected error checking server {server_id}: {e}")
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Unexpected error: {str(e)}'
+                }, status=500)
+        
+        logger.warning(f"Invalid request method {request.method} for server status check")
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid request method'
+        }, status=405)
 
     def purge_all_keys_action(self, request, queryset):
         """Purge all keys from selected servers without changing database"""
@@ -705,7 +778,13 @@ class ServerAdmin(PolymorphicParentModelAdmin):
             return mark_safe(
                 f'<div style="color: #6b7280; font-size: 11px;">' +
                 f'{icon} {obj.server_type.title()}<br>' +
-                f'<small>Click to check status</small>' +
+                f'<button type="button" class="check-status-btn btn btn-xs" '
+                f'data-server-id="{obj.id}" data-server-name="{obj.name}" '
+                f'data-server-type="{obj.server_type}" '
+                f'style="background: #007cba; color: white; border: none; padding: 2px 6px; '
+                f'border-radius: 3px; font-size: 10px; cursor: pointer;">'
+                f'⚪ Check Status'
+                f'</button>' +
                 f'</div>'
             )
         except Exception as e:
@@ -736,7 +815,7 @@ class UserAdmin(admin.ModelAdmin):
     
     class Media:
         css = {
-            'all': ('admin/css/vpn_server_admin.css',)
+            'all': ('admin/css/vpn_admin.css',)
         }
     
     fieldsets = (
@@ -1223,20 +1302,15 @@ class ACLAdmin(admin.ModelAdmin):
 
     @admin.display(description='User Links')
     def display_links(self, obj):
-        links = obj.links.all()
+        links_count = obj.links.count()
         portal_url = f"{EXTERNAL_ADDRESS}/u/{obj.user.hash}"
         
-        links_html = []
-        for link in links:
-            link_url = f"{EXTERNAL_ADDRESS}/ss/{link.link}#{obj.server.name}"
-            links_html.append(f"{link.comment} - {link_url}")
-        
-        links_text = '<br>'.join(links_html) if links_html else 'No links'
-        
         return format_html(
-            '<div style="margin-bottom: 10px;">{}</div>' +
+            '<div style="font-size: 12px; margin-bottom: 8px;">'
+            '<strong>🔗 {} link(s)</strong>'
+            '</div>'
             '<a href="{}" target="_blank" style="background: #4ade80; color: #000; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: bold;">🌐 User Portal</a>',
-            links_text, portal_url
+            links_count, portal_url
         )
 
 
