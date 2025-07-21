@@ -1,0 +1,51 @@
+{% extends "admin/change_list.html" %}
+
+{% block content_title %}
+    <h1>Task Execution Logs</h1>
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; color: #374151;">Sync Status (Last 24 hours)</h3>
+            {% if sync_currently_running %}
+                <span style="background: #fbbf24; color: #000; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;">
+                    ⏳ Sync Running
+                </span>
+            {% else %}
+                <span style="background: #10b981; color: #fff; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;">
+                    ✅ Sync Available
+                </span>
+            {% endif %}
+        </div>
+        
+        <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="background: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">📊</span>
+                <span><strong>Total Syncs:</strong> {{ total_recent_syncs|default:0 }}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="background: #16a34a; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">✅</span>
+                <span><strong>Successful:</strong> {{ successful_recent_syncs|default:0 }}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">❌</span>
+                <span><strong>Failed:</strong> {{ failed_recent_syncs|default:0 }}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="background: #f59e0b; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">⏳</span>
+                <span><strong>Running:</strong> {{ running_recent_syncs|default:0 }}</span>
+            </div>
+        </div>
+        
+        <div style="border-top: 1px solid #e5e7eb; padding-top: 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                <p style="margin: 0; color: #6b7280; font-size: 14px;">
+                    💡 Use the "Trigger full sync" action to manually synchronize all servers with current ACL settings.
+                </p>
+                {% if sync_currently_running %}
+                <span style="color: #f59e0b; font-size: 14px; font-weight: bold;">
+                    ⚠️ Sync already running - wait for completion
+                </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %}

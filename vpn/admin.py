@@ -17,6 +17,7 @@ from django.utils.timezone import localtime
 from vpn.models import User, ACL, ACLLink
 from vpn.forms import UserForm
 from mysite.settings import EXTERNAL_ADDRESS
+from django.db.models import Max, Subquery, OuterRef, Q
 from .server_plugins import (
     Server,
     WireguardServer,
@@ -33,6 +34,7 @@ class TaskExecutionLogAdmin(admin.ModelAdmin):
     ordering = ('-created_at',)
     list_per_page = 100
     date_hierarchy = 'created_at'
+    actions = ['trigger_full_sync']
     
     fieldsets = (
         ('Task Information', {
@@ -45,6 +47,55 @@ class TaskExecutionLogAdmin(admin.ModelAdmin):
             'fields': ('message_formatted', 'execution_time', 'created_at')
         }),
     )
+    
+    def trigger_full_sync(self, request, queryset):
+        """Trigger manual full synchronization of all servers"""
+        # This action doesn't require selected items
+        try:
+            from vpn.tasks import sync_all_users
+            from datetime import timedelta
+            from django.utils import timezone
+            
+            # Check if sync is already running (last 10 minutes)
+            recent_cutoff = timezone.now() - timedelta(minutes=10)
+            running_syncs = TaskExecutionLog.objects.filter(
+                created_at__gte=recent_cutoff,
+                task_name='sync_all_servers',
+                status='STARTED'
+            )
+            
+            if running_syncs.exists():
+                self.message_user(
+                    request,
+                    'Synchronization is already running. Please wait for completion.',
+                    level=messages.WARNING
+                )
+                return
+            
+            # Start the sync task
+            task = sync_all_users.delay()
+            
+            self.message_user(
+                request,
+                f'Full synchronization started successfully. Task ID: {task.id}. Check logs below for progress.',
+                level=messages.SUCCESS
+            )
+            
+        except Exception as e:
+            self.message_user(
+                request,
+                f'Failed to start full synchronization: {e}',
+                level=messages.ERROR
+            )
+    
+    trigger_full_sync.short_description = "🔄 Trigger full sync of all servers"
+    
+    def get_actions(self, request):
+        """Remove default delete action for logs"""
+        actions = super().get_actions(request)
+        if 'delete_selected' in actions:
+            del actions['delete_selected']
+        return actions
     
     @admin.display(description='Task', ordering='task_name')
     def task_name_display(self, obj):
@@ -87,6 +138,49 @@ class TaskExecutionLogAdmin(admin.ModelAdmin):
     
     def has_change_permission(self, request, obj=None):
         return False
+    
+    def changelist_view(self, request, extra_context=None):
+        """Override to handle actions that don't require item selection and add sync status"""
+        # Handle actions that don't require selection
+        if 'action' in request.POST:
+            action = request.POST['action']
+            if action == 'trigger_full_sync':
+                # Call the action directly without queryset requirement
+                self.trigger_full_sync(request, None)
+                # Return redirect to prevent AttributeError
+                return redirect(request.get_full_path())
+        
+        # Add sync status and controls to the changelist
+        extra_context = extra_context or {}
+        
+        # Add sync statistics
+        from datetime import timedelta
+        from django.utils import timezone
+        
+        # Get recent sync tasks (last 24 hours)
+        recent_cutoff = timezone.now() - timedelta(hours=24)
+        recent_syncs = TaskExecutionLog.objects.filter(
+            created_at__gte=recent_cutoff,
+            task_name='sync_all_servers'
+        )
+        
+        total_recent = recent_syncs.count()
+        successful_recent = recent_syncs.filter(status='SUCCESS').count()
+        failed_recent = recent_syncs.filter(status='FAILURE').count()
+        running_recent = recent_syncs.filter(status='STARTED').count()
+        
+        # Check if sync is currently running
+        currently_running = recent_syncs.filter(status='STARTED').exists()
+        
+        extra_context.update({
+            'total_recent_syncs': total_recent,
+            'successful_recent_syncs': successful_recent,
+            'failed_recent_syncs': failed_recent,
+            'running_recent_syncs': running_recent,
+            'sync_currently_running': currently_running,
+        })
+        
+        return super().changelist_view(request, extra_context)
 
 
 admin.site.site_title = "VPN Manager"
@@ -131,6 +225,40 @@ class ServerNameFilter(admin.SimpleListFilter):
             return queryset.filter(acl__server__name=self.value())
         return queryset
 
+
+class LastAccessFilter(admin.SimpleListFilter):
+    title = 'Last Access'
+    parameter_name = 'last_access_status'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('never', 'Never accessed'),
+            ('week', 'Last week'),
+            ('month', 'Last month'),
+            ('old', 'Older than 3 months'),
+        ]
+
+    def queryset(self, request, queryset):
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        if self.value() == 'never':
+            # Links that have no access logs
+            return queryset.filter(last_access__isnull=True)
+        elif self.value() == 'week':
+            # Links accessed in the last week
+            week_ago = timezone.now() - timedelta(days=7)
+            return queryset.filter(last_access__gte=week_ago)
+        elif self.value() == 'month':
+            # Links accessed in the last month
+            month_ago = timezone.now() - timedelta(days=30)
+            return queryset.filter(last_access__gte=month_ago)
+        elif self.value() == 'old':
+            # Links not accessed for more than 3 months
+            three_months_ago = timezone.now() - timedelta(days=90)
+            return queryset.filter(last_access__lt=three_months_ago)
+        return queryset
+
 @admin.register(Server)
 class ServerAdmin(PolymorphicParentModelAdmin):
     base_model = Server
@@ -138,7 +266,7 @@ class ServerAdmin(PolymorphicParentModelAdmin):
     list_display = ('name', 'server_type', 'comment', 'registration_date', 'user_count', 'server_status_inline')
     search_fields = ('name', 'comment')
     list_filter = ('server_type', )
-    actions = ['move_clients_action']
+    actions = ['move_clients_action', 'purge_all_keys_action']
 
     def get_urls(self):
         urls = super().get_urls()
@@ -355,6 +483,87 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                 messages.error(request, f"Database error during link transfer: {e}")
                 return redirect('admin:vpn_server_changelist')
 
+    def purge_all_keys_action(self, request, queryset):
+        """Purge all keys from selected servers without changing database"""
+        if queryset.count() == 0:
+            self.message_user(request, "Please select at least one server.", level=messages.ERROR)
+            return
+        
+        success_count = 0
+        error_count = 0
+        total_keys_removed = 0
+        
+        for server in queryset:
+            try:
+                # Check if this is an Outline server by checking the actual type
+                from vpn.server_plugins.outline import OutlineServer
+                
+                if isinstance(server, OutlineServer) and hasattr(server, 'client'):
+                    # For Outline servers, get all keys and delete them
+                    try:
+                        keys = server.client.get_keys()
+                        keys_count = len(keys)
+                        
+                        for key in keys:
+                            try:
+                                server.client.delete_key(key.key_id)
+                            except Exception as e:
+                                self.message_user(
+                                    request, 
+                                    f"Failed to delete key {key.key_id} from {server.name}: {e}",
+                                    level=messages.WARNING
+                                )
+                        
+                        total_keys_removed += keys_count
+                        success_count += 1
+                        self.message_user(
+                            request,
+                            f"Successfully purged {keys_count} keys from server '{server.name}'.",
+                            level=messages.SUCCESS
+                        )
+                        
+                    except Exception as e:
+                        error_count += 1
+                        self.message_user(
+                            request,
+                            f"Failed to connect to server '{server.name}': {e}",
+                            level=messages.ERROR
+                        )
+                else:
+                    # Show server type for debugging
+                    server_type = type(server).__name__
+                    self.message_user(
+                        request,
+                        f"Key purging only supported for Outline servers. Skipping '{server.name}' (type: {server_type}).",
+                        level=messages.INFO
+                    )
+                    
+            except Exception as e:
+                error_count += 1
+                self.message_user(
+                    request,
+                    f"Unexpected error with server '{server.name}': {e}",
+                    level=messages.ERROR
+                )
+        
+        # Summary message
+        if success_count > 0:
+            self.message_user(
+                request,
+                f"Purge completed! {success_count} server(s) processed, {total_keys_removed} total keys removed. "
+                f"Database unchanged - run sync to restore proper keys.",
+                level=messages.SUCCESS
+            )
+        
+        if error_count > 0:
+            self.message_user(
+                request,
+                f"{error_count} server(s) had errors during purge.",
+                level=messages.WARNING
+            )
+    
+    purge_all_keys_action.short_description = "🗑️ Purge all keys from server (database unchanged)"
+
     @admin.display(description='User Count', ordering='user_count')
     def user_count(self, obj):
         return obj.user_count
@@ -506,6 +715,171 @@ class ACLAdmin(admin.ModelAdmin):
             '<a href="{}" target="_blank" style="background: #4ade80; color: #000; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: bold;">🌐 User Portal</a>',
             links_text, portal_url
         )
+
+
+@admin.register(ACLLink)
+class ACLLinkAdmin(admin.ModelAdmin):
+    list_display = ('link_display', 'user_display', 'server_display', 'comment_display', 'last_access_display', 'created_display')
+    list_filter = ('acl__server__name', 'acl__server__server_type', LastAccessFilter, 'acl__user__username')
+    search_fields = ('link', 'comment', 'acl__user__username', 'acl__server__name')
+    list_per_page = 100
+    actions = ['delete_selected_links']
+    list_select_related = ('acl__user', 'acl__server')
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        qs = qs.select_related('acl__user', 'acl__server')
+        
+        # Add last access annotation
+        qs = qs.annotate(
+            last_access=Subquery(
+                AccessLog.objects.filter(
+                    user=OuterRef('acl__user__username'),
+                    server=OuterRef('acl__server__name')
+                ).order_by('-timestamp').values('timestamp')[:1]
+            )
+        )
+        
+        return qs
+
+    @admin.display(description='Link', ordering='link')
+    def link_display(self, obj):
+        link_url = f"{EXTERNAL_ADDRESS}/ss/{obj.link}#{obj.acl.server.name}"
+        return format_html(
+            '<a href="{}" target="_blank" style="color: #2563eb; text-decoration: none; font-family: monospace;">{}</a>',
+            link_url, obj.link[:16] + '...' if len(obj.link) > 16 else obj.link
+        )
+
+    @admin.display(description='User', ordering='acl__user__username')
+    def user_display(self, obj):
+        return obj.acl.user.username
+
+    @admin.display(description='Server', ordering='acl__server__name')
+    def server_display(self, obj):
+        server_type_icons = {
+            'outline': '🔵',
+            'wireguard': '🟢',
+        }
+        icon = server_type_icons.get(obj.acl.server.server_type, '⚪')
+        return f"{icon} {obj.acl.server.name}"
+
+    @admin.display(description='Comment', ordering='comment')
+    def comment_display(self, obj):
+        if obj.comment:
+            return obj.comment[:50] + '...' if len(obj.comment) > 50 else obj.comment
+        return '-'
+
+    @admin.display(description='Last Access', ordering='last_access')
+    def last_access_display(self, obj):
+        if hasattr(obj, 'last_access') and obj.last_access:
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            local_time = localtime(obj.last_access)
+            now = timezone.now()
+            diff = now - obj.last_access
+            
+            # Color coding based on age
+            if diff <= timedelta(days=7):
+                color = '#16a34a'  # green - recent
+            elif diff <= timedelta(days=30):
+                color = '#eab308'  # yellow - medium
+            elif diff <= timedelta(days=90):
+                color = '#f97316'  # orange - old
+            else:
+                color = '#dc2626'  # red - very old
+            
+            formatted_date = local_time.strftime('%Y-%m-%d %H:%M')
+            
+            # Add relative time info
+            if diff.days > 365:
+                relative = f'{diff.days // 365}y ago'
+            elif diff.days > 30:
+                relative = f'{diff.days // 30}mo ago'
+            elif diff.days > 0:
+                relative = f'{diff.days}d ago'
+            elif diff.seconds > 3600:
+                relative = f'{diff.seconds // 3600}h ago'
+            else:
+                relative = 'Recently'
+            
+            return mark_safe(
+                f'<span style="color: {color}; font-weight: bold;">{formatted_date}</span>'
+                f'<br><small style="color: {color};">{relative}</small>'
+            )
+        return mark_safe('<span style="color: #dc2626; font-weight: bold;">Never</span>')
+
+    @admin.display(description='Created', ordering='acl__created_at')
+    def created_display(self, obj):
+        local_time = localtime(obj.acl.created_at)
+        return local_time.strftime('%Y-%m-%d %H:%M')
+
+    def delete_selected_links(self, request, queryset):
+        count = queryset.count()
+        queryset.delete()
+        self.message_user(request, f'Successfully deleted {count} ACL link(s).')
+    delete_selected_links.short_description = "Delete selected ACL links"
+
+    def get_actions(self, request):
+        """Remove default delete action and keep only custom one"""
+        actions = super().get_actions(request)
+        if 'delete_selected' in actions:
+            del actions['delete_selected']
+        return actions
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return True
+
+    def has_delete_permission(self, request, obj=None):
+        return True
+    
+    def changelist_view(self, request, extra_context=None):
+        # Add summary statistics to the changelist
+        extra_context = extra_context or {}
+        
+        # Get queryset with annotations for statistics
+        queryset = self.get_queryset(request)
+        
+        total_links = queryset.count()
+        never_accessed = queryset.filter(last_access__isnull=True).count()
+        
+        from django.utils import timezone
+        from datetime import timedelta
+        three_months_ago = timezone.now() - timedelta(days=90)
+        old_links = queryset.filter(
+            Q(last_access__lt=three_months_ago) | Q(last_access__isnull=True)
+        ).count()
+        
+        extra_context.update({
+            'total_links': total_links,
+            'never_accessed': never_accessed,
+            'old_links': old_links,
+        })
+        
+        return super().changelist_view(request, extra_context)
+    
+    def get_ordering(self, request):
+        """Allow sorting by annotated fields"""
+        # Handle sorting by last_access if requested
+        order_var = request.GET.get('o')
+        if order_var:
+            try:
+                field_index = int(order_var.lstrip('-'))
+                # Check if this corresponds to the last_access column (index 4 in list_display)
+                if field_index == 4:  # last_access_display is at index 4
+                    if order_var.startswith('-'):
+                        return ['-last_access']
+                    else:
+                        return ['last_access']
+            except (ValueError, IndexError):
+                pass
+        
+        # Default ordering
+        return ['-acl__created_at', 'acl__user__username']
+
 
 try:
     from django_celery_results.models import GroupResult, TaskResult

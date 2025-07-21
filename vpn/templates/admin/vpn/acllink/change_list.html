@@ -1,0 +1,26 @@
+{% extends "admin/change_list.html" %}
+
+{% block content_title %}
+    <h1>ACL Links</h1>
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0; display: flex; gap: 20px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="background: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">📊</span>
+            <span><strong>Total Links:</strong> {{ total_links|default:0 }}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">❌</span>
+            <span><strong>Never Accessed:</strong> {{ never_accessed|default:0 }}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="background: #f97316; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">⚠️</span>
+            <span><strong>Unused (3+ months):</strong> {{ old_links|default:0 }}</span>
+        </div>
+        {% if old_links > 0 %}
+        <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+            <span style="background: #f59e0b; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                💡 Use "Last Access" filter to find old links
+            </span>
+        </div>
+        {% endif %}
+    </div>
+{% endblock %}
