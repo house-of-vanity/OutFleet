@@ -5,4 +5,4 @@ debug.log
 *.pyc
 staticfiles/
 *.__pycache__.*
-celerybeat-schedule
+celerybeat-schedule*

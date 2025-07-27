@@ -6,6 +6,7 @@ class Server(PolymorphicModel):
     SERVER_TYPE_CHOICES = (
         ('Outline', 'Outline'),
         ('Wireguard', 'Wireguard'),
+        ('xray_core', 'Xray Core'),
     )
 
     name = models.CharField(max_length=100, help_text="Server name")

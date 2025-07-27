@@ -24,7 +24,9 @@ from .server_plugins import (
     WireguardServer,
     WireguardServerAdmin,
     OutlineServer,
-    OutlineServerAdmin)
+    OutlineServerAdmin,
+    XrayCoreServer,
+    XrayCoreServerAdmin)
 
 
 @admin.register(TaskExecutionLog)
@@ -246,7 +248,7 @@ class LastAccessFilter(admin.SimpleListFilter):
 @admin.register(Server)
 class ServerAdmin(PolymorphicParentModelAdmin):
     base_model = Server
-    child_models = (OutlineServer, WireguardServer)
+    child_models = (OutlineServer, WireguardServer, XrayCoreServer)
     list_display = ('name_with_icon', 'server_type', 'comment_short', 'user_stats', 'server_status_compact', 'registration_date')
     search_fields = ('name', 'comment')
     list_filter = ('server_type', )
@@ -682,6 +684,7 @@ class ServerAdmin(PolymorphicParentModelAdmin):
         icons = {
             'outline': '🔵',
             'wireguard': '🟢',
+            'xray_core': '🟣',
         }
         icon = icons.get(obj.server_type, '')
         name_part = f"{icon} {obj.name}" if icon else obj.name
@@ -772,6 +775,7 @@ class ServerAdmin(PolymorphicParentModelAdmin):
             server_type_icons = {
                 'outline': '🔵',
                 'wireguard': '🟢',
+                'xray_core': '🟣',
             }
             icon = server_type_icons.get(obj.server_type, '⚪')
             
@@ -894,7 +898,7 @@ class UserAdmin(admin.ModelAdmin):
                     links = list(acl.links.all())
                     
                     # Server header (no slow server status checks)
-                    type_icon = '🔵' if server.server_type == 'outline' else '🟢' if server.server_type == 'wireguard' else ''
+                    type_icon = '🔵' if server.server_type == 'outline' else '🟢' if server.server_type == 'wireguard' else '🟣' if server.server_type == 'xray_core' else ''
                     html += f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">'
                     html += f'<h5 style="margin: 0; color: #333; font-size: 14px; font-weight: 600;">{type_icon} {server.name}</h5>'
                     
@@ -969,7 +973,7 @@ class UserAdmin(admin.ModelAdmin):
                 html += '<h5 style="margin: 0 0 8px 0; color: #0c5460; font-size: 13px;">➕ Available Servers</h5>'
                 html += '<div style="display: flex; gap: 8px; flex-wrap: wrap;">'
                 for server in unassigned_servers:
-                    type_icon = '🔵' if server.server_type == 'outline' else '🟢' if server.server_type == 'wireguard' else ''
+                    type_icon = '🔵' if server.server_type == 'outline' else '🟢' if server.server_type == 'wireguard' else '🟣' if server.server_type == 'xray_core' else ''
                     html += f'<button type="button" class="btn btn-sm btn-outline-info btn-sm-custom add-server-btn" '
                     html += f'data-server-id="{server.id}" data-server-name="{server.name}">'
                     html += f'{type_icon} {server.name}'
@@ -1347,6 +1351,7 @@ class ACLLinkAdmin(admin.ModelAdmin):
         server_type_icons = {
             'outline': '🔵',
             'wireguard': '🟢',
+            'xray_core': '🟣',
         }
         icon = server_type_icons.get(obj.acl.server.server_type, '⚪')
         return f"{icon} {obj.acl.server.name}"
