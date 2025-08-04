@@ -140,14 +140,23 @@ def userPortal(request, user_hash):
         logger.info(f"Prepared data for {len(servers_data)} servers and {total_links} total links")
         logger.info(f"Portal statistics: total_connections={total_connections}, recent_connections={recent_connections}")
         
+        # Check if user has access to any Xray servers
+        from vpn.server_plugins import XrayCoreServer, XrayInboundServer
+        has_xray_servers = any(
+            isinstance(acl_link.acl.server.get_real_instance(), (XrayCoreServer, XrayInboundServer))
+            for acl_link in acl_links
+        )
+        
         context = {
             'user': user,
+            'user_links': acl_links,  # For accessing user's links in template
             'servers_data': servers_data,
             'total_servers': len(servers_data),
             'total_links': total_links,
             'total_connections': total_connections,
             'recent_connections': recent_connections,
             'external_address': EXTERNAL_ADDRESS,
+            'has_xray_servers': has_xray_servers,
         }
         
         logger.debug(f"Context prepared with keys: {list(context.keys())}")
@@ -278,4 +287,114 @@ def shadowsocks(request, link):
     )
 
     return HttpResponse(response, content_type=f"{ 'application/json; charset=utf-8' if request.GET.get('mode') == 'json' else 'text/html' }")
+
+
+def xray_subscription(request, link):
+    """
+    Return Xray subscription with all available protocols for the user.
+    This generates a single subscription link that includes all inbounds the user has access to.
+    """
+    from .models import ACLLink, AccessLog
+    from vpn.server_plugins import XrayCoreServer, XrayInboundServer
+    import logging
+    from django.utils import timezone
+    import base64
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        acl_link = get_object_or_404(ACLLink, link=link)
+        acl = acl_link.acl
+        logger.info(f"Found ACL link for user {acl.user.username} on server {acl.server.name}")
+    except Http404:
+        logger.warning(f"ACL link not found: {link}")
+        AccessLog.objects.create(
+            user=None, 
+            server="Unknown", 
+            acl_link_id=link,
+            action="Failed",
+            data=f"ACL not found for link: {link}"
+        )
+        return HttpResponse("Not found", status=404)
+
+    try:
+        # Get all servers this user has access to
+        user_acls = acl.user.acl_set.all()
+        subscription_configs = []
+        
+        for user_acl in user_acls:
+            server = user_acl.server.get_real_instance()
+            
+            # Handle XrayInboundServer (individual inbounds)
+            if isinstance(server, XrayInboundServer):
+                if server.xray_inbound:
+                    config = server.get_user(acl.user, raw=True)
+                    if config and 'connection_string' in config:
+                        subscription_configs.append(config['connection_string'])
+                        logger.info(f"Added XrayInboundServer config for {server.name}")
+            
+            # Handle XrayCoreServer (parent server with multiple inbounds)
+            elif isinstance(server, XrayCoreServer):
+                try:
+                    # Get all inbounds for this server that have this user
+                    for inbound in server.inbounds.filter(enabled=True):
+                        # Check if user has a client in this inbound
+                        client = inbound.clients.filter(user=acl.user).first()
+                        if client:
+                            connection_string = server._generate_connection_string(client)
+                            if connection_string:
+                                subscription_configs.append(connection_string)
+                                logger.info(f"Added inbound {inbound.tag} config for user {acl.user.username}")
+                except Exception as e:
+                    logger.warning(f"Failed to get configs from XrayCoreServer {server.name}: {e}")
+        
+        if not subscription_configs:
+            logger.warning(f"No Xray configurations found for user {acl.user.username}")
+            AccessLog.objects.create(
+                user=acl.user.username, 
+                server="Multiple", 
+                acl_link_id=acl_link.link,
+                action="Failed",
+                data="No Xray configurations available"
+            )
+            return HttpResponse("No configurations available", status=404)
+        
+        # Join all configs with newlines and encode in base64 for subscription format
+        subscription_content = '\n'.join(subscription_configs)
+        logger.info(f"Raw subscription content for {acl.user.username}:\n{subscription_content}")
+        
+        subscription_b64 = base64.b64encode(subscription_content.encode('utf-8')).decode('utf-8')
+        logger.info(f"Base64 subscription length: {len(subscription_b64)}")
+        
+        # Update last access time
+        acl_link.last_access_time = timezone.now()
+        acl_link.save(update_fields=['last_access_time'])
+        
+        # Create access log
+        AccessLog.objects.create(
+            user=acl.user.username, 
+            server="Xray-Subscription", 
+            acl_link_id=acl_link.link,
+            action="Success", 
+            data=f"Generated subscription with {len(subscription_configs)} configs. Content: {subscription_content[:200]}..."
+        )
+        
+        logger.info(f"Generated Xray subscription for {acl.user.username} with {len(subscription_configs)} configs")
+        
+        # Return with proper headers for subscription
+        response = HttpResponse(subscription_b64, content_type="text/plain; charset=utf-8")
+        response['Content-Disposition'] = 'attachment; filename="xray_subscription.txt"'
+        response['Cache-Control'] = 'no-cache'
+        return response
+        
+    except Exception as e:
+        logger.error(f"Failed to generate Xray subscription for {acl.user.username}: {e}")
+        AccessLog.objects.create(
+            user=acl.user.username, 
+            server="Xray-Subscription", 
+            acl_link_id=acl_link.link,
+            action="Failed",
+            data=f"Failed to generate subscription: {e}"
+        )
+        return HttpResponse(f"Error generating subscription: {e}", status=500)
 

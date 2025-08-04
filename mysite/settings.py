@@ -11,7 +11,7 @@ ENV = environ.Env(
 environ.Env.read_env()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY=ENV('SECRET_KEY', default=get_random_secret_key())
+SECRET_KEY=ENV('SECRET_KEY', default='django-insecure-change-me-in-production')
 TIME_ZONE = ENV('TIMEZONE', default='Asia/Nicosia')
 EXTERNAL_ADDRESS = ENV('EXTERNAL_ADDRESS', default='https://example.org')
 
@@ -140,7 +140,10 @@ BUILD_DATE = ENV('BUILD_DATE', default='unknown')
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'vpn', 'templates')],
+        'DIRS': [
+            os.path.join(BASE_DIR, 'templates'),
+            os.path.join(BASE_DIR, 'vpn', 'templates')
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [

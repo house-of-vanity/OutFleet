@@ -1,0 +1,202 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>{{ title }}</h3>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="protocol">Protocol *</label>
+                        <select name="protocol" id="protocol" class="form-control" required>
+                            <option value="">Select Protocol</option>
+                            {% for proto in protocols %}
+                                <option value="{{ proto }}">{{ proto|upper }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="port">Port *</label>
+                        <input type="number" name="port" id="port" class="form-control" 
+                               min="1" max="65535" required>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="tag">Tag</label>
+                        <input type="text" name="tag" id="tag" class="form-control" 
+                               placeholder="Auto-generated if empty">
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="network">Network</label>
+                        <select name="network" id="network" class="form-control">
+                            {% for net in networks %}
+                                <option value="{{ net }}" {% if net == 'tcp' %}selected{% endif %}>
+                                    {{ net|upper }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="security">Security</label>
+                        <select name="security" id="security" class="form-control">
+                            {% for sec in securities %}
+                                <option value="{{ sec }}" {% if sec == 'none' %}selected{% endif %}>
+                                    {{ sec|upper }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <div class="alert alert-info">
+                    <strong>Note:</strong> The inbound will be created on both the Django database and the Xray server via gRPC API.
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn btn-success">
+                    ➕ Create Inbound
+                </button>
+                <a href="{% url 'admin:vpn_xraycoreserver_change' server.pk %}" class="btn btn-secondary">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const protocolField = document.getElementById('protocol');
+    const portField = document.getElementById('port');
+    const tagField = document.getElementById('tag');
+    
+    // Auto-suggest ports based on protocol
+    protocolField.addEventListener('change', function() {
+        const protocol = this.value;
+        const ports = {
+            'vless': 443,
+            'vmess': 443, 
+            'trojan': 443
+        };
+        
+        if (ports[protocol] && !portField.value) {
+            portField.value = ports[protocol];
+        }
+        
+        if (protocol && !tagField.value) {
+            tagField.placeholder = `${protocol}-${portField.value || 'PORT'}`;
+        }
+    });
+    
+    portField.addEventListener('input', function() {
+        const protocol = protocolField.value;
+        if (protocol && !tagField.value) {
+            tagField.placeholder = `${protocol}-${this.value}`;
+        }
+    });
+});
+</script>
+
+<style>
+.card {
+    max-width: 800px;
+    margin: 20px auto;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+.card-header {
+    background: #f8f9fa;
+    padding: 15px;
+    border-bottom: 1px solid #ddd;
+}
+
+.card-body {
+    padding: 20px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.form-control {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-success {
+    background: #28a745;
+    color: white;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.alert {
+    padding: 12px;
+    border-radius: 4px;
+    margin: 15px 0;
+}
+
+.alert-info {
+    background: #d1ecf1;
+    border: 1px solid #bee5eb;
+    color: #0c5460;
+}
+
+.row {
+    display: flex;
+    margin: 0 -10px;
+}
+
+.col-md-6 {
+    flex: 0 0 50%;
+    padding: 0 10px;
+}
+</style>
+{% endblock %}

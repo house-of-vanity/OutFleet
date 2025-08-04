@@ -473,6 +473,20 @@
                 <p>📊 Statistics are updated every 5 minutes and show your connection history</p>
                 {% endif %}
             </div>
+            
+            <!-- Xray Subscription Link -->
+            {% if has_xray_servers and user_links %}
+            <div class="xray-subscription" style="margin-top: 20px; padding: 15px; background: rgba(148, 163, 184, 0.1); border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 12px;">
+                <h3 style="color: #94a3b8; margin-bottom: 10px; font-size: 1.1rem;">🚀 Xray Universal Subscription</h3>
+                <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 10px;">
+                    One link for all your Xray protocols (VLESS, VMess, Trojan)
+                </p>
+                <div class="link-url" style="margin-bottom: 0;">
+                    {% url 'xray_subscription' user_links.0.link as xray_url %}{{ request.scheme }}://{{ request.get_host }}{{ xray_url }}
+                    <button class="copy-btn" onclick="copyToClipboard('{{ request.scheme }}://{{ request.get_host }}{{ xray_url }}')">Copy</button>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         {% if servers_data %}

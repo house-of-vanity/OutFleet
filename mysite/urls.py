@@ -17,12 +17,13 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import RedirectView
-from vpn.views import shadowsocks, userFrontend, userPortal
+from vpn.views import shadowsocks, userFrontend, userPortal, xray_subscription
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('ss/<path:link>', shadowsocks, name='shadowsocks'),
     path('dynamic/<path:link>', shadowsocks, name='shadowsocks'),
+    path('xray/<path:link>', xray_subscription, name='xray_subscription'),
     path('stat/<path:user_hash>', userFrontend, name='userFrontend'),
     path('u/<path:user_hash>', userPortal, name='userPortal'),
     path('', RedirectView.as_view(url='/admin/', permanent=False)),

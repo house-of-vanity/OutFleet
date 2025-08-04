@@ -49,6 +49,108 @@ def cleanup_task_logs():
         logger.error(f"Error cleaning up task logs: {e}")
         return f"Error cleaning up task logs: {e}"
 
+
+@shared_task(name="sync_xray_inbounds", bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 30})
+def sync_xray_inbounds(self, server_id):
+    """Stage 1: Sync inbounds for Xray server."""
+    from vpn.server_plugins import Server
+    from vpn.server_plugins.xray_core import XrayCoreServer
+    
+    start_time = time.time()
+    task_id = self.request.id
+    server = None
+    
+    try:
+        server = Server.objects.get(id=server_id)
+        
+        if not isinstance(server.get_real_instance(), XrayCoreServer):
+            error_message = f"Server {server.name} is not an Xray server"
+            logger.error(error_message)
+            create_task_log(task_id, "sync_xray_inbounds", "Wrong server type", 'FAILURE', server=server, message=error_message, execution_time=time.time() - start_time)
+            return {"error": error_message}
+        
+        create_task_log(task_id, "sync_xray_inbounds", f"Starting inbound sync for {server.name}", 'STARTED', server=server)
+        logger.info(f"Starting inbound sync for Xray server {server.name}")
+        
+        real_server = server.get_real_instance()
+        inbound_result = real_server.sync_inbounds()
+        
+        success_message = f"Successfully synced inbounds for {server.name}"
+        logger.info(f"{success_message}. Result: {inbound_result}")
+        
+        create_task_log(task_id, "sync_xray_inbounds", "Inbound sync completed", 'SUCCESS', server=server, message=f"{success_message}. Result: {inbound_result}", execution_time=time.time() - start_time)
+        
+        return inbound_result
+        
+    except Server.DoesNotExist:
+        error_message = f"Server with id {server_id} not found"
+        logger.error(error_message)
+        create_task_log(task_id, "sync_xray_inbounds", "Server not found", 'FAILURE', message=error_message, execution_time=time.time() - start_time)
+        return {"error": error_message}
+    except Exception as e:
+        error_message = f"Error syncing inbounds for {server.name if server else server_id}: {e}"
+        logger.error(error_message)
+        
+        if self.request.retries < 3:
+            retry_message = f"Retrying inbound sync for {server.name if server else server_id} (attempt {self.request.retries + 1})"
+            logger.info(retry_message)
+            create_task_log(task_id, "sync_xray_inbounds", "Retrying inbound sync", 'RETRY', server=server, message=retry_message)
+            raise self.retry(countdown=30)
+        
+        create_task_log(task_id, "sync_xray_inbounds", "Inbound sync failed after retries", 'FAILURE', server=server, message=error_message, execution_time=time.time() - start_time)
+        return {"error": error_message}
+
+
+@shared_task(name="sync_xray_users", bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 30})
+def sync_xray_users(self, server_id):
+    """Stage 2: Sync users for Xray server."""
+    from vpn.server_plugins import Server
+    from vpn.server_plugins.xray_core import XrayCoreServer
+    
+    start_time = time.time()
+    task_id = self.request.id
+    server = None
+    
+    try:
+        server = Server.objects.get(id=server_id)
+        
+        if not isinstance(server.get_real_instance(), XrayCoreServer):
+            error_message = f"Server {server.name} is not an Xray server"
+            logger.error(error_message)
+            create_task_log(task_id, "sync_xray_users", "Wrong server type", 'FAILURE', server=server, message=error_message, execution_time=time.time() - start_time)
+            return {"error": error_message}
+        
+        create_task_log(task_id, "sync_xray_users", f"Starting user sync for {server.name}", 'STARTED', server=server)
+        logger.info(f"Starting user sync for Xray server {server.name}")
+        
+        real_server = server.get_real_instance()
+        user_result = real_server.sync_users()
+        
+        success_message = f"Successfully synced {user_result.get('users_added', 0)} users for {server.name}"
+        logger.info(f"{success_message}. Result: {user_result}")
+        
+        create_task_log(task_id, "sync_xray_users", "User sync completed", 'SUCCESS', server=server, message=f"{success_message}. Result: {user_result}", execution_time=time.time() - start_time)
+        
+        return user_result
+        
+    except Server.DoesNotExist:
+        error_message = f"Server with id {server_id} not found"
+        logger.error(error_message)
+        create_task_log(task_id, "sync_xray_users", "Server not found", 'FAILURE', message=error_message, execution_time=time.time() - start_time)
+        return {"error": error_message}
+    except Exception as e:
+        error_message = f"Error syncing users for {server.name if server else server_id}: {e}"
+        logger.error(error_message)
+        
+        if self.request.retries < 3:
+            retry_message = f"Retrying user sync for {server.name if server else server_id} (attempt {self.request.retries + 1})"
+            logger.info(retry_message)
+            create_task_log(task_id, "sync_xray_users", "Retrying user sync", 'RETRY', server=server, message=retry_message)
+            raise self.retry(countdown=30)
+        
+        create_task_log(task_id, "sync_xray_users", "User sync failed after retries", 'FAILURE', server=server, message=error_message, execution_time=time.time() - start_time)
+        return {"error": error_message}
+
 class TaskFailedException(Exception):
     def __init__(self, message=""):
         self.message = message
@@ -145,15 +247,66 @@ def sync_users(self, server_id):
         
         create_task_log(task_id, "sync_all_users_on_server", f"Found {user_count} users to sync", 'STARTED', server=server, message=f"Users: {user_list}")
         
-        sync_result = server.sync_users()
+        # For Xray servers, use separate staged sync tasks
+        from vpn.server_plugins.xray_core import XrayCoreServer
+        if isinstance(server.get_real_instance(), XrayCoreServer):
+            logger.info(f"Performing staged sync for Xray server {server.name}")
+            try:
+                # Stage 1: Sync inbounds first
+                logger.info(f"Stage 1: Syncing inbounds for {server.name}")
+                inbound_task = sync_xray_inbounds.apply_async(args=[server.id])
+                inbound_result = inbound_task.get()  # Wait for completion
+                logger.info(f"Inbound sync result for {server.name}: {inbound_result}")
+                
+                if "error" in inbound_result:
+                    logger.error(f"Inbound sync failed, skipping user sync: {inbound_result['error']}")
+                    sync_result = inbound_result
+                else:
+                    # Stage 2: Sync users after inbounds are ready  
+                    logger.info(f"Stage 2: Syncing users for {server.name}")
+                    user_task = sync_xray_users.apply_async(args=[server.id])
+                    user_result = user_task.get()  # Wait for completion
+                    logger.info(f"User sync result for {server.name}: {user_result}")
+                    
+                    # Combine results
+                    if "error" in user_result:
+                        sync_result = {
+                            "status": "Staged sync partially failed",
+                            "inbounds": inbound_result.get("inbounds", []),
+                            "users": f"User sync failed: {user_result['error']}"
+                        }
+                    else:
+                        sync_result = {
+                            "status": "Staged sync completed successfully",
+                            "inbounds": inbound_result.get("inbounds", []),
+                            "users": f"Added {user_result.get('users_added', 0)} users across all inbounds"
+                        }
+                
+            except Exception as e:
+                logger.error(f"Staged sync failed for Xray server {server.name}: {e}")
+                # Fallback to regular user sync only
+                sync_result = server.sync_users()
+        else:
+            # For non-Xray servers, just sync users
+            sync_result = server.sync_users()
         
-        if sync_result:
+        # Check if sync was successful (can be boolean or dict/string)
+        sync_successful = bool(sync_result) and (
+            sync_result is not False and 
+            (isinstance(sync_result, str) and "failed" not in sync_result.lower()) or
+            isinstance(sync_result, dict) or 
+            sync_result is True
+        )
+        
+        if sync_successful:
             success_message = f"Successfully synced {user_count} users for server {server.name}"
+            if isinstance(sync_result, (str, dict)):
+                success_message += f". Details: {sync_result}"
             logger.info(success_message)
             create_task_log(task_id, "sync_all_users_on_server", "User sync completed", 'SUCCESS', server=server, message=success_message, execution_time=time.time() - start_time)
             return success_message
         else:
-            error_message = f"Sync failed for server {server.name}"
+            error_message = f"Sync failed for server {server.name}. Result: {sync_result}"
             create_task_log(task_id, "sync_all_users_on_server", "User sync failed", 'FAILURE', server=server, message=error_message, execution_time=time.time() - start_time)
             raise TaskFailedException(error_message)
     

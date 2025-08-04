@@ -26,7 +26,9 @@ from .server_plugins import (
     OutlineServer,
     OutlineServerAdmin,
     XrayCoreServer,
-    XrayCoreServerAdmin)
+    XrayCoreServerAdmin,
+    XrayInbound,
+    XrayClient)
 
 
 @admin.register(TaskExecutionLog)
@@ -265,6 +267,7 @@ class ServerAdmin(PolymorphicParentModelAdmin):
         custom_urls = [
             path('move-clients/', self.admin_site.admin_view(self.move_clients_view), name='server_move_clients'),
             path('<int:server_id>/check-status/', self.admin_site.admin_view(self.check_server_status_view), name='server_check_status'),
+            path('<int:object_id>/sync/', self.admin_site.admin_view(self.sync_server_view), name='server_sync'),
         ]
         return custom_urls + urls
 
@@ -492,6 +495,7 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                 
                 # Check server status based on type
                 from vpn.server_plugins.outline import OutlineServer
+                from vpn.server_plugins.xray_core import XrayCoreServer
                 
                 if isinstance(real_server, OutlineServer):
                     try:
@@ -519,9 +523,51 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                             'status': 'error',
                             'message': f'Connection error: {str(e)[:100]}'
                         })
+                
+                elif isinstance(real_server, XrayCoreServer):
+                    try:
+                        logger.info(f"Checking Xray server: {server.name}")
+                        # Try to get server status from Xray
+                        status = real_server.get_server_status()
+                        if status and isinstance(status, dict):
+                            if status.get('status') == 'online' or 'version' in status:
+                                inbounds_count = real_server.inbounds.count()
+                                clients_count = sum(inbound.clients.count() for inbound in real_server.inbounds.all())
+                                message = f'Server is online. Inbounds: {inbounds_count}, Clients: {clients_count}'
+                                if 'version' in status:
+                                    message += f', Version: {status["version"]}'
+                                
+                                logger.info(f"Xray server {server.name} is online: {message}")
+                                return JsonResponse({
+                                    'success': True,
+                                    'status': 'online',
+                                    'message': message
+                                })
+                            else:
+                                logger.warning(f"Xray server {server.name} returned status: {status}")
+                                return JsonResponse({
+                                    'success': True,
+                                    'status': 'offline',
+                                    'message': f'Server status: {status.get("message", "Unknown error")}'
+                                })
+                        else:
+                            logger.warning(f"Xray server {server.name} returned no status")
+                            return JsonResponse({
+                                'success': True,
+                                'status': 'offline',
+                                'message': 'Server not responding'
+                            })
+                    except Exception as e:
+                        logger.error(f"Error checking Xray server {server.name}: {e}")
+                        return JsonResponse({
+                            'success': True,
+                            'status': 'error',
+                            'message': f'Connection error: {str(e)[:100]}'
+                        })
+                
                 else:
-                    # For non-Outline servers, just return basic info
-                    logger.info(f"Non-Outline server {server.name}, type: {server.server_type}")
+                    # For other server types, just return basic info
+                    logger.info(f"Server {server.name}, type: {server.server_type}")
                     return JsonResponse({
                         'success': True,
                         'status': 'unknown',
@@ -808,6 +854,29 @@ class ServerAdmin(PolymorphicParentModelAdmin):
             'acl_set__user'
         )
         return qs
+    
+    def sync_server_view(self, request, object_id):
+        """Dispatch sync to appropriate server type."""
+        from django.shortcuts import redirect, get_object_or_404
+        from django.contrib import messages
+        from vpn.server_plugins import XrayCoreServer
+        
+        try:
+            server = get_object_or_404(Server, pk=object_id)
+            real_server = server.get_real_instance()
+            
+            # Handle XrayCoreServer
+            if isinstance(real_server, XrayCoreServer):
+                return redirect(f'/admin/vpn/xraycoreserver/{real_server.pk}/sync/')
+            
+            # Fallback for other server types
+            else:
+                messages.info(request, f"Sync not implemented for server type: {real_server.server_type}")
+                return redirect('admin:vpn_server_changelist')
+            
+        except Exception as e:
+            messages.error(request, f"Error during sync: {e}")
+            return redirect('admin:vpn_server_changelist')
 
 #admin.site.register(User, UserAdmin)
 @admin.register(User)
