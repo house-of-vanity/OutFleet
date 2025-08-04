@@ -739,38 +739,42 @@ class XrayCoreServer(Server):
             if inbound.protocol == 'vless':
                 user_obj = VlessUser(email=client.email, uuid=str(client.uuid))
                 try:
-                    ctx_link = self.client.generate_client_link(inbound.tag, user_obj)
-                    # Replace hostname in the generated link
-                    if ctx_link and '://' in ctx_link:
-                        protocol, rest = ctx_link.split('://', 1)
-                        if '@' in rest:
-                            user_part, host_part = rest.split('@', 1)
-                            if ':' in host_part:
-                                old_host, port_and_params = host_part.split(':', 1)
-                                return f"{protocol}://{user_part}@{client_hostname}:{port_and_params}"
-                    # Fallback if link parsing fails
-                    return self._generate_fallback_uri(inbound, client, client_hostname, inbound.port)
+                    # Use protocol library with database parameters
+                    from vpn.xray_api.protocols import VlessProtocol
+                    protocol_handler = VlessProtocol(inbound.port, inbound.tag, inbound.listen, inbound.network)
+                    
+                    # Get encryption setting from inbound
+                    encryption = getattr(inbound, 'vless_encryption', 'none')
+                    
+                    ctx_link = protocol_handler.generate_client_link(
+                        user_obj, 
+                        client_hostname,
+                        network=inbound.network,
+                        security=inbound.security,
+                        encryption=encryption
+                    )
+                    return ctx_link
                 except Exception:
                     return self._generate_fallback_uri(inbound, client, client_hostname, inbound.port)
 
             elif inbound.protocol == 'vmess':
                 user_obj = VmessUser(email=client.email, uuid=str(client.uuid), alter_id=client.alter_id or 0)
                 try:
-                    ctx_link = self.client.generate_client_link(inbound.tag, user_obj)
-                    # VMess uses base64 encoded JSON, need to decode and fix hostname
-                    if ctx_link and ctx_link.startswith('vmess://'):
-                        import base64, json
-                        encoded_part = ctx_link[8:]  # Remove vmess://
-                        try:
-                            decoded = base64.b64decode(encoded_part).decode('utf-8')
-                            config = json.loads(decoded)
-                            config['add'] = client_hostname  # Fix hostname
-                            fixed_config = base64.b64encode(json.dumps(config).encode('utf-8')).decode('utf-8')
-                            return f"vmess://{fixed_config}"
-                        except Exception:
-                            pass
-                    # Fallback if link parsing fails
-                    return self._generate_fallback_uri(inbound, client, client_hostname, inbound.port)
+                    # Use protocol library with database parameters
+                    from vpn.xray_api.protocols import VmessProtocol
+                    protocol_handler = VmessProtocol(inbound.port, inbound.tag, inbound.listen, inbound.network)
+                    
+                    # Get encryption setting from inbound
+                    encryption = getattr(inbound, 'vmess_encryption', 'auto')
+                    
+                    ctx_link = protocol_handler.generate_client_link(
+                        user_obj,
+                        client_hostname,
+                        network=inbound.network,
+                        security=inbound.security,
+                        encryption=encryption
+                    )
+                    return ctx_link
                 except Exception:
                     return self._generate_fallback_uri(inbound, client, client_hostname, inbound.port)
 
@@ -786,17 +790,17 @@ class XrayCoreServer(Server):
 
                 user_obj = TrojanUser(email=client.email, password=password)
                 try:
-                    ctx_link = self.client.generate_client_link(inbound.tag, user_obj)
-                    # Replace hostname in the generated link
-                    if ctx_link and '://' in ctx_link:
-                        protocol, rest = ctx_link.split('://', 1)
-                        if '@' in rest:
-                            password_part, host_part = rest.split('@', 1)
-                            if ':' in host_part:
-                                old_host, port_and_params = host_part.split(':', 1)
-                                return f"{protocol}://{password_part}@{client_hostname}:{port_and_params}"
-                    # Fallback if link parsing fails
-                    return self._generate_fallback_uri(inbound, client, client_hostname, inbound.port)
+                    # Use protocol library with database parameters
+                    from vpn.xray_api.protocols import TrojanProtocol
+                    protocol_handler = TrojanProtocol(inbound.port, inbound.tag, inbound.listen, inbound.network)
+                    
+                    ctx_link = protocol_handler.generate_client_link(
+                        user_obj,
+                        client_hostname,
+                        network=inbound.network,
+                        security=inbound.security
+                    )
+                    return ctx_link
                 except Exception:
                     return self._generate_fallback_uri(inbound, client, client_hostname, inbound.port)
 
@@ -814,25 +818,45 @@ class XrayCoreServer(Server):
         from urllib.parse import urlencode
 
         if inbound.protocol == 'vless':
-            # VLESS format: vless://uuid@host:port?encryption=none&type=tcp#name
+            # VLESS format: vless://uuid@host:port?encryption=none&type=network#name
+            # Use encryption and network from inbound settings
+            encryption = getattr(inbound, 'vless_encryption', 'none')
+            network = inbound.network or 'tcp'
+            security = inbound.security or 'none'
+            
             params = {
-                'encryption': 'none',
-                'type': 'tcp'
+                'encryption': encryption,
+                'type': network
             }
+            
+            # Add security if enabled
+            if security != 'none':
+                params['security'] = security
+                
             query_string = urlencode(params)
             return f"vless://{client.uuid}@{server_address}:{server_port}?{query_string}#{self.name}"
 
         elif inbound.protocol == 'vmess':
-            # VMess format: vmess://uuid@host:port?encryption=auto&type=tcp#name
+            # VMess format: vmess://uuid@host:port?encryption=method&type=network#name
+            # Use encryption and network from inbound settings
+            encryption = getattr(inbound, 'vmess_encryption', 'auto')
+            network = inbound.network or 'tcp'
+            security = inbound.security or 'none'
+            
             params = {
-                'encryption': 'auto',
-                'type': 'tcp'
+                'encryption': encryption,
+                'type': network
             }
+            
+            # Add security if enabled
+            if security != 'none':
+                params['security'] = security
+                
             query_string = urlencode(params)
             return f"vmess://{client.uuid}@{server_address}:{server_port}?{query_string}#{self.name}"
 
         elif inbound.protocol == 'trojan':
-            # Trojan format: trojan://password@host:port?type=tcp#name
+            # Trojan format: trojan://password@host:port?type=network#name
             password = getattr(client, 'password', None)
             if not password:
                 # Generate and save password if not exists
@@ -840,9 +864,17 @@ class XrayCoreServer(Server):
                 client.password = password
                 client.save(update_fields=['password'])
 
+            network = inbound.network or 'tcp'
+            security = inbound.security or 'none'
+            
             params = {
-                'type': 'tcp'
+                'type': network
             }
+            
+            # Add security if enabled  
+            if security != 'none':
+                params['security'] = security
+                
             query_string = urlencode(params)
             return f"trojan://{password}@{server_address}:{server_port}?{query_string}#{self.name}"
 

@@ -43,8 +43,12 @@ class VmessProtocol(BaseProtocol):
             }
         }
     
-    def generate_client_link(self, user: VmessUser, hostname: str) -> str:
+    def generate_client_link(self, user: VmessUser, hostname: str, network: str = None, security: str = None, **kwargs) -> str:
         """Generate VMess client link."""
+        # Use provided parameters or defaults
+        network_type = network or self.network
+        encryption = kwargs.get('encryption', 'auto')
+        
         config = {
             "v": "2",
             "ps": user.email,
@@ -52,11 +56,11 @@ class VmessProtocol(BaseProtocol):
             "port": str(self.port),
             "id": user.uuid,
             "aid": str(user.alter_id),
-            "net": self.network,
+            "net": network_type,
             "type": "none",
             "host": "",
             "path": "",
-            "tls": ""
+            "tls": security if security and security != 'none' else ""
         }
         
         config_json = json.dumps(config, separators=(',', ':'))

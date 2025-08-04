@@ -42,9 +42,25 @@ class VlessProtocol(BaseProtocol):
             }
         }
     
-    def generate_client_link(self, user: VlessUser, hostname: str) -> str:
+    def generate_client_link(self, user: VlessUser, hostname: str, network: str = None, security: str = None, **kwargs) -> str:
         """Generate VLESS client link."""
-        return f"vless://{user.uuid}@{hostname}:{self.port}?encryption=none&type={self.network}#{user.email}"
+        from urllib.parse import urlencode
+        
+        # Use provided parameters or defaults
+        network_type = network or self.network
+        encryption = kwargs.get('encryption', 'none')
+        
+        params = {
+            'encryption': encryption,
+            'type': network_type
+        }
+        
+        # Add security if provided
+        if security and security != 'none':
+            params['security'] = security
+            
+        query_string = urlencode(params)
+        return f"vless://{user.uuid}@{hostname}:{self.port}?{query_string}#{user.email}"
     
     def _user_to_client(self, user: VlessUser) -> Dict[str, Any]:
         """Convert VlessUser to client configuration."""

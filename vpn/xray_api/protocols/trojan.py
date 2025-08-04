@@ -63,9 +63,23 @@ class TrojanProtocol(BaseProtocol):
             }
         }
     
-    def generate_client_link(self, user: TrojanUser, hostname: str) -> str:
+    def generate_client_link(self, user: TrojanUser, hostname: str, network: str = None, security: str = None, **kwargs) -> str:
         """Generate Trojan client link."""
-        return f"trojan://{user.password}@{hostname}:{self.port}#{user.email}"
+        from urllib.parse import urlencode
+        
+        # Use provided parameters or defaults
+        network_type = network or self.network
+        
+        params = {
+            'type': network_type
+        }
+        
+        # Add security if provided
+        if security and security != 'none':
+            params['security'] = security
+            
+        query_string = urlencode(params)
+        return f"trojan://{user.password}@{hostname}:{self.port}?{query_string}#{user.email}"
     
     def get_client_note(self) -> str:
         """Get note for client configuration when using self-signed certificates."""

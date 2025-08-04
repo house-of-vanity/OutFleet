@@ -32,7 +32,7 @@ class BaseProtocol(ABC):
         pass
     
     @abstractmethod
-    def generate_client_link(self, user: User, hostname: str) -> str:
+    def generate_client_link(self, user: User, hostname: str, network: str = None, security: str = None, **kwargs) -> str:
         """Generate client connection link."""
         pass
     
