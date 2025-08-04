@@ -482,8 +482,8 @@
                     One link for all your Xray protocols (VLESS, VMess, Trojan)
                 </p>
                 <div class="link-url" style="margin-bottom: 0;">
-                    {% url 'xray_subscription' user_links.0.link as xray_url %}{{ request.scheme }}://{{ request.get_host }}{{ xray_url }}
-                    <button class="copy-btn" onclick="copyToClipboard('{{ request.scheme }}://{{ request.get_host }}{{ xray_url }}')">Copy</button>
+                    {% url 'xray_subscription' user_links.0.link as xray_url %}{{ force_scheme|default:request.scheme }}://{{ request.get_host }}{{ xray_url }}
+                    <button class="copy-btn" onclick="copyToClipboard('{{ force_scheme|default:request.scheme }}://{{ request.get_host }}{{ xray_url }}')">Copy</button>
                 </div>
             </div>
             {% endif %}

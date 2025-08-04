@@ -34,6 +34,9 @@ def userPortal(request, user_hash):
             recent_connections = 0
             logger.warning(f"No cached statistics found for user {user.username}. Run statistics update task.")
         
+        # Determine protocol scheme
+        scheme = 'https' if request.is_secure() else 'http'
+        
         # Group links by server
         servers_data = {}
         total_links = 0
@@ -157,6 +160,7 @@ def userPortal(request, user_hash):
             'recent_connections': recent_connections,
             'external_address': EXTERNAL_ADDRESS,
             'has_xray_servers': has_xray_servers,
+            'force_scheme': scheme,  # Override request.scheme in template
         }
         
         logger.debug(f"Context prepared with keys: {list(context.keys())}")
