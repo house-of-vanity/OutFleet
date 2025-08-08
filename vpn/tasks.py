@@ -705,9 +705,21 @@ def sync_server_users(self, server_id):
     from vpn.models import User, ACL
     from vpn.models_xray import UserSubscription
     
+    start_time = datetime.now()
+    task_id = self.request.id
+    
     try:
         server = Server.objects.get(id=server_id)
         real_server = server.get_real_instance()
+        
+        # Create initial log entry
+        create_task_log(
+            task_id=task_id,
+            task_name='sync_server_users',
+            action=f'Starting user sync for server {server.name}',
+            status='STARTED',
+            server=server
+        )
         
         # Get all users who should have access to this server
         # For Xray v2, users access through subscription groups
@@ -719,17 +731,46 @@ def sync_server_users(self, server_id):
         logger.info(f"Syncing {users_to_sync.count()} users for Xray server {server.name}")
         
         added_count = 0
+        failed_count = 0
         for user in users_to_sync:
             try:
                 if real_server.add_user(user):
                     added_count += 1
             except Exception as e:
+                failed_count += 1
                 logger.error(f"Failed to sync user {user.username} on server {server.name}: {e}")
         
+        # Calculate execution time
+        execution_time = (datetime.now() - start_time).total_seconds()
+        
+        # Create success log
+        create_task_log(
+            task_id=task_id,
+            task_name='sync_server_users',
+            action=f'Completed user sync for server {server.name}',
+            status='SUCCESS',
+            server=server,
+            message=f'Synced {added_count} of {users_to_sync.count()} users. Failed: {failed_count}',
+            execution_time=execution_time
+        )
+        
         logger.info(f"Successfully synced {added_count} users for server {server.name}")
-        return {"users_added": added_count, "total_users": users_to_sync.count()}
+        return {"users_added": added_count, "total_users": users_to_sync.count(), "failed": failed_count}
         
     except Exception as e:
+        # Calculate execution time
+        execution_time = (datetime.now() - start_time).total_seconds()
+        
+        # Create failure log
+        create_task_log(
+            task_id=task_id,
+            task_name='sync_server_users',
+            action=f'Failed to sync users for server {server_id}',
+            status='FAILURE',
+            message=str(e),
+            execution_time=execution_time
+        )
+        
         logger.error(f"Error syncing users for server {server_id}: {e}")
         raise
 

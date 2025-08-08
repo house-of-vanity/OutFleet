@@ -125,7 +125,7 @@ class TaskExecutionLogAdmin(admin.ModelAdmin):
     def task_name_display(self, obj):
         task_names = {
             'sync_all_servers': '🔄 Sync All',
-            'sync_all_users_on_server': '👥 Server Sync',
+            'sync_server_users': '👥 Server Sync',
             'sync_server_info': '⚙️ Server Info',
             'sync_user_on_server': '👤 User Sync',
             'cleanup_task_logs': '🧹 Cleanup',
@@ -708,14 +708,14 @@ class ServerAdmin(PolymorphicParentModelAdmin):
             return
         
         try:
-            from vpn.tasks import sync_all_users_on_server
+            from vpn.tasks import sync_server_users
             
             tasks_started = 0
             errors = []
             
             for server in queryset:
                 try:
-                    task = sync_all_users_on_server.delay(server.id)
+                    task = sync_server_users.delay(server.id)
                     tasks_started += 1
                     self.message_user(
                         request,
@@ -2073,7 +2073,7 @@ try:
         def task_name_display(self, obj):
             task_names = {
                 'sync_all_servers': '🔄 Sync All Servers',
-                'sync_all_users_on_server': '👥 Sync Users on Server',
+                'sync_server_users': '👥 Sync Users on Server',
                 'sync_server_info': '⚙️ Sync Server Info',
                 'sync_user_on_server': '👤 Sync User on Server',
                 'cleanup_task_logs': '🧹 Cleanup Old Logs',
