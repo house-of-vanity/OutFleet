@@ -16,3 +16,6 @@ psycopg2-binary==2.9.10
 setuptools==75.2.0
 shortuuid==1.0.13
 cryptography==45.0.5
+acme>=2.0.0
+cloudflare>=4.3.1
+josepy>=2.0.0

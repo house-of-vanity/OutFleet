@@ -25,10 +25,13 @@ from .server_plugins import (
     WireguardServerAdmin,
     OutlineServer,
     OutlineServerAdmin,
-    XrayCoreServer,
-    XrayCoreServerAdmin,
-    XrayInbound,
-    XrayClient)
+    XrayServerV2,
+    XrayServerV2Admin)
+
+# Import new Xray admin configuration
+from .admin_xray import add_subscription_management_to_user
+
+# This will be registered at the end of the file
 
 
 @admin.register(TaskExecutionLog)
@@ -250,11 +253,11 @@ class LastAccessFilter(admin.SimpleListFilter):
 @admin.register(Server)
 class ServerAdmin(PolymorphicParentModelAdmin):
     base_model = Server
-    child_models = (OutlineServer, WireguardServer, XrayCoreServer)
+    child_models = (OutlineServer, WireguardServer, XrayServerV2)
     list_display = ('name_with_icon', 'server_type', 'comment_short', 'user_stats', 'server_status_compact', 'registration_date')
     search_fields = ('name', 'comment')
     list_filter = ('server_type', )
-    actions = ['move_clients_action', 'purge_all_keys_action', 'sync_all_selected_servers']
+    actions = ['move_clients_action', 'purge_all_keys_action', 'sync_all_selected_servers', 'sync_xray_inbounds', 'check_status']
     
     class Media:
         css = {
@@ -495,7 +498,7 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                 
                 # Check server status based on type
                 from vpn.server_plugins.outline import OutlineServer
-                from vpn.server_plugins.xray_core import XrayCoreServer
+                # Old xray_core module removed - skip this server type
                 
                 if isinstance(real_server, OutlineServer):
                     try:
@@ -524,41 +527,54 @@ class ServerAdmin(PolymorphicParentModelAdmin):
                             'message': f'Connection error: {str(e)[:100]}'
                         })
                 
-                elif isinstance(real_server, XrayCoreServer):
+                elif isinstance(real_server, XrayServerV2):
                     try:
-                        logger.info(f"Checking Xray server: {server.name}")
-                        # Try to get server status from Xray
+                        logger.info(f"Checking Xray v2 server: {server.name}")
+                        # Get server status from new Xray implementation
                         status = real_server.get_server_status()
                         if status and isinstance(status, dict):
-                            if status.get('status') == 'online' or 'version' in status:
-                                inbounds_count = real_server.inbounds.count()
-                                clients_count = sum(inbound.clients.count() for inbound in real_server.inbounds.all())
-                                message = f'Server is online. Inbounds: {inbounds_count}, Clients: {clients_count}'
-                                if 'version' in status:
-                                    message += f', Version: {status["version"]}'
+                            if status.get('accessible', False):
+                                message = f'✅ Server is {status.get("status", "accessible")}. '
+                                message += f'Host: {status.get("client_hostname", "N/A")}, '
+                                message += f'API: {status.get("api_address", "N/A")}'
                                 
-                                logger.info(f"Xray server {server.name} is online: {message}")
+                                if status.get('api_connected'):
+                                    message += ' (Connected)'
+                                    # Add stats if available
+                                    api_stats = status.get('api_stats', {})
+                                    if api_stats and isinstance(api_stats, dict):
+                                        if 'connection' in api_stats:
+                                            message += f', Stats: {api_stats.get("connection", "ok")}'
+                                        if api_stats.get('library') == 'not_available':
+                                            message += ' [Basic check only]'
+                                elif status.get('api_error'):
+                                    message += f' ({status.get("api_error")})'
+                                
+                                message += f', Inbounds: {status.get("total_inbounds", 0)}'
+                                
+                                logger.info(f"Xray v2 server {server.name} status: {message}")
                                 return JsonResponse({
                                     'success': True,
                                     'status': 'online',
                                     'message': message
                                 })
                             else:
-                                logger.warning(f"Xray server {server.name} returned status: {status}")
+                                error_msg = status.get('error') or status.get('api_error', 'Unknown error')
+                                logger.warning(f"Xray v2 server {server.name} not accessible: {error_msg}")
                                 return JsonResponse({
                                     'success': True,
                                     'status': 'offline',
-                                    'message': f'Server status: {status.get("message", "Unknown error")}'
+                                    'message': f'❌ Server not accessible: {error_msg}'
                                 })
                         else:
-                            logger.warning(f"Xray server {server.name} returned no status")
+                            logger.warning(f"Xray v2 server {server.name} returned invalid status")
                             return JsonResponse({
                                 'success': True,
                                 'status': 'offline',
-                                'message': 'Server not responding'
+                                'message': 'Invalid server response'
                             })
                     except Exception as e:
-                        logger.error(f"Error checking Xray server {server.name}: {e}")
+                        logger.error(f"Error checking Xray v2 server {server.name}: {e}")
                         return JsonResponse({
                             'success': True,
                             'status': 'error',
@@ -723,6 +739,38 @@ class ServerAdmin(PolymorphicParentModelAdmin):
             )
     
     sync_all_selected_servers.short_description = "🔄 Sync all users on selected servers"
+    
+    def check_status(self, request, queryset):
+        """Check status for selected servers"""
+        for server in queryset:
+            try:
+                status = server.get_server_status()
+                msg = f"{server.name}: {status.get('accessible', 'Unknown')} - {status.get('status', 'N/A')}"
+                self.message_user(request, msg, level=messages.INFO)
+            except Exception as e:
+                self.message_user(request, f"Error checking {server.name}: {e}", level=messages.ERROR)
+    check_status.short_description = "📊 Check server status"
+    
+    def sync_xray_inbounds(self, request, queryset):
+        """Sync inbounds for selected servers (Xray v2 only)"""
+        from .server_plugins.xray_v2 import XrayServerV2
+        synced_count = 0
+        
+        for server in queryset:
+            try:
+                real_server = server.get_real_instance()
+                if isinstance(real_server, XrayServerV2):
+                    real_server.sync_inbounds()
+                    synced_count += 1
+                    self.message_user(request, f"Scheduled inbound sync for {server.name}", level=messages.SUCCESS)
+                else:
+                    self.message_user(request, f"{server.name} is not an Xray v2 server", level=messages.WARNING)
+            except Exception as e:
+                self.message_user(request, f"Error syncing inbounds for {server.name}: {e}", level=messages.ERROR)
+        
+        if synced_count > 0:
+            self.message_user(request, f"Scheduled inbound sync for {synced_count} server(s)", level=messages.SUCCESS)
+    sync_xray_inbounds.short_description = "🔧 Sync Xray inbounds"
 
     @admin.display(description='Server', ordering='name')
     def name_with_icon(self, obj):
@@ -731,6 +779,7 @@ class ServerAdmin(PolymorphicParentModelAdmin):
             'outline': '🔵',
             'wireguard': '🟢',
             'xray_core': '🟣',
+            'xray_v2': '🟡',
         }
         icon = icons.get(obj.server_type, '')
         name_part = f"{icon} {obj.name}" if icon else obj.name
@@ -859,15 +908,15 @@ class ServerAdmin(PolymorphicParentModelAdmin):
         """Dispatch sync to appropriate server type."""
         from django.shortcuts import redirect, get_object_or_404
         from django.contrib import messages
-        from vpn.server_plugins import XrayCoreServer
+        # XrayCoreServer removed - using XrayServerV2 now
         
         try:
             server = get_object_or_404(Server, pk=object_id)
             real_server = server.get_real_instance()
             
-            # Handle XrayCoreServer
-            if isinstance(real_server, XrayCoreServer):
-                return redirect(f'/admin/vpn/xraycoreserver/{real_server.pk}/sync/')
+            # Handle XrayServerV2
+            if isinstance(real_server, XrayServerV2):
+                return redirect(f'/admin/vpn/xrayserverv2/{real_server.pk}/sync/')
             
             # Fallback for other server types
             else:
@@ -1834,3 +1883,13 @@ try:
         
 except ImportError:
     pass
+
+# Register XrayServerV2 admin
+admin.site.register(XrayServerV2, XrayServerV2Admin)
+
+# Add subscription management to User admin
+from django.contrib.admin import site
+for model, admin_instance in site._registry.items():
+    if model.__name__ == 'User' and hasattr(admin_instance, 'fieldsets'):
+        add_subscription_management_to_user(admin_instance.__class__)
+        break

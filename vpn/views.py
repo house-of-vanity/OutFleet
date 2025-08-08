@@ -1,6 +1,7 @@
 def userPortal(request, user_hash):
-    """HTML portal for user to view their VPN access links and server information"""
-    from .models import User, ACLLink, UserStatistics, AccessLog
+    """HTML portal for user to view their VPN access links and subscription groups"""
+    from .models import User
+    from .models_xray import UserSubscription, SubscriptionGroup, Inbound
     from django.utils import timezone
     from datetime import timedelta
     import logging
@@ -18,159 +19,137 @@ def userPortal(request, user_hash):
         }, status=403)
     
     try:
-        # Get all ACL links for the user with server information
-        acl_links = ACLLink.objects.filter(acl__user=user).select_related('acl__server', 'acl')
-        logger.info(f"Found {acl_links.count()} ACL links for user {user.username}")
+        # Get all active subscription groups for the user
+        user_subscriptions = UserSubscription.objects.filter(
+            user=user, 
+            active=True,
+            subscription_group__is_active=True
+        ).select_related('subscription_group').prefetch_related('subscription_group__inbounds')
         
-        # Calculate overall statistics from cached data (only where cache exists)
-        user_stats = UserStatistics.objects.filter(user=user)
-        if user_stats.exists():
-            total_connections = sum(stat.total_connections for stat in user_stats)
-            recent_connections = sum(stat.recent_connections for stat in user_stats)
-            logger.info(f"User {user.username} cached stats: total_connections={total_connections}, recent_connections={recent_connections}")
-        else:
-            # No cache available, set to zero and suggest cache update
-            total_connections = 0
-            recent_connections = 0
-            logger.warning(f"No cached statistics found for user {user.username}. Run statistics update task.")
+        logger.info(f"Found {user_subscriptions.count()} active subscription groups for user {user.username}")
+        
+        # For now, set statistics to zero as we're transitioning systems
+        total_connections = 0
+        recent_connections = 0
+        logger.info(f"Using zero stats during transition for user {user.username}")
         
         # Determine protocol scheme
         scheme = 'https' if request.is_secure() else 'http'
         
-        # Group links by server
-        servers_data = {}
-        total_links = 0
+        # Group inbounds by subscription group
+        groups_data = {}
+        total_inbounds = 0
         
-        for link in acl_links:
-            server = link.acl.server
-            server_name = server.name
-            logger.debug(f"Processing link {link.link} for server {server_name}")
+        for subscription in user_subscriptions:
+            group = subscription.subscription_group
+            group_name = group.name
+            logger.debug(f"Processing subscription group {group_name}")
             
-            if server_name not in servers_data:
-                # Get server status and info
-                try:
-                    server_status = server.get_server_status()
-                    server_accessible = True
-                    server_error = None
-                    logger.debug(f"Server {server_name} status retrieved successfully")
-                except Exception as e:
-                    logger.warning(f"Could not get status for server {server_name}: {e}")
-                    server_status = {}
-                    server_accessible = False
-                    server_error = str(e)
-                
-                # Calculate server-level totals from cached stats (only where cache exists)
-                server_stats = user_stats.filter(server_name=server_name)
-                if server_stats.exists():
-                    server_total_connections = sum(stat.total_connections for stat in server_stats)
-                else:
-                    server_total_connections = 0
-                
-                servers_data[server_name] = {
-                    'server': server,
-                    'status': server_status,
-                    'accessible': server_accessible,
-                    'error': server_error,
-                    'links': [],
-                    'server_type': server.server_type,
-                    'total_connections': server_total_connections,
-                }
-                logger.debug(f"Created server data for {server_name} with {server_total_connections} cached connections")
+            # Get all inbounds for this group
+            group_inbounds = group.inbounds.all()
             
-            # Calculate time since last access
-            last_access_display = "Never used"
-            if link.last_access_time:
-                time_diff = timezone.now() - link.last_access_time
-                if time_diff.days > 0:
-                    last_access_display = f"{time_diff.days} days ago"
-                elif time_diff.seconds > 3600:
-                    hours = time_diff.seconds // 3600
-                    last_access_display = f"{hours} hours ago"
-                elif time_diff.seconds > 60:
-                    minutes = time_diff.seconds // 60
-                    last_access_display = f"{minutes} minutes ago"
-                else:
-                    last_access_display = "Just now"
-            
-            # Get cached statistics for this specific link
-            try:
-                link_stats = UserStatistics.objects.get(
-                    user=user,
-                    server_name=server_name,
-                    acl_link_id=link.link
-                )
-                logger.debug(f"Found cached stats for link {link.link}: {link_stats.total_connections} connections, max_daily={link_stats.max_daily}")
-                
-                link_connections = link_stats.total_connections
-                link_recent_connections = link_stats.recent_connections
-                daily_usage = link_stats.daily_usage or []
-                max_daily = link_stats.max_daily
-                
-            except UserStatistics.DoesNotExist:
-                logger.warning(f"No cached stats found for link {link.link} on server {server_name}, using fallback")
-                
-                # Fallback: Since AccessLog doesn't track specific links, show zero for link-specific stats
-                # but keep server-level stats for context
-                link_connections = 0
-                link_recent_connections = 0
-                daily_usage = [0] * 30  # Empty 30-day chart
-                max_daily = 0
-                
-                logger.warning(f"Using zero stats for uncached link {link.link} - AccessLog doesn't track individual links")
-            
-            logger.debug(f"Link {link.link} stats: connections={link_connections}, recent={link_recent_connections}, max_daily={max_daily}")
-            
-            # Add link information with statistics
-            link_url = f"{EXTERNAL_ADDRESS}/ss/{link.link}#{server_name}"
-            
-            link_data = {
-                'link': link,
-                'url': link_url,
-                'comment': link.comment or 'Default',
-                'last_access': link.last_access_time,
-                'last_access_display': last_access_display,
-                'connections': link_connections,
-                'recent_connections': link_recent_connections,
-                'daily_usage': daily_usage,
-                'max_daily': max_daily,
+            groups_data[group_name] = {
+                'group': group,
+                'subscription': subscription,
+                'inbounds': [],
+                'total_connections': 0,  # Placeholder during transition
             }
             
-            servers_data[server_name]['links'].append(link_data)
-            total_links += 1
-            
-            logger.debug(f"Added comprehensive link data for {link.link}")
+            for inbound in group_inbounds:
+                logger.debug(f"Processing inbound {inbound.name} in group {group_name}")
+                
+                # Generate connection URLs based on protocol
+                connection_urls = []
+                
+                if inbound.protocol == 'vless':
+                    # Generate VLESS URL - this is a placeholder implementation
+                    # In the real implementation, you'd generate proper VLESS URLs with user UUID
+                    connection_url = f"vless://user-uuid@{inbound.domain or EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
+                    connection_urls.append({
+                        'url': connection_url,
+                        'protocol': 'VLESS',
+                        'name': inbound.name
+                    })
+                elif inbound.protocol == 'vmess':
+                    # Generate VMess URL - placeholder
+                    connection_url = f"vmess://user-config@{inbound.domain or EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
+                    connection_urls.append({
+                        'url': connection_url,
+                        'protocol': 'VMess',
+                        'name': inbound.name
+                    })
+                elif inbound.protocol == 'trojan':
+                    # Generate Trojan URL - placeholder
+                    connection_url = f"trojan://user-password@{inbound.domain or EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
+                    connection_urls.append({
+                        'url': connection_url,
+                        'protocol': 'Trojan',
+                        'name': inbound.name
+                    })
+                elif inbound.protocol == 'shadowsocks':
+                    # Generate Shadowsocks URL - placeholder
+                    connection_url = f"ss://user-config@{inbound.domain or EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
+                    connection_urls.append({
+                        'url': connection_url,
+                        'protocol': 'Shadowsocks',
+                        'name': inbound.name
+                    })
+                
+                inbound_data = {
+                    'inbound': inbound,
+                    'connection_urls': connection_urls,
+                    'protocol': inbound.protocol.upper(),
+                    'port': inbound.port,
+                    'domain': inbound.domain or EXTERNAL_ADDRESS,
+                    'network': inbound.network,
+                    'security': inbound.security,
+                    'connections': 0,  # Placeholder during transition
+                    'last_access_display': "Never used",  # Placeholder
+                }
+                
+                groups_data[group_name]['inbounds'].append(inbound_data)
+                total_inbounds += 1
+                
+                logger.debug(f"Added inbound data for {inbound.name}")
         
-        logger.info(f"Prepared data for {len(servers_data)} servers and {total_links} total links")
+        logger.info(f"Prepared data for {len(groups_data)} subscription groups and {total_inbounds} total inbounds")
         logger.info(f"Portal statistics: total_connections={total_connections}, recent_connections={recent_connections}")
         
-        # Check if user has access to any Xray servers
-        from vpn.server_plugins import XrayCoreServer, XrayInboundServer
-        has_xray_servers = any(
-            isinstance(acl_link.acl.server.get_real_instance(), (XrayCoreServer, XrayInboundServer))
-            for acl_link in acl_links
-        )
+        # Check if user has any Xray subscription groups
+        has_xray_access = user_subscriptions.exists()
         
+        # Also get old-style ACL links for backwards compatibility
+        acl_links = []
+        try:
+            from .models import ACLLink
+            acl_links = ACLLink.objects.filter(acl__user=user).select_related('acl__server', 'acl')
+        except:
+            pass
+
         context = {
             'user': user,
-            'user_links': acl_links,  # For accessing user's links in template
-            'servers_data': servers_data,
-            'total_servers': len(servers_data),
-            'total_links': total_links,
+            'user_subscriptions': user_subscriptions,  # For accessing user's subscriptions in template
+            'groups_data': groups_data,
+            'total_groups': len(groups_data),
+            'total_inbounds': total_inbounds,
             'total_connections': total_connections,
             'recent_connections': recent_connections,
             'external_address': EXTERNAL_ADDRESS,
-            'has_xray_servers': has_xray_servers,
+            'has_xray_access': has_xray_access,
             'force_scheme': scheme,  # Override request.scheme in template
+            'acl_links': acl_links,  # For backwards compatibility
+            'has_old_links': len(acl_links) > 0,
+            'xray_subscription_url': f"{EXTERNAL_ADDRESS}/xray/{user.hash}",
         }
         
         logger.debug(f"Context prepared with keys: {list(context.keys())}")
-        logger.debug(f"Servers in context: {list(servers_data.keys())}")
+        logger.debug(f"Groups in context: {list(groups_data.keys())}")
         
-        # Log sample server data for debugging
-        for server_name, server_data in servers_data.items():
-            logger.debug(f"Server {server_name}: total_connections={server_data['total_connections']}, links_count={len(server_data['links'])}")
-            for i, link_data in enumerate(server_data['links']):
-                logger.debug(f"  Link {i}: connections={link_data['connections']}, recent={link_data['recent_connections']}, last_access='{link_data['last_access_display']}'")
+        # Log sample group data for debugging
+        for group_name, group_data in groups_data.items():
+            logger.debug(f"Group {group_name}: total_connections={group_data['total_connections']}, inbounds_count={len(group_data['inbounds'])}")
+            for i, inbound_data in enumerate(group_data['inbounds']):
+                logger.debug(f"  Inbound {i}: protocol={inbound_data['protocol']}, port={inbound_data['port']}, connections={inbound_data['connections']}")
         
         return render(request, 'vpn/user_portal.html', context)
         
@@ -239,15 +218,27 @@ def shadowsocks(request, link):
         )
         return JsonResponse({"error": f"Couldn't get credentials from server. {e}"}, status=500)
 
+    # Handle both dict and object formats for server_user
+    if isinstance(server_user, dict):
+        password = server_user.get('password', '')
+        method = server_user.get('method', 'aes-128-gcm')
+        port = server_user.get('port', 8080)
+        access_url = server_user.get('access_url', '')
+    else:
+        password = getattr(server_user, 'password', '')
+        method = getattr(server_user, 'method', 'aes-128-gcm')
+        port = getattr(server_user, 'port', 8080)
+        access_url = getattr(server_user, 'access_url', '')
+
     if request.GET.get('mode') == 'json':
       config = {
           "info": "Managed by OutFleet_2 [github.com/house-of-vanity/OutFleet/]",
-          "password": server_user.password,
-          "method": server_user.method,
+          "password": password,
+          "method": method,
           "prefix": "\u0005\u00dc_\u00e0\u0001",
           "server": acl.server.client_hostname,
-          "server_port": server_user.port,
-          "access_url": server_user.access_url,
+          "server_port": port,
+          "access_url": access_url,
           "outfleet": {
               "acl_link": link,
               "server_name": acl.server.name,
@@ -261,16 +252,16 @@ def shadowsocks(request, link):
              "$type": "tcpudp",
              "tcp": {
                   "$type": "shadowsocks",
-                  "endpoint": f"{acl.server.client_hostname}:{server_user.port}",
-                  "cipher": f"{server_user.method}",
-                  "secret": f"{server_user.password}",
+                  "endpoint": f"{acl.server.client_hostname}:{port}",
+                  "cipher": f"{method}",
+                  "secret": f"{password}",
                   "prefix": "\u0005\u00dc_\u00e0\u0001"
              },
              "udp": {
                   "$type": "shadowsocks",
-                  "endpoint": f"{acl.server.client_hostname}:{server_user.port}",
-                  "cipher": f"{server_user.method}",
-                  "secret": f"{server_user.password}",
+                  "endpoint": f"{acl.server.client_hostname}:{port}",
+                  "cipher": f"{method}",
+                  "secret": f"{password}",
                   "prefix": "\u0005\u00dc_\u00e0\u0001"
               }
           }
@@ -293,112 +284,269 @@ def shadowsocks(request, link):
     return HttpResponse(response, content_type=f"{ 'application/json; charset=utf-8' if request.GET.get('mode') == 'json' else 'text/html' }")
 
 
-def xray_subscription(request, link):
+def xray_subscription(request, user_hash):
     """
     Return Xray subscription with all available protocols for the user.
-    This generates a single subscription link that includes all inbounds the user has access to.
+    This generates configs based on user's subscription groups.
     """
-    from .models import ACLLink, AccessLog
-    from vpn.server_plugins import XrayCoreServer, XrayInboundServer
+    from .models import User, AccessLog
+    from .models_xray import UserSubscription
     import logging
     from django.utils import timezone
     import base64
+    import uuid
+    import json
     
     logger = logging.getLogger(__name__)
     
+    # Clean user_hash from any trailing slashes
+    user_hash = user_hash.rstrip('/')
+    
     try:
-        acl_link = get_object_or_404(ACLLink, link=link)
-        acl = acl_link.acl
-        logger.info(f"Found ACL link for user {acl.user.username} on server {acl.server.name}")
+        user = get_object_or_404(User, hash=user_hash)
+        logger.info(f"Found user {user.username} for Xray subscription generation")
     except Http404:
-        logger.warning(f"ACL link not found: {link}")
+        logger.warning(f"User not found for hash: {user_hash}")
         AccessLog.objects.create(
             user=None, 
             server="Unknown", 
-            acl_link_id=link,
+            acl_link_id=user_hash,
             action="Failed",
-            data=f"ACL not found for link: {link}"
+            data=f"User not found for hash: {user_hash}"
         )
         return HttpResponse("Not found", status=404)
 
+    # Check if this is a JSON request for web display
+    if request.GET.get('format') == 'json':
+        return xray_subscription_json(request, user, user_hash)
+
     try:
-        # Get all servers this user has access to
-        user_acls = acl.user.acl_set.all()
+        # Check if specific group is requested
+        group_filter = request.GET.get('group')
+        
+        # Get subscription groups for the user
+        user_subscriptions = UserSubscription.objects.filter(
+            user=user, 
+            active=True,
+            subscription_group__is_active=True
+        ).select_related('subscription_group').prefetch_related('subscription_group__inbounds')
+        
+        # Filter by specific group if requested
+        if group_filter:
+            user_subscriptions = user_subscriptions.filter(subscription_group__name=group_filter)
+            logger.info(f"Filtering subscription for group: {group_filter}")
+        
         subscription_configs = []
         
-        for user_acl in user_acls:
-            server = user_acl.server.get_real_instance()
+        for subscription in user_subscriptions:
+            group = subscription.subscription_group
+            logger.info(f"Processing subscription group {group.name} for user {user.username}")
             
-            # Handle XrayInboundServer (individual inbounds)
-            if isinstance(server, XrayInboundServer):
-                if server.xray_inbound:
-                    config = server.get_user(acl.user, raw=True)
-                    if config and 'connection_string' in config:
-                        subscription_configs.append(config['connection_string'])
-                        logger.info(f"Added XrayInboundServer config for {server.name}")
-            
-            # Handle XrayCoreServer (parent server with multiple inbounds)
-            elif isinstance(server, XrayCoreServer):
+            # Get all inbounds from this group
+            for inbound in group.inbounds.all():
                 try:
-                    # Get all inbounds for this server that have this user
-                    for inbound in server.inbounds.filter(enabled=True):
-                        # Check if user has a client in this inbound
-                        client = inbound.clients.filter(user=acl.user).first()
-                        if client:
-                            connection_string = server._generate_connection_string(client)
-                            if connection_string:
-                                subscription_configs.append(connection_string)
-                                logger.info(f"Added inbound {inbound.tag} config for user {acl.user.username}")
+                    # Generate connection string based on protocol
+                    connection_string = generate_xray_connection_string(user, inbound)
+                    
+                    if connection_string:
+                        subscription_configs.append(connection_string)
+                        logger.info(f"Added {inbound.protocol} config for inbound {inbound.name}")
+                        
                 except Exception as e:
-                    logger.warning(f"Failed to get configs from XrayCoreServer {server.name}: {e}")
+                    logger.warning(f"Failed to generate config for inbound {inbound.name}: {e}")
+                    continue
         
         if not subscription_configs:
-            logger.warning(f"No Xray configurations found for user {acl.user.username}")
+            group_msg = f" for group '{group_filter}'" if group_filter else ""
+            logger.warning(f"No Xray configurations found for user {user.username}{group_msg}")
             AccessLog.objects.create(
-                user=acl.user.username, 
-                server="Multiple", 
-                acl_link_id=acl_link.link,
+                user=user.username, 
+                server="Xray-Subscription", 
+                acl_link_id=user_hash,
                 action="Failed",
-                data="No Xray configurations available"
+                data=f"No Xray configurations available{group_msg}"
             )
-            return HttpResponse("No configurations available", status=404)
+            return HttpResponse(f"No configurations available{group_msg}", status=404)
         
         # Join all configs with newlines and encode in base64 for subscription format
         subscription_content = '\n'.join(subscription_configs)
-        logger.info(f"Raw subscription content for {acl.user.username}:\n{subscription_content}")
+        logger.info(f"Raw subscription content for {user.username}: {len(subscription_configs)} configs")
         
         subscription_b64 = base64.b64encode(subscription_content.encode('utf-8')).decode('utf-8')
         logger.info(f"Base64 subscription length: {len(subscription_b64)}")
         
-        # Update last access time
-        acl_link.last_access_time = timezone.now()
-        acl_link.save(update_fields=['last_access_time'])
-        
         # Create access log
+        group_msg = f" for group '{group_filter}'" if group_filter else ""
         AccessLog.objects.create(
-            user=acl.user.username, 
+            user=user.username, 
             server="Xray-Subscription", 
-            acl_link_id=acl_link.link,
+            acl_link_id=user_hash,
             action="Success", 
-            data=f"Generated subscription with {len(subscription_configs)} configs. Content: {subscription_content[:200]}..."
+            data=f"Generated subscription with {len(subscription_configs)} configs from {user_subscriptions.count()} groups{group_msg}"
         )
         
-        logger.info(f"Generated Xray subscription for {acl.user.username} with {len(subscription_configs)} configs")
+        logger.info(f"Generated Xray subscription for {user.username} with {len(subscription_configs)} configs{group_msg}")
         
         # Return with proper headers for subscription
         response = HttpResponse(subscription_b64, content_type="text/plain; charset=utf-8")
-        response['Content-Disposition'] = 'attachment; filename="xray_subscription.txt"'
+        response['Content-Disposition'] = f'attachment; filename="{user.username}_xray_subscription.txt"'
         response['Cache-Control'] = 'no-cache'
         return response
         
     except Exception as e:
-        logger.error(f"Failed to generate Xray subscription for {acl.user.username}: {e}")
+        logger.error(f"Failed to generate Xray subscription for {user.username}: {e}")
         AccessLog.objects.create(
-            user=acl.user.username, 
+            user=user.username, 
             server="Xray-Subscription", 
-            acl_link_id=acl_link.link,
+            acl_link_id=user_hash,
             action="Failed",
             data=f"Failed to generate subscription: {e}"
         )
         return HttpResponse(f"Error generating subscription: {e}", status=500)
+
+
+def xray_subscription_json(request, user, user_hash):
+    """Return Xray subscription in JSON format for web display"""
+    from .models_xray import UserSubscription
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Get all active subscription groups for the user
+        user_subscriptions = UserSubscription.objects.filter(
+            user=user, 
+            active=True,
+            subscription_group__is_active=True
+        ).select_related('subscription_group').prefetch_related('subscription_group__inbounds')
+        
+        groups_data = {}
+        
+        for subscription in user_subscriptions:
+            group = subscription.subscription_group
+            group_configs = []
+            
+            # Get all inbounds from this group
+            for inbound in group.inbounds.all():
+                try:
+                    # Generate connection string
+                    connection_string = generate_xray_connection_string(user, inbound)
+                    
+                    if connection_string:
+                        group_configs.append({
+                            'name': inbound.name,
+                            'protocol': inbound.protocol.upper(),
+                            'port': inbound.port,
+                            'network': inbound.network,
+                            'security': inbound.security,
+                            'domain': inbound.domain,
+                            'connection_string': connection_string
+                        })
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to generate config for inbound {inbound.name}: {e}")
+                    continue
+            
+            if group_configs:
+                groups_data[group.name] = {
+                    'group_name': group.name,
+                    'description': group.description,
+                    'configs': group_configs
+                }
+        
+        return JsonResponse(groups_data)
+        
+    except Exception as e:
+        logger.error(f"Failed to generate Xray JSON for {user.username}: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def generate_xray_connection_string(user, inbound):
+    """Generate Xray connection string for user and inbound"""
+    import uuid
+    import base64
+    import json
+    from urllib.parse import quote
+    
+    try:
+        # Generate user UUID based on user ID and inbound
+        user_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{user.username}-{inbound.name}"))
+        
+        # Get host (domain or EXTERNAL_ADDRESS)
+        host = inbound.domain if inbound.domain else EXTERNAL_ADDRESS
+        
+        if inbound.protocol == 'vless':
+            # VLESS URL format: vless://uuid@host:port?params#name
+            params = []
+            
+            if inbound.network != 'tcp':
+                params.append(f"type={inbound.network}")
+            
+            if inbound.security != 'none':
+                params.append(f"security={inbound.security}")
+                if inbound.security == 'tls' and inbound.domain:
+                    params.append(f"sni={inbound.domain}")
+            
+            if inbound.network == 'ws':
+                params.append(f"path=/{inbound.name}")
+            elif inbound.network == 'grpc':
+                params.append(f"serviceName={inbound.name}")
+            
+            param_string = '&'.join(params)
+            query_part = f"?{param_string}" if param_string else ""
+            
+            connection_string = f"vless://{user_uuid}@{host}:{inbound.port}{query_part}#{quote(inbound.name)}"
+            
+        elif inbound.protocol == 'vmess':
+            # VMess JSON format encoded in base64
+            vmess_config = {
+                "v": "2",
+                "ps": inbound.name,
+                "add": host,
+                "port": str(inbound.port),
+                "id": user_uuid,
+                "aid": "0",
+                "scy": "auto",
+                "net": inbound.network,
+                "type": "none",
+                "host": inbound.domain if inbound.domain else "",
+                "path": f"/{inbound.name}" if inbound.network == 'ws' else "",
+                "tls": inbound.security if inbound.security != 'none' else ""
+            }
+            
+            vmess_json = json.dumps(vmess_config)
+            vmess_b64 = base64.b64encode(vmess_json.encode()).decode()
+            connection_string = f"vmess://{vmess_b64}"
+            
+        elif inbound.protocol == 'trojan':
+            # Trojan URL format: trojan://password@host:port?params#name
+            # Use user UUID as password
+            params = []
+            
+            if inbound.security != 'none' and inbound.domain:
+                params.append(f"sni={inbound.domain}")
+            
+            if inbound.network != 'tcp':
+                params.append(f"type={inbound.network}")
+                if inbound.network == 'ws':
+                    params.append(f"path=/{inbound.name}")
+                elif inbound.network == 'grpc':
+                    params.append(f"serviceName={inbound.name}")
+            
+            param_string = '&'.join(params)
+            query_part = f"?{param_string}" if param_string else ""
+            
+            connection_string = f"trojan://{user_uuid}@{host}:{inbound.port}{query_part}#{quote(inbound.name)}"
+            
+        else:
+            # Fallback for unknown protocols
+            connection_string = f"{inbound.protocol}://{user_uuid}@{host}:{inbound.port}#{quote(inbound.name)}"
+        
+        return connection_string
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to generate connection string for {inbound.name}: {e}")
+        return None
 

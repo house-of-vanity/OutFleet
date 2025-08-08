@@ -7,6 +7,7 @@ class Server(PolymorphicModel):
         ('Outline', 'Outline'),
         ('Wireguard', 'Wireguard'),
         ('xray_core', 'Xray Core'),
+        ('xray_v2', 'Xray Server v2'),
     )
 
     name = models.CharField(max_length=100, help_text="Server name")

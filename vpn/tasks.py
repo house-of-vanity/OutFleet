@@ -54,7 +54,7 @@ def cleanup_task_logs():
 def sync_xray_inbounds(self, server_id):
     """Stage 1: Sync inbounds for Xray server."""
     from vpn.server_plugins import Server
-    from vpn.server_plugins.xray_core import XrayCoreServer
+    from vpn.server_plugins.xray_v2 import XrayServerV2
     
     start_time = time.time()
     task_id = self.request.id
@@ -63,7 +63,7 @@ def sync_xray_inbounds(self, server_id):
     try:
         server = Server.objects.get(id=server_id)
         
-        if not isinstance(server.get_real_instance(), XrayCoreServer):
+        if not isinstance(server.get_real_instance(), XrayServerV2):
             error_message = f"Server {server.name} is not an Xray server"
             logger.error(error_message)
             create_task_log(task_id, "sync_xray_inbounds", "Wrong server type", 'FAILURE', server=server, message=error_message, execution_time=time.time() - start_time)
@@ -105,7 +105,7 @@ def sync_xray_inbounds(self, server_id):
 def sync_xray_users(self, server_id):
     """Stage 2: Sync users for Xray server."""
     from vpn.server_plugins import Server
-    from vpn.server_plugins.xray_core import XrayCoreServer
+    from vpn.server_plugins.xray_v2 import XrayServerV2
     
     start_time = time.time()
     task_id = self.request.id
@@ -114,7 +114,7 @@ def sync_xray_users(self, server_id):
     try:
         server = Server.objects.get(id=server_id)
         
-        if not isinstance(server.get_real_instance(), XrayCoreServer):
+        if not isinstance(server.get_real_instance(), XrayServerV2):
             error_message = f"Server {server.name} is not an Xray server"
             logger.error(error_message)
             create_task_log(task_id, "sync_xray_users", "Wrong server type", 'FAILURE', server=server, message=error_message, execution_time=time.time() - start_time)
@@ -247,45 +247,13 @@ def sync_users(self, server_id):
         
         create_task_log(task_id, "sync_all_users_on_server", f"Found {user_count} users to sync", 'STARTED', server=server, message=f"Users: {user_list}")
         
-        # For Xray servers, use separate staged sync tasks
-        from vpn.server_plugins.xray_core import XrayCoreServer
-        if isinstance(server.get_real_instance(), XrayCoreServer):
-            logger.info(f"Performing staged sync for Xray server {server.name}")
-            try:
-                # Stage 1: Sync inbounds first
-                logger.info(f"Stage 1: Syncing inbounds for {server.name}")
-                inbound_task = sync_xray_inbounds.apply_async(args=[server.id])
-                inbound_result = inbound_task.get()  # Wait for completion
-                logger.info(f"Inbound sync result for {server.name}: {inbound_result}")
-                
-                if "error" in inbound_result:
-                    logger.error(f"Inbound sync failed, skipping user sync: {inbound_result['error']}")
-                    sync_result = inbound_result
-                else:
-                    # Stage 2: Sync users after inbounds are ready  
-                    logger.info(f"Stage 2: Syncing users for {server.name}")
-                    user_task = sync_xray_users.apply_async(args=[server.id])
-                    user_result = user_task.get()  # Wait for completion
-                    logger.info(f"User sync result for {server.name}: {user_result}")
-                    
-                    # Combine results
-                    if "error" in user_result:
-                        sync_result = {
-                            "status": "Staged sync partially failed",
-                            "inbounds": inbound_result.get("inbounds", []),
-                            "users": f"User sync failed: {user_result['error']}"
-                        }
-                    else:
-                        sync_result = {
-                            "status": "Staged sync completed successfully",
-                            "inbounds": inbound_result.get("inbounds", []),
-                            "users": f"Added {user_result.get('users_added', 0)} users across all inbounds"
-                        }
-                
-            except Exception as e:
-                logger.error(f"Staged sync failed for Xray server {server.name}: {e}")
-                # Fallback to regular user sync only
-                sync_result = server.sync_users()
+        # For Xray servers, use the new sync methods
+        from vpn.server_plugins.xray_v2 import XrayServerV2
+        if isinstance(server.get_real_instance(), XrayServerV2):
+            logger.info(f"Using XrayServerV2 sync for server {server.name}")
+            # Just call the sync method which schedules tasks asynchronously
+            sync_result = server.sync_users()
+            logger.info(f"Scheduled async sync for Xray server {server.name}")
         else:
             # For non-Xray servers, just sync users
             sync_result = server.sync_users()
@@ -567,3 +535,426 @@ def sync_user(self, user_id, server_id):
         raise TaskFailedException(message=f"Errors during task: {errors}")
     
     return result
+
+
+@shared_task(name="sync_user_xray_access", bind=True)
+def sync_user_xray_access(self, user_id, server_id):
+    """
+    Sync user's Xray access based on subscription groups.
+    Creates inbounds on server if needed and adds user to them.
+    """
+    from .models import User, Server
+    from .models_xray import SubscriptionGroup, Inbound, XrayConfiguration
+    from vpn.xray_api_v2.client import XrayClient
+    
+    start_time = time.time()
+    task_id = self.request.id
+    
+    try:
+        user = User.objects.get(id=user_id)
+        server = Server.objects.get(id=server_id)
+        
+        # Get Xray configuration
+        xray_config = XrayConfiguration.objects.first()
+        if not xray_config:
+            raise ValueError("Xray configuration not found. Please configure in admin.")
+        
+        create_task_log(
+            task_id, "sync_user_xray_access", 
+            f"Starting Xray sync for {user.username} on {server.name}", 
+            'STARTED', server=server, user=user
+        )
+        
+        # Get user's active subscription groups
+        user_groups = SubscriptionGroup.objects.filter(
+            usersubscription__user=user,
+            usersubscription__active=True,
+            is_active=True
+        ).prefetch_related('inbounds')
+        
+        if not user_groups.exists():
+            logger.info(f"User {user.username} has no active subscriptions")
+            return {"status": "No active subscriptions"}
+        
+        # Collect all inbounds from user's groups
+        user_inbounds = Inbound.objects.filter(
+            subscriptiongroup__in=user_groups
+        ).distinct()
+        
+        logger.info(f"User {user.username} has access to {user_inbounds.count()} inbounds")
+        
+        # Connect to Xray server
+        client = XrayClient(xray_config.grpc_address)
+        
+        # Get existing inbounds on server
+        try:
+            existing_result = client.execute_command('lsi')  # List inbounds
+            existing_inbounds = existing_result.get('inbounds', []) if existing_result else []
+            existing_tags = {ib.get('tag') for ib in existing_inbounds if ib.get('tag')}
+        except Exception as e:
+            logger.warning(f"Failed to list existing inbounds: {e}")
+            existing_tags = set()
+        
+        results = {
+            'inbounds_created': [],
+            'users_added': [],
+            'errors': []
+        }
+        
+        # Process each inbound
+        for inbound in user_inbounds:
+            try:
+                # Check if inbound exists on server
+                if inbound.name not in existing_tags:
+                    logger.info(f"Creating inbound {inbound.name} on server")
+                    
+                    # Build inbound configuration
+                    if not inbound.full_config:
+                        inbound.build_config()
+                        inbound.save()
+                    
+                    # Add inbound to server
+                    client.execute_command('adi', json_files=[inbound.full_config])
+                    results['inbounds_created'].append(inbound.name)
+                
+                # Add user to inbound
+                logger.info(f"Adding user {user.username} to inbound {inbound.name}")
+                
+                # Create user config based on protocol
+                import uuid
+                
+                # Generate user UUID based on username and inbound
+                user_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{user.username}-{inbound.name}"))
+                
+                if inbound.protocol == 'vless':
+                    user_config = {
+                        "email": f"{user.username}@{server.name}",
+                        "id": user_uuid,
+                        "level": 0
+                    }
+                elif inbound.protocol == 'vmess':
+                    user_config = {
+                        "email": f"{user.username}@{server.name}",
+                        "id": user_uuid,
+                        "level": 0,
+                        "alterId": 0
+                    }
+                elif inbound.protocol == 'trojan':
+                    user_config = {
+                        "email": f"{user.username}@{server.name}",
+                        "password": user_uuid,
+                        "level": 0
+                    }
+                else:
+                    logger.warning(f"Unsupported protocol: {inbound.protocol}")
+                    continue
+                
+                # Add user to inbound
+                add_request = {
+                    "inboundTag": inbound.name,
+                    "user": user_config
+                }
+                
+                client.execute_command('adu', json_files=[add_request])
+                results['users_added'].append(f"{user.username} -> {inbound.name}")
+                
+            except Exception as e:
+                error_msg = f"Error processing inbound {inbound.name}: {e}"
+                logger.error(error_msg)
+                results['errors'].append(error_msg)
+        
+        # Log results
+        success_msg = (
+            f"Xray sync completed for {user.username}: "
+            f"Created {len(results['inbounds_created'])} inbounds, "
+            f"Added user to {len(results['users_added'])} inbounds"
+        )
+        
+        create_task_log(
+            task_id, "sync_user_xray_access", 
+            "Xray sync completed", 'SUCCESS', 
+            server=server, user=user, 
+            message=success_msg,
+            execution_time=time.time() - start_time
+        )
+        
+        return results
+        
+    except Exception as e:
+        error_msg = f"Error in Xray sync: {e}"
+        logger.error(error_msg, exc_info=True)
+        
+        create_task_log(
+            task_id, "sync_user_xray_access", 
+            "Xray sync failed", 'FAILURE', 
+            message=error_msg,
+            execution_time=time.time() - start_time
+        )
+        
+        raise
+
+
+@shared_task(name="sync_server_users", bind=True)
+def sync_server_users(self, server_id):
+    """
+    Sync all users for a specific Xray server.
+    This is called by XrayServerV2.sync_users()
+    """
+    from vpn.server_plugins import Server
+    from vpn.models import User, ACL
+    from vpn.models_xray import UserSubscription
+    
+    try:
+        server = Server.objects.get(id=server_id)
+        real_server = server.get_real_instance()
+        
+        # Get all users who should have access to this server
+        # For Xray v2, users access through subscription groups
+        users_to_sync = User.objects.filter(
+            xray_subscriptions__active=True,
+            xray_subscriptions__subscription_group__is_active=True
+        ).distinct()
+        
+        logger.info(f"Syncing {users_to_sync.count()} users for Xray server {server.name}")
+        
+        added_count = 0
+        for user in users_to_sync:
+            try:
+                if real_server.add_user(user):
+                    added_count += 1
+            except Exception as e:
+                logger.error(f"Failed to sync user {user.username} on server {server.name}: {e}")
+        
+        logger.info(f"Successfully synced {added_count} users for server {server.name}")
+        return {"users_added": added_count, "total_users": users_to_sync.count()}
+        
+    except Exception as e:
+        logger.error(f"Error syncing users for server {server_id}: {e}")
+        raise
+
+
+@shared_task(name="sync_server_inbounds", bind=True)
+def sync_server_inbounds(self, server_id):
+    """
+    Sync all inbounds for a specific Xray server.
+    This is called by XrayServerV2.sync_inbounds()
+    """
+    from vpn.server_plugins import Server
+    from vpn.models_xray import SubscriptionGroup, ServerInbound
+    
+    try:
+        server = Server.objects.get(id=server_id)
+        real_server = server.get_real_instance()
+        
+        # Get all subscription groups
+        groups = SubscriptionGroup.objects.filter(is_active=True).prefetch_related('inbounds')
+        
+        deployed_count = 0
+        for group in groups:
+            for inbound in group.inbounds.all():
+                try:
+                    if real_server.deploy_inbound(inbound):
+                        deployed_count += 1
+                        logger.info(f"Deployed inbound {inbound.name} on server {server.name}")
+                except Exception as e:
+                    logger.error(f"Failed to deploy inbound {inbound.name} on server {server.name}: {e}")
+        
+        logger.info(f"Successfully deployed {deployed_count} inbounds on server {server.name}")
+        return {"inbounds_deployed": deployed_count}
+        
+    except Exception as e:
+        logger.error(f"Error syncing inbounds for server {server_id}: {e}")
+        raise
+
+
+@shared_task(name="generate_certificate_task", bind=True)
+def generate_certificate_task(self, certificate_id):
+    """
+    Generate Let's Encrypt certificate for a domain
+    """
+    from .models_xray import Certificate
+    from vpn.letsencrypt.letsencrypt_dns import get_certificate_for_domain
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    start_time = time.time()
+    task_id = self.request.id
+    
+    try:
+        cert = Certificate.objects.get(id=certificate_id)
+        
+        create_task_log(
+            task_id, "generate_certificate_task", 
+            f"Starting certificate generation for {cert.domain}", 
+            'STARTED'
+        )
+        
+        # Check if we have credentials
+        if not cert.credentials:
+            raise ValueError(f"No credentials configured for {cert.domain}")
+        
+        # Get Cloudflare token from credentials
+        cf_token = cert.credentials.get_credential('api_token')
+        if not cf_token:
+            raise ValueError(f"No Cloudflare API token found for {cert.domain}")
+        
+        logger.info(f"Generating certificate for {cert.domain} using email {cert.acme_email}")
+        
+        # Request certificate using the library function
+        cert_pem, key_pem = get_certificate_for_domain(
+            domain=cert.domain,
+            email=cert.acme_email,
+            cloudflare_token=cf_token,
+            staging=False  # Production certificate
+        )
+        
+        # Update certificate object
+        cert.certificate_pem = cert_pem
+        cert.private_key_pem = key_pem
+        cert.expires_at = timezone.now() + timedelta(days=90)  # Let's Encrypt certs are valid for 90 days
+        cert.last_renewed = timezone.now()
+        cert.save()
+        
+        success_msg = f"Certificate for {cert.domain} generated successfully"
+        logger.info(success_msg)
+        
+        create_task_log(
+            task_id, "generate_certificate_task", 
+            "Certificate generated", 'SUCCESS', 
+            message=success_msg,
+            execution_time=time.time() - start_time
+        )
+        
+        return {"status": "success", "domain": cert.domain}
+        
+    except Certificate.DoesNotExist:
+        error_msg = f"Certificate with id {certificate_id} not found"
+        logger.error(error_msg)
+        
+        create_task_log(
+            task_id, "generate_certificate_task", 
+            "Certificate not found", 'FAILURE', 
+            message=error_msg,
+            execution_time=time.time() - start_time
+        )
+        raise
+        
+    except Exception as e:
+        error_msg = f"Failed to generate certificate: {e}"
+        logger.error(error_msg, exc_info=True)
+        
+        create_task_log(
+            task_id, "generate_certificate_task", 
+            "Certificate generation failed", 'FAILURE', 
+            message=error_msg,
+            execution_time=time.time() - start_time
+        )
+        raise
+
+
+@shared_task(name="renew_certificates", bind=True)
+def renew_certificates(self):
+    """
+    Check and renew certificates that are about to expire.
+    """
+    from .models_xray import Certificate, XrayConfiguration
+    from .letsencrypt import get_certificate_for_domain
+    from datetime import datetime
+    
+    start_time = time.time()
+    task_id = self.request.id
+    
+    create_task_log(task_id, "renew_certificates", "Starting certificate renewal check", 'STARTED')
+    
+    try:
+        # Get certificates that need renewal
+        certs_to_renew = Certificate.objects.filter(
+            auto_renew=True,
+            cert_type='letsencrypt'
+        )
+        
+        renewed_count = 0
+        errors = []
+        
+        for cert in certs_to_renew:
+            if not cert.needs_renewal:
+                continue
+                
+            try:
+                logger.info(f"Renewing certificate for {cert.domain}")
+                
+                # Check if we have credentials
+                if not cert.credentials:
+                    logger.warning(f"No credentials configured for {cert.domain}")
+                    continue
+                
+                # Get Cloudflare token from credentials
+                cf_token = cert.credentials.get_credential('api_token')
+                cf_email = cert.credentials.get_credential('email', 'admin@example.com')
+                
+                if not cf_token:
+                    logger.error(f"No Cloudflare API token found for {cert.domain}")
+                    continue
+                
+                # Renew certificate
+                cert_pem, key_pem = get_certificate_for_domain(
+                    domain=cert.domain,
+                    email=cf_email,
+                    cloudflare_token=cf_token,
+                    staging=False  # Production certificate
+                )
+                
+                # Update certificate
+                cert.certificate_pem = cert_pem
+                cert.private_key_pem = key_pem
+                cert.last_renewed = datetime.now()
+                cert.expires_at = datetime.now() + timedelta(days=90)  # Let's Encrypt certs are valid for 90 days
+                cert.save()
+                
+                renewed_count += 1
+                logger.info(f"Successfully renewed certificate for {cert.domain}")
+                
+            except Exception as e:
+                error_msg = f"Failed to renew certificate for {cert.domain}: {e}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+        
+        # Summary
+        if renewed_count > 0 or errors:
+            summary = f"Renewed {renewed_count} certificates"
+            if errors:
+                summary += f", {len(errors)} errors"
+            
+            create_task_log(
+                task_id, "renew_certificates", 
+                "Certificate renewal completed", 
+                'SUCCESS' if not errors else 'PARTIAL', 
+                message=summary,
+                execution_time=time.time() - start_time
+            )
+        else:
+            create_task_log(
+                task_id, "renew_certificates", 
+                "No certificates need renewal", 
+                'SUCCESS',
+                execution_time=time.time() - start_time
+            )
+        
+        return {
+            'renewed': renewed_count,
+            'errors': errors
+        }
+        
+    except Exception as e:
+        error_msg = f"Certificate renewal task failed: {e}"
+        logger.error(error_msg, exc_info=True)
+        
+        create_task_log(
+            task_id, "renew_certificates", 
+            "Certificate renewal failed", 
+            'FAILURE', 
+            message=error_msg,
+            execution_time=time.time() - start_time
+        )
+        
+        raise

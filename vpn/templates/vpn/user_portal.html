@@ -450,12 +450,12 @@
             <div class="subtitle">Welcome back, <strong>{{ user.username }}</strong></div>
             <div class="stats">
                 <div class="stat">
-                    <span class="stat-number">{{ total_servers }}</span>
-                    <span class="stat-label">Available Servers</span>
+                    <span class="stat-number">{{ total_groups }}</span>
+                    <span class="stat-label">Subscription Groups</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-number">{{ total_links }}</span>
-                    <span class="stat-label">Active Links</span>
+                    <span class="stat-number">{{ total_inbounds }}</span>
+                    <span class="stat-label">Available Inbounds</span>
                 </div>
                 <div class="stat">
                     <span class="stat-number">{{ total_connections }}</span>
@@ -475,85 +475,134 @@
             </div>
             
             <!-- Xray Subscription Link -->
-            {% if has_xray_servers and user_links %}
+            {% if has_xray_access %}
             <div class="xray-subscription" style="margin-top: 20px; padding: 15px; background: rgba(148, 163, 184, 0.1); border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 12px;">
                 <h3 style="color: #94a3b8; margin-bottom: 10px; font-size: 1.1rem;">🚀 Xray Universal Subscription</h3>
                 <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 10px;">
                     One link for all your Xray protocols (VLESS, VMess, Trojan)
                 </p>
                 <div class="link-url" style="margin-bottom: 0;">
-                    {% url 'xray_subscription' user_links.0.link as xray_url %}{{ force_scheme|default:request.scheme }}://{{ request.get_host }}{{ xray_url }}
-                    <button class="copy-btn" onclick="copyToClipboard('{{ force_scheme|default:request.scheme }}://{{ request.get_host }}{{ xray_url }}')">Copy</button>
+                    {{ force_scheme|default:request.scheme }}://{{ request.get_host }}/xray/{{ user.hash }}
+                    <button class="copy-btn" onclick="copyToClipboard('{{ force_scheme|default:request.scheme }}://{{ request.get_host }}/xray/{{ user.hash }}')">Copy</button>
                 </div>
             </div>
             {% endif %}
         </div>
 
-        {% if servers_data %}
+        {% if groups_data %}
             <div class="servers-grid">
-                {% for server_name, server_data in servers_data.items %}
+                {% for group_name, group_data in groups_data.items %}
                 <div class="server-card">
                     <div class="server-header">
                         <div class="server-info">
-                            <div class="server-name">{{ server_name }}</div>
+                            <div class="server-name">{{ group_name }}</div>
                             <div class="server-stats">
-                                <span class="connection-count">📊 {{ server_data.total_connections }} uses</span>
+                                <span class="connection-count">📊 {{ group_data.total_connections }} uses</span>
+                                <span class="connection-count">🔗 {{ group_data.inbounds|length }} inbound(s)</span>
                             </div>
                         </div>
-                        <div class="server-type">{{ server_data.server_type }}</div>
+                        <div class="server-type">Xray Group</div>
                     </div>
 
                     <div class="server-status">
-                        {% if server_data.accessible %}
-                            <div class="status-indicator status-online">
-                                <div class="status-dot"></div>
-                                Online & Ready
-                            </div>
-                        {% else %}
-                            <div class="status-indicator status-offline">
-                                <div class="status-dot"></div>
-                                Connection Issues
-                            </div>
-                        {% endif %}
+                        <div class="status-indicator status-online">
+                            <div class="status-dot"></div>
+                            Active Subscription
+                        </div>
                     </div>
 
+                    <!-- Individual Subscription Link for this Group -->
                     <div class="links-container">
-                        {% for link_data in server_data.links %}
                         <div class="link-item">
                             <div class="link-header">
                                 <div class="link-info">
-                                    <div class="link-comment">📱 {{ link_data.comment }}</div>
+                                    <div class="link-comment">🚀 {{ group_name }} Subscription</div>
                                     <div class="link-stats">
-                                        <span class="usage-count">✨ {{ link_data.connections }} uses</span>
-                                        <span class="recent-count">📅 {{ link_data.recent_connections }} last 30 days</span>
-                                        <span class="last-used">🕒 {{ link_data.last_access_display }}</span>
+                                        {% if group_data.inbounds|length > 1 %}
+                                            <span class="usage-count">✨ {{ group_data.inbounds|length }} protocols included</span>
+                                        {% else %}
+                                            <span class="usage-count">✨ {{ group_data.inbounds.0.protocol|upper }} protocol</span>
+                                        {% endif %}
+                                        <span class="recent-count">📅 
+                                        {% for inbound_data in group_data.inbounds %}
+                                            {{ inbound_data.protocol|upper }}{% if not forloop.last %}, {% endif %}
+                                        {% endfor %}
+                                        </span>
+                                        <span class="last-used">🔗 {{ group_data.inbounds|length }} inbound(s)</span>
                                     </div>
                                 </div>
-                                <div class="usage-chart" data-usage="{{ link_data.daily_usage|join:',' }}" data-max="{{ link_data.max_daily }}">
-                                    <div class="chart-title">30-day activity</div>
-                                    <div class="chart-bars">
-                                        {% for day_usage in link_data.daily_usage %}
-                                        <div class="chart-bar" data-height="{{ day_usage }}" data-max="{{ link_data.max_daily }}"></div>
+                                <div class="usage-chart">
+                                    <div class="chart-title">Protocols</div>
+                                    <div style="display: flex; flex-direction: column; gap: 5px; align-items: center;">
+                                        {% for inbound_data in group_data.inbounds %}
+                                        <div style="background: rgba(74, 222, 128, 0.2); padding: 3px 8px; border-radius: 8px; font-size: 0.7rem; color: #4ade80;">
+                                            {{ inbound_data.protocol|upper }}:{{ inbound_data.port }}
+                                        </div>
                                         {% endfor %}
                                     </div>
                                 </div>
                             </div>
                             
                             <div class="link-url">
-                                {{ link_data.url }}
-                                <button class="copy-btn" onclick="copyToClipboard('{{ link_data.url }}')">Copy</button>
+                                {{ force_scheme|default:request.scheme }}://{{ request.get_host }}/xray/{{ user.hash }}?group={{ group_name }}
+                                <button class="copy-btn" onclick="copyToClipboard('{{ force_scheme|default:request.scheme }}://{{ request.get_host }}/xray/{{ user.hash }}?group={{ group_name }}')">Copy</button>
                             </div>
                         </div>
-                        {% endfor %}
+
                     </div>
                 </div>
                 {% endfor %}
             </div>
         {% else %}
             <div class="no-servers">
-                <h3>No VPN Access Available</h3>
-                <p>You don't have access to any VPN servers yet. Please contact your administrator.</p>
+                <h3>No Xray Subscriptions Available</h3>
+                <p>You don't have access to any subscription groups yet. Please contact your administrator.</p>
             </div>
+        {% endif %}
+
+        <!-- Show old ACL links for backwards compatibility -->
+        {% if has_old_links %}
+        <h2 style="color: #9ca3af; margin: 40px 0 20px 0; text-align: center;">Legacy Shadowsocks Access</h2>
+        <div class="servers-grid">
+            {% for acl_link in acl_links %}
+            <div class="server-card" style="opacity: 0.7;">
+                <div class="server-header">
+                    <div class="server-info">
+                        <div class="server-name">{{ acl_link.acl.server.name }}</div>
+                        <div class="server-stats">
+                            <span class="connection-count">📊 Legacy</span>
+                        </div>
+                    </div>
+                    <div class="server-type">Shadowsocks</div>
+                </div>
+
+                <div class="server-status">
+                    <div class="status-indicator status-online">
+                        <div class="status-dot"></div>
+                        Legacy Access
+                    </div>
+                </div>
+
+                <div class="links-container">
+                    <div class="link-item">
+                        <div class="link-header">
+                            <div class="link-info">
+                                <div class="link-comment">📱 {{ acl_link.comment }}</div>
+                                <div class="link-stats">
+                                    <span class="last-used">🕒 {{ acl_link.last_access_time|default:"Never used" }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="link-url">
+                            {{ external_address }}/ss/{{ acl_link.link }}#{{ acl_link.acl.server.name }}
+                            <button class="copy-btn" onclick="copyToClipboard('{{ external_address }}/ss/{{ acl_link.link }}#{{ acl_link.acl.server.name }}')">Copy</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
         {% endif %}
 
         <div class="footer">

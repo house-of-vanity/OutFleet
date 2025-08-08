@@ -167,3 +167,10 @@ class ACLLink(models.Model):
 
     def __str__(self):
         return self.link
+
+
+# Import new Xray models
+from .models_xray import (
+    XrayConfiguration, Credentials, Certificate,
+    Inbound, SubscriptionGroup, UserSubscription
+)
