@@ -423,43 +423,63 @@ class XrayServerV2(Server):
                 return False
             
             try:
-                # First, get existing inbound to check for other users
-                existing_result = client.execute_command('lsi')
-                existing_inbound = None
+                # Get all users who should have access to this inbound from database
+                from vpn.models_xray import UserSubscription
                 
-                if existing_result and 'inbounds' in existing_result:
-                    for ib in existing_result['inbounds']:
-                        if ib.get('tag') == inbound.name:
-                            existing_inbound = ib
-                            break
+                # Find all users who have subscriptions that include this inbound
+                users_with_access = set()
+                subscriptions = UserSubscription.objects.filter(
+                    active=True,
+                    subscription_group__inbounds=inbound,
+                    subscription_group__is_active=True
+                ).select_related('user')
                 
-                if not existing_inbound:
-                    logger.warning(f"Inbound {inbound.name} not found on server, deploying it first")
-                    # Get or create ServerInbound for certificate access
-                    from vpn.models_xray import ServerInbound
-                    server_inbound_obj, created = ServerInbound.objects.get_or_create(
-                        server=self, inbound=inbound, defaults={'active': True}
-                    )
-                    # Deploy the inbound if it doesn't exist
-                    if not self.deploy_inbound(inbound, server_inbound=server_inbound_obj):
-                        logger.error(f"Failed to deploy inbound {inbound.name}")
-                        return False
-                    # Get the inbound config we just created
-                    existing_inbound = {"settings": {"clients": []}}
+                for subscription in subscriptions:
+                    users_with_access.add(subscription.user)
                 
-                # Get existing users from the inbound
-                existing_users = existing_inbound.get('settings', {}).get('clients', [])
-                logger.info(f"Found {len(existing_users)} existing users in inbound {inbound.name}")
+                logger.info(f"Found {len(users_with_access)} users with database access to inbound {inbound.name}")
                 
-                # Check if user already exists
-                for existing_user in existing_users:
-                    if existing_user.get('email') == f"{user.username}@{self.name}":
-                        logger.info(f"User {user.username} already exists in inbound {inbound.name}")
-                        return True
+                # Build user configs for all users who should have access
+                existing_users = []
+                user_already_exists = False
                 
-                # Add new user to existing users list
-                existing_users.append(user_config)
-                logger.info(f"Creating new inbound with {len(existing_users)} users including {user.username}")
+                for db_user in users_with_access:
+                    # Generate user UUID and config
+                    import uuid
+                    db_user_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{db_user.username}-{inbound.name}"))
+                    
+                    if db_user.username == user.username:
+                        user_already_exists = True
+                    
+                    if inbound.protocol == 'vless':
+                        db_user_config = {
+                            "email": f"{db_user.username}@{self.name}",
+                            "id": db_user_uuid,
+                            "level": 0
+                        }
+                    elif inbound.protocol == 'vmess':
+                        db_user_config = {
+                            "email": f"{db_user.username}@{self.name}",
+                            "id": db_user_uuid,
+                            "level": 0,
+                            "alterId": 0
+                        }
+                    elif inbound.protocol == 'trojan':
+                        db_user_config = {
+                            "email": f"{db_user.username}@{self.name}",
+                            "password": db_user_uuid,
+                            "level": 0
+                        }
+                    else:
+                        continue
+                    
+                    existing_users.append(db_user_config)
+                
+                if user_already_exists:
+                    logger.info(f"User {user.username} already has database access to inbound {inbound.name}")
+                    # Still proceed to ensure inbound is deployed with all users
+                
+                logger.info(f"Creating inbound with {len(existing_users)} users from database including {user.username}")
                 
                 # Remove the old inbound
                 logger.info(f"Removing old inbound {inbound.name}")
@@ -511,14 +531,17 @@ class XrayServerV2(Server):
                     elif inbound.protocol == 'trojan':
                         inbound_config["settings"]["clients"] = existing_users
                 
-                logger.info(f"Deploying updated inbound with users: {[u.get('email') for u in existing_users]}")
+                logger.info(f"Deploying inbound with users: {[u.get('email') for u in existing_users]}")
                 result = client.add_inbound(inbound_config)
                 
                 if result is not None and not (isinstance(result, dict) and 'error' in result):
-                    logger.info(f"Successfully added user {user.username} to inbound {inbound.name} via inbound recreation")
+                    if user_already_exists:
+                        logger.info(f"Successfully ensured user {user.username} exists in inbound {inbound.name}")
+                    else:
+                        logger.info(f"Successfully added user {user.username} to inbound {inbound.name} via inbound recreation")
                     return True
                 else:
-                    logger.error(f"Failed to recreate inbound {inbound.name} with user. Result: {result}")
+                    logger.error(f"Failed to recreate inbound {inbound.name} with users. Result: {result}")
                     return False
                     
             except Exception as cmd_error:
@@ -655,19 +678,34 @@ class XrayServerV2(Server):
                 
                 # Check if inbound exists on server
                 if inbound.name not in existing_inbound_tags:
-                    logger.info(f"Inbound {inbound.name} doesn't exist on server, creating with user")
-                    # Get or create ServerInbound for certificate access
-                    from vpn.models_xray import ServerInbound
+                    logger.info(f"Inbound {inbound.name} doesn't exist on server, creating with all authorized users")
+                    
+                    # Get all users who should have access to this inbound from database
+                    from vpn.models_xray import ServerInbound, UserSubscription
                     server_inbound_obj, created = ServerInbound.objects.get_or_create(
                         server=self, inbound=inbound, defaults={'active': True}
                     )
-                    # Create the inbound with the user directly
-                    if self.deploy_inbound(inbound, users=[user], server_inbound=server_inbound_obj):
-                        logger.info(f"Successfully created inbound {inbound.name} with user {user.username}")
+                    
+                    # Find all users who have subscriptions that include this inbound
+                    users_with_access = set()
+                    subscriptions_for_inbound = UserSubscription.objects.filter(
+                        active=True,
+                        subscription_group__inbounds=inbound,
+                        subscription_group__is_active=True
+                    ).select_related('user')
+                    
+                    for subscription in subscriptions_for_inbound:
+                        users_with_access.add(subscription.user)
+                    
+                    logger.info(f"Creating inbound {inbound.name} with {len(users_with_access)} authorized users")
+                    
+                    # Create the inbound with all authorized users
+                    if self.deploy_inbound(inbound, users=list(users_with_access), server_inbound=server_inbound_obj):
+                        logger.info(f"Successfully created inbound {inbound.name} with {len(users_with_access)} users")
                         added_count += 1
                         existing_inbound_tags.add(inbound.name)
                     else:
-                        logger.error(f"Failed to create inbound {inbound.name} with user")
+                        logger.error(f"Failed to create inbound {inbound.name} with users")
                         continue
                 else:
                     # Inbound exists, add user using recreation approach
