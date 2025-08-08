@@ -162,7 +162,7 @@ class XrayServerV2(Server):
             logger.error(f"Failed to schedule inbound sync for server {self.name}: {e}")
             return {"error": str(e)}
     
-    def deploy_inbound(self, inbound, users=None):
+    def deploy_inbound(self, inbound, users=None, server_inbound=None):
         """Deploy a specific inbound on this server with optional users"""
         try:
             from vpn.xray_api_v2.client import XrayClient
@@ -201,7 +201,7 @@ class XrayServerV2(Server):
                         continue
                     
                     user_configs.append(user_config)
-                    logger.info(f"Added user {user.username} to inbound config")
+                    logger.debug(f"Added user {user.username} to inbound config")
             
             # Build proper inbound configuration based on protocol
             if inbound.full_config:
@@ -213,24 +213,37 @@ class XrayServerV2(Server):
                     if 'settings' not in inbound_config:
                         inbound_config['settings'] = {}
                     inbound_config['settings']['clients'] = user_configs
-                    logger.info(f"Added {len(user_configs)} users to full_config")
+                    logger.debug(f"Added {len(user_configs)} users to full_config")
                 
-                # If inbound has a certificate, update the config to use inline certificates
-                if inbound.certificate and inbound.certificate.certificate_pem:
-                    logger.info(f"Updating full_config with inline certificate for {inbound.certificate.domain}")
+                # Get certificate from ServerInbound or auto-select
+                certificate = None
+                if server_inbound:
+                    certificate = server_inbound.get_certificate()
+                
+                # If certificate found, update the config to use inline certificates
+                if certificate and certificate.certificate_pem:
+                    logger.info(f"Updating full_config with inline certificate for {certificate.domain}")
                     
                     # Convert PEM to lines for Xray format
-                    cert_lines = inbound.certificate.certificate_pem.strip().split('\n')
-                    key_lines = inbound.certificate.private_key_pem.strip().split('\n')
+                    cert_lines = certificate.certificate_pem.strip().split('\n')
+                    key_lines = certificate.private_key_pem.strip().split('\n')
                     
                     # Update streamSettings if it exists
                     if "streamSettings" in inbound_config and "tlsSettings" in inbound_config["streamSettings"]:
+                        # Remove any existing certificate file paths
+                        tls_settings = inbound_config["streamSettings"]["tlsSettings"]
+                        if "certificateFile" in tls_settings:
+                            del tls_settings["certificateFile"]
+                        if "keyFile" in tls_settings:
+                            del tls_settings["keyFile"]
+                        
+                        # Set inline certificates
                         inbound_config["streamSettings"]["tlsSettings"]["certificates"] = [{
                             "certificate": cert_lines,
                             "key": key_lines,
                             "usage": "encipherment"
                         }]
-                        logger.info("Updated existing tlsSettings with inline certificate")
+                        logger.debug("Updated existing tlsSettings with inline certificate and removed file paths")
             else:
                 # Build full config based on protocol
                 inbound_config = {
@@ -281,12 +294,16 @@ class XrayServerV2(Server):
                         "security": "tls"
                     }
                     
-                    # Trojan always requires TLS certificate
-                    if inbound.certificate and inbound.certificate.certificate_pem:
-                        logger.info(f"Using certificate for Trojan inbound on domain {inbound.certificate.domain}")
+                    # Get certificate for Trojan (always required)
+                    certificate = None
+                    if server_inbound:
+                        certificate = server_inbound.get_certificate()
+                    
+                    if certificate and certificate.certificate_pem:
+                        logger.info(f"Using certificate for Trojan inbound on domain {certificate.domain}")
                         # Convert PEM to lines for Xray format
-                        cert_lines = inbound.certificate.certificate_pem.strip().split('\n')
-                        key_lines = inbound.certificate.private_key_pem.strip().split('\n')
+                        cert_lines = certificate.certificate_pem.strip().split('\n')
+                        key_lines = certificate.private_key_pem.strip().split('\n')
                         
                         inbound_config["streamSettings"]["tlsSettings"] = {
                             "certificates": [{
@@ -307,12 +324,16 @@ class XrayServerV2(Server):
                         inbound_config["streamSettings"] = {}
                     inbound_config["streamSettings"]["security"] = "tls"
                     
-                    # Check if inbound has a certificate
-                    if inbound.certificate and inbound.certificate.certificate_pem:
-                        logger.info(f"Using certificate for domain {inbound.certificate.domain}")
+                    # Get certificate for TLS
+                    certificate = None
+                    if server_inbound:
+                        certificate = server_inbound.get_certificate()
+                    
+                    if certificate and certificate.certificate_pem:
+                        logger.info(f"Using certificate for domain {certificate.domain}")
                         # Convert PEM to lines for Xray format
-                        cert_lines = inbound.certificate.certificate_pem.strip().split('\n')
-                        key_lines = inbound.certificate.private_key_pem.strip().split('\n')
+                        cert_lines = certificate.certificate_pem.strip().split('\n')
+                        key_lines = certificate.private_key_pem.strip().split('\n')
                         
                         inbound_config["streamSettings"]["tlsSettings"] = {
                             "certificates": [{
@@ -327,7 +348,7 @@ class XrayServerV2(Server):
                             "certificates": []
                         }
             
-            logger.info(f"Inbound config: {inbound_config}")
+            logger.debug(f"Inbound config for {inbound.name}: {len(str(inbound_config))} chars")
             
             # Add inbound using the client's add_inbound method which handles wrapping
             try:
@@ -360,14 +381,22 @@ class XrayServerV2(Server):
         """Add a user to a specific inbound on this server using inbound recreation approach"""
         try:
             from vpn.xray_api_v2.client import XrayClient
+            from vpn.models_xray import ServerInbound
             import uuid
             
             logger.info(f"Adding user {user.username} to inbound {inbound.name} using inbound recreation")
             client = XrayClient(server=self.api_address)
             
+            # Get ServerInbound object for certificate access
+            try:
+                server_inbound = ServerInbound.objects.get(server=self, inbound=inbound)
+            except ServerInbound.DoesNotExist:
+                logger.warning(f"ServerInbound not found for {self.name} -> {inbound.name}, creating one")
+                server_inbound = ServerInbound.objects.create(server=self, inbound=inbound, active=True)
+            
             # Generate user UUID based on username and inbound
             user_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{user.username}-{inbound.name}"))
-            logger.info(f"Generated UUID for user {user.username}: {user_uuid}")
+            logger.debug(f"Generated UUID for user {user.username}: {user_uuid}")
             
             # Build user config based on protocol
             if inbound.protocol == 'vless':
@@ -406,8 +435,13 @@ class XrayServerV2(Server):
                 
                 if not existing_inbound:
                     logger.warning(f"Inbound {inbound.name} not found on server, deploying it first")
+                    # Get or create ServerInbound for certificate access
+                    from vpn.models_xray import ServerInbound
+                    server_inbound_obj, created = ServerInbound.objects.get_or_create(
+                        server=self, inbound=inbound, defaults={'active': True}
+                    )
                     # Deploy the inbound if it doesn't exist
-                    if not self.deploy_inbound(inbound):
+                    if not self.deploy_inbound(inbound, server_inbound=server_inbound_obj):
                         logger.error(f"Failed to deploy inbound {inbound.name}")
                         return False
                     # Get the inbound config we just created
@@ -439,11 +473,22 @@ class XrayServerV2(Server):
                     inbound_config['settings']['clients'] = existing_users
                     
                     # Handle certificate embedding if needed
-                    if inbound.certificate and inbound.certificate.certificate_pem:
-                        cert_lines = inbound.certificate.certificate_pem.strip().split('\n')
-                        key_lines = inbound.certificate.private_key_pem.strip().split('\n')
+                    certificate = None
+                    if server_inbound:
+                        certificate = server_inbound.get_certificate()
+                        
+                    if certificate and certificate.certificate_pem:
+                        cert_lines = certificate.certificate_pem.strip().split('\n')
+                        key_lines = certificate.private_key_pem.strip().split('\n')
                         
                         if "streamSettings" in inbound_config and "tlsSettings" in inbound_config["streamSettings"]:
+                            # Remove any existing certificate file paths
+                            tls_settings = inbound_config["streamSettings"]["tlsSettings"]
+                            if "certificateFile" in tls_settings:
+                                del tls_settings["certificateFile"]
+                            if "keyFile" in tls_settings:
+                                del tls_settings["keyFile"]
+                                
                             inbound_config["streamSettings"]["tlsSettings"]["certificates"] = [{
                                 "certificate": cert_lines,
                                 "key": key_lines,
@@ -611,19 +656,16 @@ class XrayServerV2(Server):
                 # Check if inbound exists on server
                 if inbound.name not in existing_inbound_tags:
                     logger.info(f"Inbound {inbound.name} doesn't exist on server, creating with user")
+                    # Get or create ServerInbound for certificate access
+                    from vpn.models_xray import ServerInbound
+                    server_inbound_obj, created = ServerInbound.objects.get_or_create(
+                        server=self, inbound=inbound, defaults={'active': True}
+                    )
                     # Create the inbound with the user directly
-                    if self.deploy_inbound(inbound, users=[user]):
+                    if self.deploy_inbound(inbound, users=[user], server_inbound=server_inbound_obj):
                         logger.info(f"Successfully created inbound {inbound.name} with user {user.username}")
                         added_count += 1
                         existing_inbound_tags.add(inbound.name)
-                        
-                        # Mark as deployed on this server
-                        from vpn.models_xray import ServerInbound
-                        ServerInbound.objects.update_or_create(
-                            server=self,
-                            inbound=inbound,
-                            defaults={'active': True}
-                        )
                     else:
                         logger.error(f"Failed to create inbound {inbound.name} with user")
                         continue
@@ -685,9 +727,17 @@ class ServerInboundInline(admin.TabularInline):
     from vpn.models_xray import ServerInbound
     model = ServerInbound
     extra = 0
-    fields = ('inbound', 'active')
+    fields = ('inbound', 'certificate', 'active')
     verbose_name = "Inbound Template"
     verbose_name_plural = "Inbound Templates"
+    
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """Filter certificates for inbound selection"""
+        if db_field.name == 'certificate':
+            from vpn.models_xray import Certificate
+            kwargs['queryset'] = Certificate.objects.filter(cert_type__in=['letsencrypt', 'custom'])
+            kwargs['empty_label'] = "Auto-select by server hostname"
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 class XrayServerV2Admin(admin.ModelAdmin):
@@ -696,6 +746,10 @@ class XrayServerV2Admin(admin.ModelAdmin):
     search_fields = ['name', 'client_hostname', 'comment']
     readonly_fields = ['server_type', 'registration_date']
     inlines = [ServerInboundInline]
+    
+    def has_module_permission(self, request):
+        """Hide this model from the main admin index"""
+        return False
     
     fieldsets = [
         ('Basic Information', {

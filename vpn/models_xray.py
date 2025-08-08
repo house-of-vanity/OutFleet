@@ -193,13 +193,6 @@ class Inbound(models.Model):
         default='none',
         help_text="Security type"
     )
-    certificate = models.ForeignKey(
-        Certificate,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        help_text="Certificate for TLS"
-    )
     
     # Full configuration for Xray
     full_config = models.JSONField(
@@ -328,13 +321,7 @@ class Inbound(models.Model):
                 "alpn": ["h2", "http/1.1"]
             }
             
-            if self.certificate:
-                tls_settings.update({
-                    "certificates": [{
-                        "certificateFile": f"/etc/xray/certs/{self.certificate.domain}.crt",
-                        "keyFile": f"/etc/xray/certs/{self.certificate.domain}.key"
-                    }]
-                })
+            # Certificate will be set during deployment based on ServerInbound configuration
             
             stream_settings["tlsSettings"] = tls_settings
         
@@ -430,6 +417,15 @@ class ServerInbound(models.Model):
     deployed_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # Certificate for TLS on this specific server deployment
+    certificate = models.ForeignKey(
+        Certificate,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        help_text="Certificate for TLS on this specific server (overrides automatic selection)"
+    )
+    
     # Store deployment-specific configuration if needed
     deployment_config = models.JSONField(default=dict, blank=True, help_text="Server-specific deployment configuration")
     
@@ -442,3 +438,27 @@ class ServerInbound(models.Model):
     def __str__(self):
         status = "Active" if self.active else "Inactive"
         return f"{self.server.name} -> {self.inbound.name} ({status})"
+    
+    def get_certificate(self):
+        """Get certificate for this deployment with fallback logic"""
+        # 1. Use explicitly set certificate
+        if self.certificate:
+            return self.certificate
+            
+        # 2. Try to find certificate by server's client_hostname
+        if hasattr(self.server.get_real_instance(), 'client_hostname'):
+            server_hostname = self.server.get_real_instance().client_hostname
+            try:
+                return Certificate.objects.get(domain=server_hostname, cert_type='letsencrypt')
+            except Certificate.DoesNotExist:
+                try:
+                    return Certificate.objects.get(domain=server_hostname)
+                except Certificate.DoesNotExist:
+                    pass
+        
+        # 3. No certificate found
+        return None
+    
+    def requires_certificate(self):
+        """Check if this inbound requires a certificate"""
+        return self.inbound.security in ['tls'] or self.inbound.protocol == 'trojan'

@@ -450,7 +450,7 @@ class InboundAdmin(admin.ModelAdmin):
     """Admin for inbound template management"""
     list_display = (
         'name', 'protocol', 'port', 'network', 
-        'security', 'certificate_status', 'group_count'
+        'security', 'group_count'
     )
     list_filter = ('protocol', 'network', 'security')
     search_fields = ('name',)
@@ -458,10 +458,10 @@ class InboundAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Basic Configuration', {
             'fields': ('name', 'protocol', 'port'),
-            'description': 'Domain will be taken from server client_hostname when deployed'
+            'description': 'Certificates are configured per-server in Server admin → Inbound Templates tab'
         }),
         ('Transport & Security', {
-            'fields': ('network', 'security', 'certificate', 'listen_address')
+            'fields': ('network', 'security', 'listen_address')
         }),
         ('Advanced Settings', {
             'fields': ('enable_sniffing', 'full_config_display'),
@@ -475,19 +475,6 @@ class InboundAdmin(admin.ModelAdmin):
     )
     
     readonly_fields = ('full_config_display', 'created_at', 'updated_at')
-    
-    def certificate_status(self, obj):
-        """Display certificate status"""
-        if obj.security == 'tls':
-            if obj.certificate:
-                if obj.certificate.is_expired:
-                    return format_html('<span style="color: red;">❌ Expired</span>')
-                else:
-                    return format_html('<span style="color: green;">✅ Valid</span>')
-            else:
-                return format_html('<span style="color: orange;">⚠️ No cert</span>')
-        return format_html('<span style="color: gray;">-</span>')
-    certificate_status.short_description = 'Cert Status'
     
     def group_count(self, obj):
         """Number of groups this inbound belongs to"""
@@ -695,7 +682,7 @@ class UserSubscriptionAdmin(admin.ModelAdmin):
 # ServerInbound admin is integrated into XrayServerV2 admin, not shown in main menu
 class ServerInboundAdmin(admin.ModelAdmin):
     """Admin for server-inbound deployment tracking"""
-    list_display = ('server', 'inbound', 'active', 'deployed_at', 'updated_at')
+    list_display = ('server', 'inbound', 'certificate_status', 'active', 'deployed_at', 'updated_at')
     list_filter = ('active', 'inbound__protocol', 'deployed_at')
     search_fields = ('server__name', 'inbound__name')
     date_hierarchy = 'deployed_at'
@@ -704,13 +691,54 @@ class ServerInboundAdmin(admin.ModelAdmin):
         ('Template Deployment', {
             'fields': ('server', 'inbound', 'active')
         }),
+        ('Certificate Configuration', {
+            'fields': ('certificate', 'certificate_info'),
+            'description': 'Certificate for TLS. If not specified, will be auto-selected by server hostname.'
+        }),
         ('Timestamps', {
             'fields': ('deployed_at', 'updated_at'),
             'classes': ('collapse',)
         })
     )
     
-    readonly_fields = ('deployed_at', 'updated_at')
+    readonly_fields = ('deployed_at', 'updated_at', 'certificate_info')
+    
+    def certificate_status(self, obj):
+        """Display certificate status"""
+        if not obj.requires_certificate():
+            return format_html('<span style="color: gray;">-</span>')
+            
+        cert = obj.get_certificate()
+        if cert:
+            if cert.is_expired:
+                return format_html('<span style="color: red;">❌ {}</span>', cert.domain)
+            else:
+                return format_html('<span style="color: green;">✅ {}</span>', cert.domain)
+        else:
+            return format_html('<span style="color: orange;">⚠️ No cert</span>')
+    certificate_status.short_description = 'Certificate'
+    
+    def certificate_info(self, obj):
+        """Display certificate information and selection logic"""
+        html = '<div style="background: #f8f9fa; padding: 10px; border-radius: 4px;">'
+        
+        if not obj.requires_certificate():
+            html += '<p><strong>Certificate not required</strong> for this protocol/security combination.</p>'
+        else:
+            cert = obj.get_certificate()
+            if obj.certificate:
+                html += f'<p><strong>✅ Explicit certificate:</strong> {obj.certificate.domain}</p>'
+            elif cert:
+                html += f'<p><strong>🔄 Auto-selected:</strong> {cert.domain} (matches server hostname)</p>'
+            else:
+                server_hostname = getattr(obj.server.get_real_instance(), 'client_hostname', 'N/A')
+                html += f'<p><strong>⚠️ No certificate found</strong></p>'
+                html += f'<p>Server hostname: <code>{server_hostname}</code></p>'
+                html += f'<p>Consider creating certificate for this domain or select one manually above.</p>'
+        
+        html += '</div>'
+        return format_html(html)
+    certificate_info.short_description = 'Certificate Selection Info'
 
 
 # Unified Subscriptions Admin with tabs
