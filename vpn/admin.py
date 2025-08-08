@@ -19,6 +19,15 @@ from vpn.models import User, ACL, ACLLink
 from vpn.forms import UserForm
 from mysite.settings import EXTERNAL_ADDRESS
 from django.db.models import Max, Subquery, OuterRef, Q
+
+
+def format_bytes(bytes_val):
+    """Format bytes to human readable format"""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if bytes_val < 1024.0:
+            return f"{bytes_val:.1f}{unit}"
+        bytes_val /= 1024.0
+    return f"{bytes_val:.1f}PB"
 from .server_plugins import (
     Server,
     WireguardServer,
@@ -802,48 +811,121 @@ class ServerAdmin(PolymorphicParentModelAdmin):
             
             user_count = obj.user_count if hasattr(obj, 'user_count') else 0
             
-            # Use prefetched data if available
-            if hasattr(obj, 'acl_set'):
-                all_links = []
-                for acl in obj.acl_set.all():
-                    if hasattr(acl, 'links') and hasattr(acl.links, 'all'):
-                        all_links.extend(acl.links.all())
+            # Different logic for Xray vs legacy servers
+            if obj.server_type == 'xray_v2':
+                # For Xray servers, count inbounds and active subscriptions
+                from vpn.models_xray import ServerInbound
+                total_inbounds = ServerInbound.objects.filter(server=obj, active=True).count()
                 
-                total_links = len(all_links)
-                
-                # Count active links from prefetched data
+                # Count recent subscription accesses via AccessLog
                 thirty_days_ago = timezone.now() - timedelta(days=30)
-                active_links = sum(1 for link in all_links 
-                                 if link.last_access_time and link.last_access_time >= thirty_days_ago)
+                from vpn.models import AccessLog
+                active_accesses = AccessLog.objects.filter(
+                    server='Xray-Subscription',
+                    action='Success',
+                    timestamp__gte=thirty_days_ago
+                ).values('user').distinct().count()
+                
+                total_links = total_inbounds
+                active_links = min(active_accesses, user_count)  # Can't be more than total users
             else:
-                # Fallback to direct queries (less efficient)
-                total_links = ACLLink.objects.filter(acl__server=obj).count()
-                thirty_days_ago = timezone.now() - timedelta(days=30)
-                active_links = ACLLink.objects.filter(
-                    acl__server=obj,
-                    last_access_time__isnull=False,
-                    last_access_time__gte=thirty_days_ago
-                ).count()
+                # Legacy servers: use ACL links as before
+                if hasattr(obj, 'acl_set'):
+                    all_links = []
+                    for acl in obj.acl_set.all():
+                        if hasattr(acl, 'links') and hasattr(acl.links, 'all'):
+                            all_links.extend(acl.links.all())
+                    
+                    total_links = len(all_links)
+                    
+                    # Count active links from prefetched data
+                    thirty_days_ago = timezone.now() - timedelta(days=30)
+                    active_links = sum(1 for link in all_links 
+                                     if link.last_access_time and link.last_access_time >= thirty_days_ago)
+                else:
+                    # Fallback to direct queries (less efficient)
+                    total_links = ACLLink.objects.filter(acl__server=obj).count()
+                    thirty_days_ago = timezone.now() - timedelta(days=30)
+                    active_links = ACLLink.objects.filter(
+                        acl__server=obj,
+                        last_access_time__isnull=False,
+                        last_access_time__gte=thirty_days_ago
+                    ).count()
             
             # Color coding based on activity
             if user_count == 0:
                 color = '#9ca3af'  # gray - no users
             elif total_links == 0:
-                color = '#dc2626'  # red - no links
-            elif total_links > 0 and active_links > total_links * 0.7:  # High activity
-                color = '#16a34a'  # green
-            elif total_links > 0 and active_links > total_links * 0.3:  # Medium activity
-                color = '#eab308'  # yellow
+                color = '#dc2626'  # red - no links/inbounds
+            elif obj.server_type == 'xray_v2':
+                # For Xray: base on user activity rather than link activity
+                if active_links > user_count * 0.5:  # More than half users active
+                    color = '#16a34a'  # green
+                elif active_links > user_count * 0.2:  # More than 20% users active
+                    color = '#eab308'  # yellow
+                else:
+                    color = '#f97316'  # orange - low activity
             else:
-                color = '#f97316'  # orange - low activity
+                # Legacy servers: base on link activity
+                if total_links > 0 and active_links > total_links * 0.7:  # High activity
+                    color = '#16a34a'  # green
+                elif total_links > 0 and active_links > total_links * 0.3:  # Medium activity
+                    color = '#eab308'  # yellow
+                else:
+                    color = '#f97316'  # orange - low activity
             
-            return mark_safe(
-                f'<div style="font-size: 12px;">' +
-                f'<div style="color: {color}; font-weight: bold;">👥 {user_count} users</div>' +
-                f'<div style="color: #6b7280;">🔗 {active_links}/{total_links} active</div>' +
-                f'</div>'
-            )
+            # Different display for Xray vs legacy
+            if obj.server_type == 'xray_v2':
+                # Try to get traffic stats if stats enabled
+                traffic_info = ""
+                # Get the real XrayServerV2 instance to access its fields
+                xray_server = obj.get_real_instance()
+                if hasattr(xray_server, 'stats_enabled') and xray_server.stats_enabled and xray_server.api_enabled:
+                    try:
+                        from vpn.xray_api_v2.client import XrayClient
+                        from vpn.xray_api_v2.stats import StatsManager
+                        
+                        client = XrayClient(server=xray_server.api_address)
+                        stats_manager = StatsManager(client)
+                        traffic_summary = stats_manager.get_traffic_summary()
+                        
+                        # Calculate total traffic
+                        total_uplink = 0
+                        total_downlink = 0
+                        
+                        # Sum up user traffic
+                        for user_email, user_traffic in traffic_summary.get('users', {}).items():
+                            total_uplink += user_traffic.get('uplink', 0)
+                            total_downlink += user_traffic.get('downlink', 0)
+                        
+                        # Format traffic
+                        
+                        if total_uplink > 0 or total_downlink > 0:
+                            traffic_info = f'<div style="color: #6b7280; font-size: 11px;">↑{format_bytes(total_uplink)} ↓{format_bytes(total_downlink)}</div>'
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.debug(f"Could not get stats for Xray server {xray_server.name}: {e}")
+                
+                return mark_safe(
+                    f'<div style="font-size: 12px;">' +
+                    f'<div style="color: {color}; font-weight: bold;">👥 {user_count} users</div>' +
+                    f'<div style="color: #6b7280;">📡 {total_links} inbounds</div>' +
+                    traffic_info +
+                    f'</div>'
+                )
+            else:
+                return mark_safe(
+                    f'<div style="font-size: 12px;">' +
+                    f'<div style="color: {color}; font-weight: bold;">👥 {user_count} users</div>' +
+                    f'<div style="color: #6b7280;">🔗 {active_links}/{total_links} active</div>' +
+                    f'</div>'
+                )
         except Exception as e:
+            import traceback
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in user_stats for server {obj.name}: {e}", exc_info=True)
             return mark_safe(f'<span style="color: #dc2626; font-size: 11px;">Stats error: {e}</span>')
     
     @admin.display(description='Activity')
@@ -896,8 +978,46 @@ class ServerAdmin(PolymorphicParentModelAdmin):
             )
 
     def get_queryset(self, request):
+        from django.db.models import Case, When, Value, IntegerField, F, Q, Subquery, OuterRef
+        from vpn.models_xray import UserSubscription, ServerInbound
+        
         qs = super().get_queryset(request)
-        qs = qs.annotate(user_count=Count('acl'))
+        
+        # Count ACL users for all servers
+        qs = qs.annotate(
+            acl_user_count=Count('acl__user', distinct=True)
+        )
+        
+        # For Xray servers, calculate user count separately
+        # Create subquery to count Xray users
+        xray_user_count_subquery = ServerInbound.objects.filter(
+            server_id=OuterRef('pk'),
+            active=True,
+            inbound__subscriptiongroup__usersubscription__active=True,
+            inbound__subscriptiongroup__is_active=True
+        ).values('server_id').annotate(
+            count=Count('inbound__subscriptiongroup__usersubscription__user', distinct=True)
+        ).values('count')
+        
+        qs = qs.annotate(
+            xray_user_count=Subquery(xray_user_count_subquery, output_field=IntegerField()),
+            user_count=Case(
+                When(server_type='xray_v2', then=F('xray_user_count')),
+                default=F('acl_user_count'),
+                output_field=IntegerField()
+            )
+        )
+        
+        # Handle None values from subquery
+        qs = qs.annotate(
+            user_count=Case(
+                When(server_type='xray_v2', user_count__isnull=True, then=Value(0)),
+                When(server_type='xray_v2', then=F('xray_user_count')),
+                default=F('acl_user_count'),
+                output_field=IntegerField()
+            )
+        )
+        
         qs = qs.prefetch_related(
             'acl_set__links',
             'acl_set__user'
@@ -1015,6 +1135,50 @@ class UserAdmin(admin.ModelAdmin):
             for group in xray_groups:
                 html += f'<li>{group}</li>'
             html += '</ul>'
+            
+            # Try to get traffic statistics for this user
+            try:
+                from vpn.server_plugins.xray_v2 import XrayServerV2
+                traffic_total_up = 0
+                traffic_total_down = 0
+                servers_checked = set()
+                
+                # Get all Xray servers
+                xray_servers = XrayServerV2.objects.filter(api_enabled=True, stats_enabled=True)
+                
+                for server in xray_servers:
+                    if server.name not in servers_checked:
+                        try:
+                            from vpn.xray_api_v2.client import XrayClient
+                            from vpn.xray_api_v2.stats import StatsManager
+                            
+                            client = XrayClient(server=server.api_address)
+                            stats_manager = StatsManager(client)
+                            
+                            # Get user stats (use email format: username@servername)
+                            user_email = f"{obj.username}@{server.name}"
+                            user_stats = stats_manager.get_user_stats(user_email)
+                            
+                            if user_stats:
+                                traffic_total_up += user_stats.get('uplink', 0)
+                                traffic_total_down += user_stats.get('downlink', 0)
+                            
+                            servers_checked.add(server.name)
+                        except Exception as e:
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.debug(f"Could not get user stats from server {server.name}: {e}")
+                
+                # Format traffic if we got any
+                if traffic_total_up > 0 or traffic_total_down > 0:
+                    
+                    html += f'<p style="margin: 10px 0 5px 0; color: #007cba;"><strong>📊 Traffic Statistics:</strong></p>'
+                    html += f'<p style="margin: 5px 0 5px 20px;">↑ Upload: <strong>{format_bytes(traffic_total_up)}</strong></p>'
+                    html += f'<p style="margin: 5px 0 5px 20px;">↓ Download: <strong>{format_bytes(traffic_total_down)}</strong></p>'
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.debug(f"Could not get traffic stats for user {obj.username}: {e}")
         else:
             html += '<p style="margin: 5px 0; color: #6c757d;">No Xray subscriptions</p>'
         html += '</div>'

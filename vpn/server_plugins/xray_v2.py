@@ -782,7 +782,7 @@ class XrayServerV2Admin(admin.ModelAdmin):
     list_display = ['name', 'client_hostname', 'api_address', 'api_enabled', 'stats_enabled', 'registration_date']
     list_filter = ['api_enabled', 'stats_enabled', 'registration_date']
     search_fields = ['name', 'client_hostname', 'comment']
-    readonly_fields = ['server_type', 'registration_date']
+    readonly_fields = ['server_type', 'registration_date', 'traffic_statistics']
     inlines = [ServerInboundInline]
     
     def has_module_permission(self, request):
@@ -798,6 +798,10 @@ class XrayServerV2Admin(admin.ModelAdmin):
         }),
         ('API Settings', {
             'fields': ('api_enabled', 'stats_enabled')
+        }),
+        ('Traffic Statistics', {
+            'fields': ('traffic_statistics',),
+            'description': 'Real-time traffic statistics from Xray server'
         }),
         ('Timestamps', {
             'fields': ('registration_date',),
@@ -826,3 +830,118 @@ class XrayServerV2Admin(admin.ModelAdmin):
             statuses.append(f"{server.name}: {status.get('accessible', 'Unknown')}")
         self.message_user(request, f"Server statuses: {', '.join(statuses)}")
     get_status.short_description = "Check status of selected servers"
+    
+    def traffic_statistics(self, obj):
+        """Display traffic statistics for this server"""
+        from django.utils.safestring import mark_safe
+        from django.utils.html import format_html
+        
+        if not obj.pk:
+            return "Save server first to see statistics"
+        
+        if not obj.api_enabled or not obj.stats_enabled:
+            return "Statistics are disabled. Enable API and stats to see traffic data."
+        
+        try:
+            from vpn.xray_api_v2.client import XrayClient
+            from vpn.xray_api_v2.stats import StatsManager
+            
+            client = XrayClient(server=obj.api_address)
+            stats_manager = StatsManager(client)
+            
+            # Get traffic summary
+            traffic_summary = stats_manager.get_traffic_summary()
+            
+            # Format bytes
+            def format_bytes(bytes_val):
+                for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+                    if bytes_val < 1024.0:
+                        return f"{bytes_val:.1f}{unit}"
+                    bytes_val /= 1024.0
+                return f"{bytes_val:.1f}PB"
+            
+            html = '<div style="background: #f8f9fa; padding: 15px; border-radius: 5px;">'
+            
+            # User statistics
+            users = traffic_summary.get('users', {})
+            if users:
+                html += '<h4 style="margin: 0 0 15px 0; color: #495057;">👥 User Traffic</h4>'
+                html += '<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">'
+                html += '<thead><tr style="background: #e9ecef;">'
+                html += '<th style="padding: 8px; text-align: left; border: 1px solid #dee2e6;">User</th>'
+                html += '<th style="padding: 8px; text-align: right; border: 1px solid #dee2e6;">Upload</th>'
+                html += '<th style="padding: 8px; text-align: right; border: 1px solid #dee2e6;">Download</th>'
+                html += '<th style="padding: 8px; text-align: right; border: 1px solid #dee2e6;">Total</th>'
+                html += '</tr></thead><tbody>'
+                
+                # Sort users by total traffic
+                sorted_users = sorted(users.items(), 
+                                    key=lambda x: x[1].get('uplink', 0) + x[1].get('downlink', 0), 
+                                    reverse=True)
+                
+                total_up = 0
+                total_down = 0
+                
+                for email, stats in sorted_users[:20]:  # Show top 20 users
+                    up = stats.get('uplink', 0)
+                    down = stats.get('downlink', 0)
+                    total = up + down
+                    total_up += up
+                    total_down += down
+                    
+                    html += '<tr>'
+                    html += f'<td style="padding: 6px; border: 1px solid #dee2e6;">{email}</td>'
+                    html += f'<td style="padding: 6px; text-align: right; border: 1px solid #dee2e6;">↑ {format_bytes(up)}</td>'
+                    html += f'<td style="padding: 6px; text-align: right; border: 1px solid #dee2e6;">↓ {format_bytes(down)}</td>'
+                    html += f'<td style="padding: 6px; text-align: right; border: 1px solid #dee2e6; font-weight: bold;">{format_bytes(total)}</td>'
+                    html += '</tr>'
+                
+                if len(users) > 20:
+                    html += f'<tr><td colspan="4" style="padding: 6px; text-align: center; border: 1px solid #dee2e6; color: #6c757d;">... and {len(users) - 20} more users</td></tr>'
+                
+                # Total row
+                html += '<tr style="background: #e9ecef; font-weight: bold;">'
+                html += f'<td style="padding: 8px; border: 1px solid #dee2e6;">Total ({len(users)} users)</td>'
+                html += f'<td style="padding: 8px; text-align: right; border: 1px solid #dee2e6;">↑ {format_bytes(total_up)}</td>'
+                html += f'<td style="padding: 8px; text-align: right; border: 1px solid #dee2e6;">↓ {format_bytes(total_down)}</td>'
+                html += f'<td style="padding: 8px; text-align: right; border: 1px solid #dee2e6;">{format_bytes(total_up + total_down)}</td>'
+                html += '</tr>'
+                
+                html += '</tbody></table>'
+            else:
+                html += '<p style="color: #6c757d;">No user traffic data available</p>'
+            
+            # Inbound statistics
+            inbounds = traffic_summary.get('inbounds', {})
+            if inbounds:
+                html += '<h4 style="margin: 20px 0 15px 0; color: #495057;">📡 Inbound Traffic</h4>'
+                html += '<table style="width: 100%; border-collapse: collapse;">'
+                html += '<thead><tr style="background: #e9ecef;">'
+                html += '<th style="padding: 8px; text-align: left; border: 1px solid #dee2e6;">Inbound</th>'
+                html += '<th style="padding: 8px; text-align: right; border: 1px solid #dee2e6;">Upload</th>'
+                html += '<th style="padding: 8px; text-align: right; border: 1px solid #dee2e6;">Download</th>'
+                html += '<th style="padding: 8px; text-align: right; border: 1px solid #dee2e6;">Total</th>'
+                html += '</tr></thead><tbody>'
+                
+                for tag, stats in inbounds.items():
+                    up = stats.get('uplink', 0)
+                    down = stats.get('downlink', 0)
+                    total = up + down
+                    
+                    html += '<tr>'
+                    html += f'<td style="padding: 6px; border: 1px solid #dee2e6;">{tag}</td>'
+                    html += f'<td style="padding: 6px; text-align: right; border: 1px solid #dee2e6;">↑ {format_bytes(up)}</td>'
+                    html += f'<td style="padding: 6px; text-align: right; border: 1px solid #dee2e6;">↓ {format_bytes(down)}</td>'
+                    html += f'<td style="padding: 6px; text-align: right; border: 1px solid #dee2e6; font-weight: bold;">{format_bytes(total)}</td>'
+                    html += '</tr>'
+                
+                html += '</tbody></table>'
+            
+            html += '</div>'
+            
+            return format_html(html)
+            
+        except Exception as e:
+            return f"Error fetching statistics: {str(e)}"
+    
+    traffic_statistics.short_description = 'Traffic Statistics'
