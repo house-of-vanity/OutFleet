@@ -11,7 +11,7 @@
 
 ![Forks](https://img.shields.io/github/forks/house-of-vanity/outfleet?style=social) ![Stargazers](https://img.shields.io/github/stars/house-of-vanity/outfleet?style=social) ![License](https://img.shields.io/github/license/house-of-vanity/outfleet) 
 
-<img width="1454" alt="image" src="https://github.com/user-attachments/assets/20555dd9-54ea-4b95-aa13-a7dd54e34ef4" />
+<img width="1282" height="840" alt="image" src="https://github.com/user-attachments/assets/3b66f928-853b-4af0-8968-1eacb2c16a1c" />
 
 ## About The Project
 
