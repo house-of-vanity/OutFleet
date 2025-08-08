@@ -46,7 +46,7 @@ def userPortal(request, user_hash):
         logger.info(f"Xray statistics for user {user.username}: total={total_connections}, recent={recent_connections}")
         
         # Determine protocol scheme
-        scheme = 'https' if request.is_secure() else 'http'
+        scheme = 'https'  # Always use HTTPS as SSL is handled by ingress
         
         # Group inbounds by subscription group
         groups_data = {}
@@ -91,7 +91,7 @@ def userPortal(request, user_hash):
                 if inbound.protocol == 'vless':
                     # Generate VLESS URL - this is a placeholder implementation
                     # In the real implementation, you'd generate proper VLESS URLs with user UUID
-                    connection_url = f"vless://user-uuid@{EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
+                    connection_url = f"vless://user-uuid@{get_external_host()}:{inbound.port}#{inbound.name}"
                     connection_urls.append({
                         'url': connection_url,
                         'protocol': 'VLESS',
@@ -99,7 +99,7 @@ def userPortal(request, user_hash):
                     })
                 elif inbound.protocol == 'vmess':
                     # Generate VMess URL - placeholder
-                    connection_url = f"vmess://user-config@{EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
+                    connection_url = f"vmess://user-config@{get_external_host()}:{inbound.port}#{inbound.name}"
                     connection_urls.append({
                         'url': connection_url,
                         'protocol': 'VMess',
@@ -107,7 +107,7 @@ def userPortal(request, user_hash):
                     })
                 elif inbound.protocol == 'trojan':
                     # Generate Trojan URL - placeholder
-                    connection_url = f"trojan://user-password@{EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
+                    connection_url = f"trojan://user-password@{get_external_host()}:{inbound.port}#{inbound.name}"
                     connection_urls.append({
                         'url': connection_url,
                         'protocol': 'Trojan',
@@ -115,7 +115,7 @@ def userPortal(request, user_hash):
                     })
                 elif inbound.protocol == 'shadowsocks':
                     # Generate Shadowsocks URL - placeholder
-                    connection_url = f"ss://user-config@{EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
+                    connection_url = f"ss://user-config@{get_external_host()}:{inbound.port}#{inbound.name}"
                     connection_urls.append({
                         'url': connection_url,
                         'protocol': 'Shadowsocks',
@@ -127,7 +127,7 @@ def userPortal(request, user_hash):
                     'connection_urls': connection_urls,
                     'protocol': inbound.protocol.upper(),
                     'port': inbound.port,
-                    'domain': EXTERNAL_ADDRESS,
+                    'domain': get_external_host(),
                     'network': inbound.network,
                     'security': inbound.security,
                     'connections': 0,  # Placeholder during transition
@@ -163,12 +163,12 @@ def userPortal(request, user_hash):
             'total_inbounds': total_inbounds,
             'total_connections': total_connections,
             'recent_connections': recent_connections,
-            'external_address': EXTERNAL_ADDRESS,
+            'external_address': get_external_host(),
             'has_xray_access': has_xray_access,
             'force_scheme': scheme,  # Override request.scheme in template
             'acl_links': acl_links,  # For backwards compatibility
             'has_old_links': len(acl_links) > 0,
-            'xray_subscription_url': f"{EXTERNAL_ADDRESS}/xray/{user.hash}",
+            'xray_subscription_url': f"https://{request.get_host()}/xray/{user.hash}",
         }
         
         logger.debug(f"Context prepared with keys: {list(context.keys())}")
@@ -194,6 +194,15 @@ import logging
 from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse, HttpResponse, Http404
 from mysite.settings import EXTERNAL_ADDRESS
+from urllib.parse import urlparse
+
+def get_external_host():
+    """Extract hostname from EXTERNAL_ADDRESS, removing scheme"""
+    parsed = urlparse(EXTERNAL_ADDRESS)
+    if parsed.hostname:
+        return parsed.hostname
+    # If no scheme, assume it's just a hostname
+    return EXTERNAL_ADDRESS
 
 def userFrontend(request, user_hash):
     from .models import User, ACLLink
@@ -207,7 +216,7 @@ def userFrontend(request, user_hash):
         server_name = link.acl.server.name
         if server_name not in acl_links:
             acl_links[server_name] = []
-        acl_links[server_name].append({"link": f"{EXTERNAL_ADDRESS}/ss/{link.link}#{link.acl.server.name}", "comment": link.comment})
+        acl_links[server_name].append({"link": f"https://{request.get_host()}/ss/{link.link}#{link.acl.server.name}", "comment": link.comment})
 
     return JsonResponse(acl_links)
 
@@ -524,8 +533,8 @@ def generate_xray_connection_string(user, inbound, server_name=None, server_host
         # Generate user UUID based on user ID and inbound
         user_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{user.username}-{inbound.name}"))
         
-        # Get host (use server's client_hostname if available, fallback to EXTERNAL_ADDRESS)
-        host = server_hostname if server_hostname else EXTERNAL_ADDRESS
+        # Get host (use server's client_hostname if available, fallback to external host)
+        host = server_hostname if server_hostname else get_external_host()
         
         if inbound.protocol == 'vless':
             # VLESS URL format: vless://uuid@host:port?params#name
