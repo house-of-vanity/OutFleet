@@ -100,8 +100,14 @@ class CredentialsAdmin(admin.ModelAdmin):
         return '-'
     credentials_display.short_description = 'Credentials (Preview)'
 
-# Credentials admin is available through Certificate admin only
-# Do not register directly to avoid showing in main menu
+# Register Credentials admin but hide from main menu for Django + button functionality
+@admin.register(Credentials)
+class CredentialsHiddenAdmin(CredentialsAdmin):
+    """Credentials admin hidden from main menu but available for + button"""
+    
+    def has_module_permission(self, request):
+        """Hide this model from the main admin index"""
+        return False
 
 
 @admin.register(Certificate)
