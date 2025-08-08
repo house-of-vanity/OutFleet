@@ -497,7 +497,7 @@
                         <div class="server-info">
                             <div class="server-name">{{ group_name }}</div>
                             <div class="server-stats">
-                                <span class="connection-count">🔗 {{ group_data.inbounds|length }} inbound(s)</span>
+                                <span class="connection-count">🔗 {{ group_data.deployed_count }} inbound(s)</span>
                             </div>
                         </div>
                         <div class="server-type">Xray Group</div>
@@ -517,7 +517,7 @@
                                 <div class="link-info">
                                     <div class="link-comment">🚀 {{ group_name }} Subscription</div>
                                     <div class="link-stats">
-                                        <span class="last-used">🔗 {{ group_data.inbounds|length }} inbound(s)</span>
+                                        <span class="last-used">🔗 {{ group_data.deployed_count }} inbound(s)</span>
                                     </div>
                                 </div>
                                 <div class="usage-chart">
@@ -525,7 +525,7 @@
                                     <div style="display: flex; flex-direction: column; gap: 5px; align-items: center;">
                                         {% for inbound_data in group_data.inbounds %}
                                         <div style="background: rgba(74, 222, 128, 0.2); padding: 3px 8px; border-radius: 8px; font-size: 0.7rem; color: #4ade80;">
-                                            {{ inbound_data.protocol|upper }}:{{ inbound_data.port }}
+                                            {{ inbound_data.server_name }}: {{ inbound_data.protocol|upper }}:{{ inbound_data.port }}
                                         </div>
                                         {% endfor %}
                                     </div>

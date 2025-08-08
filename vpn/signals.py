@@ -175,6 +175,43 @@ def subscription_group_inbounds_changed(sender, instance, action, pk_set, **kwar
                         transaction.on_commit(lambda: job.apply_async())
 
 
+@receiver(post_save, sender=ServerInbound)
+def server_inbound_created_or_updated(sender, instance, created, **kwargs):
+    """
+    When ServerInbound is created or updated, immediately deploy the inbound
+    template to the server (not wait for subscription group changes)
+    """
+    logger.info(f"ServerInbound {instance.inbound.name} {'created' if created else 'updated'} for server {instance.server.name}")
+    
+    if instance.active:
+        # Deploy inbound immediately
+        servers = [instance.server.get_real_instance()]
+        transaction.on_commit(
+            lambda: schedule_inbound_sync_for_servers(instance.inbound, servers)
+        )
+        
+        # Schedule user sync after inbound deployment
+        transaction.on_commit(lambda: schedule_user_sync_for_servers(servers))
+    else:
+        # Remove inbound from server if deactivated
+        logger.info(f"Removing inbound {instance.inbound.name} from server {instance.server.name} (deactivated)")
+        from .tasks import remove_inbound_from_server
+        task = remove_inbound_from_server.s(instance.server.id, instance.inbound.name)
+        transaction.on_commit(lambda: task.apply_async())
+
+
+@receiver(post_delete, sender=ServerInbound)
+def server_inbound_deleted(sender, instance, **kwargs):
+    """
+    When ServerInbound is deleted, remove the inbound from the server
+    """
+    logger.info(f"ServerInbound {instance.inbound.name} deleted from server {instance.server.name}")
+    
+    from .tasks import remove_inbound_from_server
+    task = remove_inbound_from_server.s(instance.server.id, instance.inbound.name)
+    transaction.on_commit(lambda: task.apply_async())
+
+
 @receiver(post_save, sender=UserSubscription)
 def user_subscription_created_or_updated(sender, instance, created, **kwargs):
     """
@@ -270,3 +307,40 @@ def subscription_group_updated(sender, instance, created, **kwargs):
                     if tasks:
                         job = group(tasks)
                         transaction.on_commit(lambda: job.apply_async())
+
+
+@receiver(post_save, sender=ServerInbound)
+def server_inbound_created_or_updated(sender, instance, created, **kwargs):
+    """
+    When ServerInbound is created or updated, immediately deploy the inbound
+    template to the server (not wait for subscription group changes)
+    """
+    logger.info(f"ServerInbound {instance.inbound.name} {'created' if created else 'updated'} for server {instance.server.name}")
+    
+    if instance.active:
+        # Deploy inbound immediately
+        servers = [instance.server.get_real_instance()]
+        transaction.on_commit(
+            lambda: schedule_inbound_sync_for_servers(instance.inbound, servers)
+        )
+        
+        # Schedule user sync after inbound deployment
+        transaction.on_commit(lambda: schedule_user_sync_for_servers(servers))
+    else:
+        # Remove inbound from server if deactivated
+        logger.info(f"Removing inbound {instance.inbound.name} from server {instance.server.name} (deactivated)")
+        from .tasks import remove_inbound_from_server
+        task = remove_inbound_from_server.s(instance.server.id, instance.inbound.name)
+        transaction.on_commit(lambda: task.apply_async())
+
+
+@receiver(post_delete, sender=ServerInbound)
+def server_inbound_deleted(sender, instance, **kwargs):
+    """
+    When ServerInbound is deleted, remove the inbound from the server
+    """
+    logger.info(f"ServerInbound {instance.inbound.name} deleted from server {instance.server.name}")
+    
+    from .tasks import remove_inbound_from_server
+    task = remove_inbound_from_server.s(instance.server.id, instance.inbound.name)
+    transaction.on_commit(lambda: task.apply_async())

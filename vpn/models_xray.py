@@ -200,11 +200,6 @@ class Inbound(models.Model):
         on_delete=models.SET_NULL,
         help_text="Certificate for TLS"
     )
-    domain = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Client connection domain"
-    )
     
     # Full configuration for Xray
     full_config = models.JSONField(
@@ -228,8 +223,8 @@ class Inbound(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        verbose_name = "Inbound"
-        verbose_name_plural = "Inbounds"
+        verbose_name = "Inbound Template"
+        verbose_name_plural = "Inbound Templates"
         ordering = ['protocol', 'port']
         unique_together = [['port', 'listen_address']]
     
@@ -322,14 +317,14 @@ class Inbound(models.Model):
         elif self.network == "http":
             stream_settings["httpSettings"] = {
                 "path": f"/{self.name}",
-                "host": [self.domain] if self.domain else []
+                "host": []  # Will be filled when deployed to server
             }
         
         # Add security settings
         if self.security == "tls":
             stream_settings["security"] = "tls"
             tls_settings = {
-                "serverName": self.domain or "localhost",
+                "serverName": "localhost",  # Will be replaced with server hostname when deployed
                 "alpn": ["h2", "http/1.1"]
             }
             
@@ -347,8 +342,8 @@ class Inbound(models.Model):
             stream_settings["security"] = "reality"
             # Reality settings would be configured here
             stream_settings["realitySettings"] = {
-                "dest": self.domain or "example.com:443",
-                "serverNames": [self.domain] if self.domain else ["example.com"],
+                "dest": "example.com:443",  # Will be replaced with server hostname when deployed
+                "serverNames": ["example.com"],  # Will be replaced with server hostname when deployed
                 "privateKey": "",  # Would be generated
                 "shortIds": [""]   # Would be generated
             }
@@ -380,8 +375,8 @@ class SubscriptionGroup(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        verbose_name = "Subscription Group"
-        verbose_name_plural = "Subscription Groups"
+        verbose_name = "Subscriptions"
+        verbose_name_plural = "Subscriptions"
         ordering = ['name']
     
     def __str__(self):

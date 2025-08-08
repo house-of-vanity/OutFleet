@@ -535,7 +535,7 @@ class XrayServerV2(Server):
                     try:
                         # Generate connection string directly
                         from vpn.views import generate_xray_connection_string
-                        connection_string = generate_xray_connection_string(user, inbound)
+                        connection_string = generate_xray_connection_string(user, inbound, self.name, self.client_hostname)
                         
                         if connection_string:
                             configs.append({
@@ -680,11 +680,22 @@ class XrayServerV2(Server):
         return f"Xray Server v2: {self.name}"
 
 
+class ServerInboundInline(admin.TabularInline):
+    """Inline for managing inbound templates on a server"""
+    from vpn.models_xray import ServerInbound
+    model = ServerInbound
+    extra = 0
+    fields = ('inbound', 'active')
+    verbose_name = "Inbound Template"
+    verbose_name_plural = "Inbound Templates"
+
+
 class XrayServerV2Admin(admin.ModelAdmin):
     list_display = ['name', 'client_hostname', 'api_address', 'api_enabled', 'stats_enabled', 'registration_date']
     list_filter = ['api_enabled', 'stats_enabled', 'registration_date']
     search_fields = ['name', 'client_hostname', 'comment']
     readonly_fields = ['server_type', 'registration_date']
+    inlines = [ServerInboundInline]
     
     fieldsets = [
         ('Basic Information', {
@@ -693,7 +704,7 @@ class XrayServerV2Admin(admin.ModelAdmin):
         ('Connection Settings', {
             'fields': ('client_hostname', 'api_address')
         }),
-        ('Features', {
+        ('API Settings', {
             'fields': ('api_enabled', 'stats_enabled')
         }),
         ('Timestamps', {

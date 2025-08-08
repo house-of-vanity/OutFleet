@@ -1,0 +1,20 @@
+{% extends "admin/change_list.html" %}
+
+{% block content %}
+    {% if show_tab_navigation %}
+    <div class="module" style="margin-bottom: 20px;">
+        <div style="display: flex; border-bottom: 1px solid #ddd;">
+            <a href="{% url 'admin:vpn_subscriptiongroup_changelist' %}" 
+               style="padding: 10px 20px; text-decoration: none; border-bottom: 3px solid {% if current_tab == 'subscription_groups' %}#417690{% else %}transparent{% endif %}; color: {% if current_tab == 'subscription_groups' %}#417690{% else %}#666{% endif %};">
+                📋 Subscription Groups
+            </a>
+            <a href="/admin/vpn/usersubscription/"
+               style="padding: 10px 20px; text-decoration: none; border-bottom: 3px solid {% if current_tab == 'user_subscriptions' %}#417690{% else %}transparent{% endif %}; color: {% if current_tab == 'user_subscriptions' %}#417690{% else %}#666{% endif %};">
+                👥 User Subscriptions
+            </a>
+        </div>
+    </div>
+    {% endif %}
+    
+    {{ block.super }}
+{% endblock %}

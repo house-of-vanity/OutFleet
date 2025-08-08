@@ -441,17 +441,18 @@ class CertificateAdmin(admin.ModelAdmin):
 
 @admin.register(Inbound)
 class InboundAdmin(admin.ModelAdmin):
-    """Admin for inbound management"""
+    """Admin for inbound template management"""
     list_display = (
         'name', 'protocol', 'port', 'network', 
         'security', 'certificate_status', 'group_count'
     )
     list_filter = ('protocol', 'network', 'security')
-    search_fields = ('name', 'domain')
+    search_fields = ('name',)
     
     fieldsets = (
         ('Basic Configuration', {
-            'fields': ('name', 'protocol', 'port', 'domain')
+            'fields': ('name', 'protocol', 'port'),
+            'description': 'Domain will be taken from server client_hostname when deployed'
         }),
         ('Transport & Security', {
             'fields': ('network', 'security', 'certificate', 'listen_address')
@@ -523,7 +524,6 @@ class InboundInline(admin.TabularInline):
     verbose_name_plural = "Inbounds in this group"
 
 
-@admin.register(SubscriptionGroup)
 class SubscriptionGroupAdmin(admin.ModelAdmin):
     """Admin for subscription groups"""
     list_display = ('name', 'is_active', 'inbound_count', 'user_count', 'created_at')
@@ -582,6 +582,7 @@ class SubscriptionGroupAdmin(admin.ModelAdmin):
             return format_html(html)
         return 'Save to see statistics'
     group_statistics.short_description = 'Group Statistics'
+
 
 
 class UserSubscriptionInline(admin.TabularInline):
@@ -673,21 +674,19 @@ def add_subscription_management_to_user(UserAdmin):
     UserAdmin.subscription_groups_widget = subscription_groups_widget
 
 
-# Register admin for UserSubscription (if needed separately)
-@admin.register(UserSubscription)
+# UserSubscription admin will be integrated into unified Subscriptions admin
 class UserSubscriptionAdmin(admin.ModelAdmin):
-    """Standalone admin for user subscriptions"""
+    """Admin for user subscriptions (integrated into unified Subscriptions admin)"""
     list_display = ('user', 'subscription_group', 'active', 'created_at')
     list_filter = ('active', 'subscription_group')
     search_fields = ('user__username', 'subscription_group__name')
     date_hierarchy = 'created_at'
     
     def has_add_permission(self, request):
-        # Prefer managing through User admin
-        return False
+        return True  # Allow adding subscriptions
 
 
-@admin.register(ServerInbound)
+# ServerInbound admin is integrated into XrayServerV2 admin, not shown in main menu
 class ServerInboundAdmin(admin.ModelAdmin):
     """Admin for server-inbound deployment tracking"""
     list_display = ('server', 'inbound', 'active', 'deployed_at', 'updated_at')
@@ -696,12 +695,8 @@ class ServerInboundAdmin(admin.ModelAdmin):
     date_hierarchy = 'deployed_at'
     
     fieldsets = (
-        ('Deployment', {
+        ('Template Deployment', {
             'fields': ('server', 'inbound', 'active')
-        }),
-        ('Configuration', {
-            'fields': ('deployment_config_display', 'deployment_config'),
-            'classes': ('collapse',)
         }),
         ('Timestamps', {
             'fields': ('deployed_at', 'updated_at'),
@@ -709,14 +704,164 @@ class ServerInboundAdmin(admin.ModelAdmin):
         })
     )
     
-    readonly_fields = ('deployment_config_display', 'deployed_at', 'updated_at')
+    readonly_fields = ('deployed_at', 'updated_at')
+
+
+# Unified Subscriptions Admin with tabs
+@admin.register(SubscriptionGroup)
+class UnifiedSubscriptionsAdmin(admin.ModelAdmin):
+    """Unified admin for managing both Subscription Groups and User Subscriptions"""
     
-    def deployment_config_display(self, obj):
-        """Display deployment config in formatted JSON"""
-        if obj.deployment_config:
-            return format_html(
-                '<pre style="background: #f4f4f4; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;">{}</pre>',
-                json.dumps(obj.deployment_config, indent=2)
+    # Use SubscriptionGroup as the base model but provide access to UserSubscription via tabs
+    list_display = ('name', 'is_active', 'inbound_count', 'user_count', 'created_at')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'description')
+    filter_horizontal = ('inbounds',)
+    
+    def get_urls(self):
+        """Add custom URLs for user subscriptions tab"""
+        urls = super().get_urls()
+        custom_urls = [
+            path('user-subscriptions/', 
+                 self.admin_site.admin_view(self.user_subscriptions_view),
+                 name='vpn_usersubscription_changelist_tab'),
+        ]
+        return custom_urls + urls
+    
+    def user_subscriptions_view(self, request):
+        """Redirect to user subscriptions with tab navigation"""
+        from django.shortcuts import redirect
+        return redirect('/admin/vpn/usersubscription/')
+    
+    def changelist_view(self, request, extra_context=None):
+        """Override changelist to add tab navigation"""
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_tab_navigation': True,
+            'current_tab': 'subscription_groups'
+        })
+        return super().changelist_view(request, extra_context)
+    
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        """Override change view to add tab navigation"""
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_tab_navigation': True,
+            'current_tab': 'subscription_groups'
+        })
+        return super().change_view(request, object_id, form_url, extra_context)
+    
+    def add_view(self, request, form_url='', extra_context=None):
+        """Override add view to add tab navigation"""
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_tab_navigation': True,
+            'current_tab': 'subscription_groups'
+        })
+        return super().add_view(request, form_url, extra_context)
+    
+    # Copy fieldsets and methods from SubscriptionGroupAdmin
+    fieldsets = (
+        ('Group Information', {
+            'fields': ('name', 'description', 'is_active')
+        }),
+        ('Inbounds', {
+            'fields': ('inbounds',),
+            'description': 'Select inbounds to include in this group. ' +
+                         '<br><strong>🚀 Auto-sync enabled:</strong> Changes will be automatically deployed to servers!'
+        }),
+        ('Statistics', {
+            'fields': ('group_statistics',),
+            'classes': ('collapse',)
+        })
+    )
+    
+    readonly_fields = ('group_statistics',)
+    
+    def save_model(self, request, obj, form, change):
+        """Override save to notify about auto-sync"""
+        super().save_model(request, obj, form, change)
+        if change:
+            messages.success(
+                request, 
+                f'Subscription group "{obj.name}" updated. Changes will be automatically synchronized to all Xray servers.'
             )
-        return 'No additional deployment configuration'
-    deployment_config_display.short_description = 'Deployment Config Preview'
+        else:
+            messages.success(
+                request, 
+                f'Subscription group "{obj.name}" created. Inbounds will be automatically deployed when you add them to this group.'
+            )
+    
+    def group_statistics(self, obj):
+        """Display group statistics"""
+        if obj.pk:
+            stats = {
+                'Total Inbounds': obj.inbound_count,
+                'Active Users': obj.user_count,
+                'Protocols': list(obj.inbounds.values_list('protocol', flat=True).distinct()),
+                'Ports': list(obj.inbounds.values_list('port', flat=True).distinct())
+            }
+            
+            html = '<div style="background: #f4f4f4; padding: 10px; border-radius: 4px;">'
+            for key, value in stats.items():
+                if isinstance(value, list):
+                    value = ', '.join(map(str, value))
+                html += f'<div><strong>{key}:</strong> {value}</div>'
+            html += '</div>'
+            
+            return format_html(html)
+        return 'Save to see statistics'
+    group_statistics.short_description = 'Group Statistics'
+
+
+# UserSubscription admin with tab navigation (hidden from main menu)
+@admin.register(UserSubscription)  
+class UserSubscriptionTabAdmin(UserSubscriptionAdmin):
+    """UserSubscription admin with tab navigation"""
+    
+    def has_module_permission(self, request):
+        """Hide this model from the main admin index"""
+        return False
+        
+    def has_view_permission(self, request, obj=None):
+        """Allow viewing through direct URL access"""
+        return request.user.is_staff
+        
+    def has_add_permission(self, request):
+        """Allow adding through direct URL access"""
+        return request.user.is_staff
+        
+    def has_change_permission(self, request, obj=None):
+        """Allow changing through direct URL access"""
+        return request.user.is_staff
+        
+    def has_delete_permission(self, request, obj=None):
+        """Allow deleting through direct URL access"""
+        return request.user.is_staff
+    
+    def changelist_view(self, request, extra_context=None):
+        """Override changelist to add tab navigation"""
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_tab_navigation': True,
+            'current_tab': 'user_subscriptions'
+        })
+        return super().changelist_view(request, extra_context)
+    
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        """Override change view to add tab navigation"""
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_tab_navigation': True,
+            'current_tab': 'user_subscriptions'
+        })
+        return super().change_view(request, object_id, form_url, extra_context)
+    
+    def add_view(self, request, form_url='', extra_context=None):
+        """Override add view to add tab navigation"""
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_tab_navigation': True,
+            'current_tab': 'user_subscriptions'
+        })
+        return super().add_view(request, form_url, extra_context)

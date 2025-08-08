@@ -1,0 +1,18 @@
+{% extends "admin/change_list.html" %}
+
+{% block content %}
+    <div class="module" style="margin-bottom: 20px;">
+        <div style="display: flex; border-bottom: 1px solid #ddd;">
+            <a href="{% url 'admin:vpn_subscriptiongroup_changelist' %}" 
+               style="padding: 10px 20px; text-decoration: none; border-bottom: 3px solid transparent; color: #666;">
+                📋 Subscription Groups
+            </a>
+            <a href="/admin/vpn/usersubscription/"
+               style="padding: 10px 20px; text-decoration: none; border-bottom: 3px solid #417690; color: #417690;">
+                👥 User Subscriptions
+            </a>
+        </div>
+    </div>
+    
+    {{ block.super }}
+{% endblock %}

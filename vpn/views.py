@@ -57,8 +57,12 @@ def userPortal(request, user_hash):
             group_name = group.name
             logger.debug(f"Processing subscription group {group_name}")
             
-            # Get all inbounds for this group
-            group_inbounds = group.inbounds.all()
+            # Get all deployed inbounds for this group (count actual server deployments)
+            from .models_xray import ServerInbound
+            deployed_inbounds = ServerInbound.objects.filter(
+                inbound__in=group.inbounds.all(),
+                active=True
+            ).select_related('inbound', 'server')
             
             # Calculate connections for this specific group
             group_connections = AccessLog.objects.filter(
@@ -73,9 +77,12 @@ def userPortal(request, user_hash):
                 'subscription': subscription,
                 'inbounds': [],
                 'total_connections': group_connections,
+                'deployed_count': deployed_inbounds.count(),  # Actual deployed inbounds count
             }
             
-            for inbound in group_inbounds:
+            # Process each deployed inbound (each server-inbound combination)
+            for server_inbound in deployed_inbounds:
+                inbound = server_inbound.inbound
                 logger.debug(f"Processing inbound {inbound.name} in group {group_name}")
                 
                 # Generate connection URLs based on protocol
@@ -84,7 +91,7 @@ def userPortal(request, user_hash):
                 if inbound.protocol == 'vless':
                     # Generate VLESS URL - this is a placeholder implementation
                     # In the real implementation, you'd generate proper VLESS URLs with user UUID
-                    connection_url = f"vless://user-uuid@{inbound.domain or EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
+                    connection_url = f"vless://user-uuid@{EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
                     connection_urls.append({
                         'url': connection_url,
                         'protocol': 'VLESS',
@@ -92,7 +99,7 @@ def userPortal(request, user_hash):
                     })
                 elif inbound.protocol == 'vmess':
                     # Generate VMess URL - placeholder
-                    connection_url = f"vmess://user-config@{inbound.domain or EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
+                    connection_url = f"vmess://user-config@{EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
                     connection_urls.append({
                         'url': connection_url,
                         'protocol': 'VMess',
@@ -100,7 +107,7 @@ def userPortal(request, user_hash):
                     })
                 elif inbound.protocol == 'trojan':
                     # Generate Trojan URL - placeholder
-                    connection_url = f"trojan://user-password@{inbound.domain or EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
+                    connection_url = f"trojan://user-password@{EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
                     connection_urls.append({
                         'url': connection_url,
                         'protocol': 'Trojan',
@@ -108,7 +115,7 @@ def userPortal(request, user_hash):
                     })
                 elif inbound.protocol == 'shadowsocks':
                     # Generate Shadowsocks URL - placeholder
-                    connection_url = f"ss://user-config@{inbound.domain or EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
+                    connection_url = f"ss://user-config@{EXTERNAL_ADDRESS}:{inbound.port}#{inbound.name}"
                     connection_urls.append({
                         'url': connection_url,
                         'protocol': 'Shadowsocks',
@@ -120,11 +127,13 @@ def userPortal(request, user_hash):
                     'connection_urls': connection_urls,
                     'protocol': inbound.protocol.upper(),
                     'port': inbound.port,
-                    'domain': inbound.domain or EXTERNAL_ADDRESS,
+                    'domain': EXTERNAL_ADDRESS,
                     'network': inbound.network,
                     'security': inbound.security,
                     'connections': 0,  # Placeholder during transition
                     'last_access_display': "Never used",  # Placeholder
+                    'server': server_inbound.server,  # Server that deployed this inbound
+                    'server_name': server_inbound.server.name,  # Server name for display
                 }
                 
                 groups_data[group_name]['inbounds'].append(inbound_data)
@@ -365,12 +374,23 @@ def xray_subscription(request, user_hash):
             # Get all inbounds from this group
             for inbound in group.inbounds.all():
                 try:
-                    # Generate connection string based on protocol
-                    connection_string = generate_xray_connection_string(user, inbound)
+                    # Find all servers where this inbound is deployed
+                    from .models_xray import ServerInbound
+                    deployed_servers = ServerInbound.objects.filter(
+                        inbound=inbound, 
+                        active=True
+                    ).select_related('server')
                     
-                    if connection_string:
-                        subscription_configs.append(connection_string)
-                        logger.info(f"Added {inbound.protocol} config for inbound {inbound.name}")
+                    # Generate connection string for each server where inbound is deployed
+                    for server_inbound in deployed_servers:
+                        server = server_inbound.server
+                        # Get server's client_hostname for XrayServerV2
+                        server_hostname = getattr(server.get_real_instance(), 'client_hostname', None)
+                        connection_string = generate_xray_connection_string(user, inbound, server.name, server_hostname)
+                        
+                        if connection_string:
+                            subscription_configs.append(connection_string)
+                            logger.info(f"Added {inbound.protocol} config for inbound {inbound.name} on server {server.name}")
                         
                 except Exception as e:
                     logger.warning(f"Failed to generate config for inbound {inbound.name}: {e}")
@@ -449,17 +469,29 @@ def xray_subscription_json(request, user, user_hash):
             # Get all inbounds from this group
             for inbound in group.inbounds.all():
                 try:
-                    # Generate connection string
-                    connection_string = generate_xray_connection_string(user, inbound)
+                    # Find all servers where this inbound is deployed
+                    from .models_xray import ServerInbound
+                    deployed_servers = ServerInbound.objects.filter(
+                        inbound=inbound, 
+                        active=True
+                    ).select_related('server')
                     
-                    if connection_string:
-                        group_configs.append({
-                            'name': inbound.name,
+                    # Generate connection string for each server where inbound is deployed
+                    for server_inbound in deployed_servers:
+                        server = server_inbound.server
+                        # Get server's client_hostname for XrayServerV2
+                        server_hostname = getattr(server.get_real_instance(), 'client_hostname', None)
+                        connection_string = generate_xray_connection_string(user, inbound, server.name, server_hostname)
+                        
+                        if connection_string:
+                            config_name = f"{server.name} {inbound.name}"
+                            group_configs.append({
+                            'name': config_name,
                             'protocol': inbound.protocol.upper(),
                             'port': inbound.port,
                             'network': inbound.network,
                             'security': inbound.security,
-                            'domain': inbound.domain,
+                            'domain': host,
                             'connection_string': connection_string
                         })
                         
@@ -481,7 +513,7 @@ def xray_subscription_json(request, user, user_hash):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-def generate_xray_connection_string(user, inbound):
+def generate_xray_connection_string(user, inbound, server_name=None, server_hostname=None):
     """Generate Xray connection string for user and inbound"""
     import uuid
     import base64
@@ -492,8 +524,8 @@ def generate_xray_connection_string(user, inbound):
         # Generate user UUID based on user ID and inbound
         user_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{user.username}-{inbound.name}"))
         
-        # Get host (domain or EXTERNAL_ADDRESS)
-        host = inbound.domain if inbound.domain else EXTERNAL_ADDRESS
+        # Get host (use server's client_hostname if available, fallback to EXTERNAL_ADDRESS)
+        host = server_hostname if server_hostname else EXTERNAL_ADDRESS
         
         if inbound.protocol == 'vless':
             # VLESS URL format: vless://uuid@host:port?params#name
@@ -504,8 +536,8 @@ def generate_xray_connection_string(user, inbound):
             
             if inbound.security != 'none':
                 params.append(f"security={inbound.security}")
-                if inbound.security == 'tls' and inbound.domain:
-                    params.append(f"sni={inbound.domain}")
+                if inbound.security == 'tls' and host:
+                    params.append(f"sni={host}")
             
             if inbound.network == 'ws':
                 params.append(f"path=/{inbound.name}")
@@ -515,13 +547,17 @@ def generate_xray_connection_string(user, inbound):
             param_string = '&'.join(params)
             query_part = f"?{param_string}" if param_string else ""
             
-            connection_string = f"vless://{user_uuid}@{host}:{inbound.port}{query_part}#{quote(inbound.name)}"
+            # Generate config name: ServerName InboundName (e.g., "Israel VLESS-Premium")
+            config_name = f"{server_name} {inbound.name}" if server_name else inbound.name
+            connection_string = f"vless://{user_uuid}@{host}:{inbound.port}{query_part}#{quote(config_name)}"
             
         elif inbound.protocol == 'vmess':
             # VMess JSON format encoded in base64
+            # Generate config name: ServerName InboundName (e.g., "Israel VMESS-Premium")
+            config_name = f"{server_name} {inbound.name}" if server_name else inbound.name
             vmess_config = {
                 "v": "2",
-                "ps": inbound.name,
+                "ps": config_name,
                 "add": host,
                 "port": str(inbound.port),
                 "id": user_uuid,
@@ -529,7 +565,7 @@ def generate_xray_connection_string(user, inbound):
                 "scy": "auto",
                 "net": inbound.network,
                 "type": "none",
-                "host": inbound.domain if inbound.domain else "",
+                "host": host if host else "",
                 "path": f"/{inbound.name}" if inbound.network == 'ws' else "",
                 "tls": inbound.security if inbound.security != 'none' else ""
             }
@@ -543,8 +579,8 @@ def generate_xray_connection_string(user, inbound):
             # Use user UUID as password
             params = []
             
-            if inbound.security != 'none' and inbound.domain:
-                params.append(f"sni={inbound.domain}")
+            if inbound.security != 'none' and host:
+                params.append(f"sni={host}")
             
             if inbound.network != 'tcp':
                 params.append(f"type={inbound.network}")
@@ -556,11 +592,14 @@ def generate_xray_connection_string(user, inbound):
             param_string = '&'.join(params)
             query_part = f"?{param_string}" if param_string else ""
             
-            connection_string = f"trojan://{user_uuid}@{host}:{inbound.port}{query_part}#{quote(inbound.name)}"
+            # Generate config name: ServerName InboundName (e.g., "Israel TROJAN-Premium")
+            config_name = f"{server_name} {inbound.name}" if server_name else inbound.name
+            connection_string = f"trojan://{user_uuid}@{host}:{inbound.port}{query_part}#{quote(config_name)}"
             
         else:
             # Fallback for unknown protocols
-            connection_string = f"{inbound.protocol}://{user_uuid}@{host}:{inbound.port}#{quote(inbound.name)}"
+            config_name = f"{server_name} {inbound.name}" if server_name else inbound.name
+            connection_string = f"{inbound.protocol}://{user_uuid}@{host}:{inbound.port}#{quote(config_name)}"
         
         return connection_string
         
