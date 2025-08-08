@@ -171,6 +171,6 @@ class ACLLink(models.Model):
 
 # Import new Xray models
 from .models_xray import (
-    XrayConfiguration, Credentials, Certificate,
+    Credentials, Certificate,
     Inbound, SubscriptionGroup, UserSubscription
 )

@@ -28,10 +28,22 @@ def userPortal(request, user_hash):
         
         logger.info(f"Found {user_subscriptions.count()} active subscription groups for user {user.username}")
         
-        # For now, set statistics to zero as we're transitioning systems
-        total_connections = 0
-        recent_connections = 0
-        logger.info(f"Using zero stats during transition for user {user.username}")
+        # Calculate overall Xray subscription statistics
+        from .models import AccessLog
+        total_connections = AccessLog.objects.filter(
+            user=user.username,
+            action='Success',
+            server='Xray-Subscription'
+        ).count()
+        
+        recent_connections = AccessLog.objects.filter(
+            user=user.username,
+            action='Success',
+            server='Xray-Subscription',
+            timestamp__gte=timezone.now() - timedelta(days=30)
+        ).count()
+        
+        logger.info(f"Xray statistics for user {user.username}: total={total_connections}, recent={recent_connections}")
         
         # Determine protocol scheme
         scheme = 'https' if request.is_secure() else 'http'
@@ -48,11 +60,19 @@ def userPortal(request, user_hash):
             # Get all inbounds for this group
             group_inbounds = group.inbounds.all()
             
+            # Calculate connections for this specific group
+            group_connections = AccessLog.objects.filter(
+                user=user.username,
+                action='Success',
+                server='Xray-Subscription',
+                data__icontains=f'"group": "{group_name}"'
+            ).count()
+            
             groups_data[group_name] = {
                 'group': group,
                 'subscription': subscription,
                 'inbounds': [],
-                'total_connections': 0,  # Placeholder during transition
+                'total_connections': group_connections,
             }
             
             for inbound in group_inbounds:

@@ -10,42 +10,6 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 
-class XrayConfiguration(models.Model):
-    """Global Xray configuration - Admin menu settings"""
-    grpc_address = models.CharField(
-        max_length=255,
-        default="127.0.0.1:10085",
-        help_text="Xray gRPC API address (host:port)"
-    )
-    default_client_hostname = models.CharField(
-        max_length=255,
-        help_text="Default hostname for client connections"
-    )
-    stats_enabled = models.BooleanField(
-        default=True,
-        help_text="Enable traffic statistics"
-    )
-    cert_renewal_days = models.IntegerField(
-        default=60,
-        help_text="Renew certificates X days before expiration"
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        verbose_name = "Xray Configuration"
-        verbose_name_plural = "Xray Configuration"
-    
-    def __str__(self):
-        return f"Xray Config - {self.grpc_address}"
-    
-    def save(self, *args, **kwargs):
-        # Ensure only one configuration exists
-        if not self.pk and XrayConfiguration.objects.exists():
-            raise ValidationError("Only one Xray configuration allowed")
-        super().save(*args, **kwargs)
-
-
 class Credentials(models.Model):
     """Universal credentials storage for various services"""
     CRED_TYPES = [
@@ -171,11 +135,8 @@ class Certificate(models.Model):
         if not self.auto_renew or not self.expires_at:
             return False
         
-        try:
-            config = XrayConfiguration.objects.first()
-            renewal_days = config.cert_renewal_days if config else 60
-        except:
-            renewal_days = 60
+        # Default renewal period
+        renewal_days = 60
         
         days_left = self.days_until_expiration
         if days_left is None:

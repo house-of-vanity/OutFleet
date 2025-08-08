@@ -2,7 +2,7 @@ import logging
 from django.db import models
 from django.contrib import admin
 from .generic import Server
-from vpn.models_xray import XrayConfiguration, Inbound, UserSubscription
+from vpn.models_xray import Inbound, UserSubscription
 
 logger = logging.getLogger(__name__)
 
@@ -151,17 +151,16 @@ class XrayServerV2(Server):
             logger.error(f"Failed to schedule user sync for server {self.name}: {e}")
             return {"status": "failed", "error": str(e)}
     
-    def sync_inbounds(self):
+    def sync_inbounds(self, auto_sync_users=True):
         """Deploy all required inbounds on this server based on subscription groups"""
         try:
             from vpn.tasks import sync_server_inbounds
-            task = sync_server_inbounds.delay(self.id)
+            task = sync_server_inbounds.delay(self.id, auto_sync_users)
             logger.info(f"Scheduled inbound sync for Xray server {self.name} - task ID: {task.id}")
-            # Return None to match old behavior
-            return None
+            return {"task_id": str(task.id), "auto_sync_users": auto_sync_users}
         except Exception as e:
             logger.error(f"Failed to schedule inbound sync for server {self.name}: {e}")
-            return None
+            return {"error": str(e)}
     
     def deploy_inbound(self, inbound, users=None):
         """Deploy a specific inbound on this server with optional users"""

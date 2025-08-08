@@ -544,8 +544,9 @@ def sync_user_xray_access(self, user_id, server_id):
     Creates inbounds on server if needed and adds user to them.
     """
     from .models import User, Server
-    from .models_xray import SubscriptionGroup, Inbound, XrayConfiguration
+    from .models_xray import SubscriptionGroup, Inbound
     from vpn.xray_api_v2.client import XrayClient
+    from vpn.server_plugins.xray_v2 import XrayServerV2
     
     start_time = time.time()
     task_id = self.request.id
@@ -554,10 +555,10 @@ def sync_user_xray_access(self, user_id, server_id):
         user = User.objects.get(id=user_id)
         server = Server.objects.get(id=server_id)
         
-        # Get Xray configuration
-        xray_config = XrayConfiguration.objects.first()
-        if not xray_config:
-            raise ValueError("Xray configuration not found. Please configure in admin.")
+        # Get server instance
+        real_server = server.get_real_instance()
+        if not isinstance(real_server, XrayServerV2):
+            raise ValueError(f"Server {server.name} is not an Xray v2 server")
         
         create_task_log(
             task_id, "sync_user_xray_access", 
@@ -584,7 +585,7 @@ def sync_user_xray_access(self, user_id, server_id):
         logger.info(f"User {user.username} has access to {user_inbounds.count()} inbounds")
         
         # Connect to Xray server
-        client = XrayClient(xray_config.grpc_address)
+        client = XrayClient(real_server.api_address)
         
         # Get existing inbounds on server
         try:
@@ -734,13 +735,13 @@ def sync_server_users(self, server_id):
 
 
 @shared_task(name="sync_server_inbounds", bind=True)
-def sync_server_inbounds(self, server_id):
+def sync_server_inbounds(self, server_id, auto_sync_users=True):
     """
     Sync all inbounds for a specific Xray server.
     This is called by XrayServerV2.sync_inbounds()
     """
     from vpn.server_plugins import Server
-    from vpn.models_xray import SubscriptionGroup, ServerInbound
+    from vpn.models_xray import SubscriptionGroup, ServerInbound, UserSubscription
     
     try:
         server = Server.objects.get(id=server_id)
@@ -753,18 +754,167 @@ def sync_server_inbounds(self, server_id):
         for group in groups:
             for inbound in group.inbounds.all():
                 try:
-                    if real_server.deploy_inbound(inbound):
+                    # Get users for this inbound
+                    users_with_access = []
+                    group_users = [
+                        sub.user for sub in 
+                        UserSubscription.objects.filter(
+                            subscription_group=group,
+                            active=True
+                        ).select_related('user')
+                    ]
+                    users_with_access.extend(group_users)
+                    
+                    # Remove duplicates
+                    users_with_access = list(set(users_with_access))
+                    
+                    # Deploy inbound with users
+                    if real_server.deploy_inbound(inbound, users=users_with_access):
                         deployed_count += 1
-                        logger.info(f"Deployed inbound {inbound.name} on server {server.name}")
+                        
+                        # Mark as deployed
+                        ServerInbound.objects.update_or_create(
+                            server=server,
+                            inbound=inbound,
+                            defaults={'active': True}
+                        )
+                        
+                        logger.info(f"Deployed inbound {inbound.name} with {len(users_with_access)} users on server {server.name}")
+                    else:
+                        logger.error(f"Failed to deploy inbound {inbound.name} on server {server.name}")
                 except Exception as e:
                     logger.error(f"Failed to deploy inbound {inbound.name} on server {server.name}: {e}")
         
         logger.info(f"Successfully deployed {deployed_count} inbounds on server {server.name}")
-        return {"inbounds_deployed": deployed_count}
+        
+        # Automatically sync users after inbound deployment if requested
+        if auto_sync_users and deployed_count > 0:
+            logger.info(f"Scheduling user sync for server {server.name} after inbound deployment")
+            sync_server_users.apply_async(args=[server_id], countdown=5)  # 5 second delay
+        
+        return {"inbounds_deployed": deployed_count, "auto_sync_users": auto_sync_users}
         
     except Exception as e:
         logger.error(f"Error syncing inbounds for server {server_id}: {e}")
         raise
+
+
+@shared_task(name="deploy_inbound_on_server", bind=True)
+def deploy_inbound_on_server(self, server_id, inbound_id):
+    """
+    Deploy a specific inbound on a specific server
+    """
+    from vpn.server_plugins import Server
+    from vpn.models_xray import Inbound
+    
+    try:
+        server = Server.objects.get(id=server_id)
+        real_server = server.get_real_instance()
+        inbound = Inbound.objects.get(id=inbound_id)
+        
+        logger.info(f"Deploying inbound {inbound.name} on server {server.name}")
+        
+        # Get all users that should have access to this inbound
+        from vpn.models_xray import UserSubscription
+        users_with_access = []
+        
+        # Find users through subscription groups
+        for group in inbound.subscriptiongroup_set.filter(is_active=True):
+            group_users = [
+                sub.user for sub in 
+                UserSubscription.objects.filter(
+                    subscription_group=group,
+                    active=True
+                ).select_related('user')
+            ]
+            users_with_access.extend(group_users)
+        
+        # Remove duplicates
+        users_with_access = list(set(users_with_access))
+        
+        logger.info(f"Deploying inbound {inbound.name} with {len(users_with_access)} users")
+        
+        # Deploy inbound with users
+        if real_server.deploy_inbound(inbound, users=users_with_access):
+            # Mark as deployed
+            from vpn.models_xray import ServerInbound
+            ServerInbound.objects.update_or_create(
+                server=server,
+                inbound=inbound,
+                defaults={'active': True}
+            )
+            logger.info(f"Successfully deployed inbound {inbound.name} on server {server.name}")
+            return {"success": True, "inbound": inbound.name, "server": server.name, "users": len(users_with_access)}
+        else:
+            logger.error(f"Failed to deploy inbound {inbound.name} on server {server.name}")
+            return {"success": False, "inbound": inbound.name, "server": server.name, "error": "Deployment failed"}
+            
+    except Exception as e:
+        logger.error(f"Error deploying inbound {inbound_id} on server {server_id}: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@shared_task(name="remove_inbound_from_server", bind=True)
+def remove_inbound_from_server(self, server_id, inbound_name):
+    """
+    Remove a specific inbound from a specific server
+    """
+    from vpn.server_plugins import Server
+    from vpn.xray_api_v2.client import XrayClient
+    
+    try:
+        server = Server.objects.get(id=server_id)
+        real_server = server.get_real_instance()
+        
+        logger.info(f"Removing inbound {inbound_name} from server {server.name}")
+        
+        # Remove inbound using Xray API
+        client = XrayClient(server=real_server.api_address)
+        result = client.remove_inbound(inbound_name)
+        
+        # Remove from ServerInbound tracking
+        from vpn.models_xray import ServerInbound, Inbound
+        try:
+            inbound = Inbound.objects.get(name=inbound_name)
+            ServerInbound.objects.filter(server=server, inbound=inbound).delete()
+        except Inbound.DoesNotExist:
+            pass  # Inbound was already deleted from Django
+        
+        logger.info(f"Successfully removed inbound {inbound_name} from server {server.name}")
+        return {"success": True, "inbound": inbound_name, "server": server.name}
+        
+    except Exception as e:
+        logger.error(f"Error removing inbound {inbound_name} from server {server_id}: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@shared_task(name="remove_user_from_server", bind=True)
+def remove_user_from_server(self, server_id, user_id):
+    """
+    Remove a specific user from a specific server
+    """
+    from vpn.server_plugins import Server
+    from vpn.models import User
+    
+    try:
+        server = Server.objects.get(id=server_id)
+        real_server = server.get_real_instance()
+        user = User.objects.get(id=user_id)
+        
+        logger.info(f"Removing user {user.username} from server {server.name}")
+        
+        result = real_server.delete_user(user)
+        
+        if result:
+            logger.info(f"Successfully removed user {user.username} from server {server.name}")
+            return {"success": True, "user": user.username, "server": server.name}
+        else:
+            logger.warning(f"Failed to remove user {user.username} from server {server.name}")
+            return {"success": False, "user": user.username, "server": server.name, "error": "Removal failed"}
+            
+    except Exception as e:
+        logger.error(f"Error removing user {user_id} from server {server_id}: {e}")
+        return {"success": False, "error": str(e)}
 
 
 @shared_task(name="generate_certificate_task", bind=True)
@@ -857,7 +1007,7 @@ def renew_certificates(self):
     """
     Check and renew certificates that are about to expire.
     """
-    from .models_xray import Certificate, XrayConfiguration
+    from .models_xray import Certificate
     from .letsencrypt import get_certificate_for_domain
     from datetime import datetime
     

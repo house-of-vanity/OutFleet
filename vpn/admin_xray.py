@@ -13,33 +13,15 @@ from django.urls import path, reverse
 from django.http import JsonResponse, HttpResponseRedirect
 
 from .models_xray import (
-    XrayConfiguration, Credentials, Certificate,
+    Credentials, Certificate,
     Inbound, SubscriptionGroup, UserSubscription, ServerInbound
 )
 
 
-@admin.register(XrayConfiguration)
-class XrayConfigurationAdmin(admin.ModelAdmin):
-    """Admin for global Xray configuration"""
-    list_display = ('grpc_address', 'default_client_hostname', 'stats_enabled', 'cert_renewal_days', 'updated_at')
-    fields = (
-        'grpc_address', 'default_client_hostname', 
-        'stats_enabled', 'cert_renewal_days',
-        'created_at', 'updated_at'
-    )
-    readonly_fields = ('created_at', 'updated_at')
-    
-    def has_add_permission(self, request):
-        # Only allow one configuration
-        return not XrayConfiguration.objects.exists()
-    
-    def has_delete_permission(self, request, obj=None):
-        return False
 
-
-@admin.register(Credentials)
+# Credentials admin available through direct URL but not in main menu
 class CredentialsAdmin(admin.ModelAdmin):
-    """Admin for credentials management"""
+    """Admin for credentials management (accessible via direct URL only)"""
     list_display = ('name', 'cred_type', 'description', 'created_at')
     list_filter = ('cred_type',)
     search_fields = ('name', 'description')
@@ -50,7 +32,7 @@ class CredentialsAdmin(admin.ModelAdmin):
         }),
         ('Credentials Data', {
             'fields': ('credentials_help', 'credentials'),
-            'description': 'Enter credentials as JSON. Example: {"api_token": "your_token", "email": "your_email"}'
+            'description': 'Enter credentials as JSON'
         }),
         ('Preview', {
             'fields': ('credentials_display',),
@@ -64,27 +46,23 @@ class CredentialsAdmin(admin.ModelAdmin):
     
     readonly_fields = ('credentials_display', 'credentials_help', 'created_at', 'updated_at')
     
-    # Add JSON widget for better formatting
     formfield_overrides = {
-        models.JSONField: {'widget': Textarea(attrs={'rows': 10, 'cols': 80, 'class': 'vLargeTextField'})},
+        models.JSONField: {'widget': Textarea(attrs={'rows': 6, 'style': 'font-family: monospace;'})},
     }
     
     def credentials_help(self, obj):
-        """Help text and examples for credentials field"""
+        """Display help for different credential formats"""
         examples = {
             'cloudflare': {
-                'api_token': 'your_cloudflare_api_token',
-                'email': 'your_email@example.com'
+                'api_token': 'your_cloudflare_api_token_here'
             },
-            'dns_provider': {
-                'api_key': 'your_dns_api_key',
-                'secret': 'your_secret'
+            'digitalocean': {
+                'token': 'your_digitalocean_token_here'
             },
-            'email': {
-                'smtp_host': 'smtp.example.com',
-                'smtp_port': 587,
-                'username': 'your_email',
-                'password': 'your_password'
+            'aws_route53': {
+                'access_key_id': 'your_access_key_id',
+                'secret_access_key': 'your_secret_access_key',
+                'region': 'us-east-1'
             }
         }
         
@@ -122,6 +100,9 @@ class CredentialsAdmin(admin.ModelAdmin):
         return '-'
     credentials_display.short_description = 'Credentials (Preview)'
 
+# Credentials admin is available through Certificate admin only
+# Do not register directly to avoid showing in main menu
+
 
 @admin.register(Certificate)
 class CertificateAdmin(admin.ModelAdmin):
@@ -132,20 +113,25 @@ class CertificateAdmin(admin.ModelAdmin):
     )
     list_filter = ('cert_type', 'auto_renew')
     search_fields = ('domain',)
+    actions = ['rotate_selected_certificates']
     
     fieldsets = (
         ('Certificate Request', {
-            'fields': ('domain', 'cert_type', 'acme_email', 'credentials', 'auto_renew'),
-            'description': 'For Let\'s Encrypt certificates, provide email for ACME registration and select credentials with Cloudflare API token.'
+            'fields': ('domain', 'cert_type', 'acme_email', 'auto_renew'),
+            'description': 'For Let\'s Encrypt certificates, provide email for ACME registration and select/create credentials below.'
         }),
-        ('Certificate Status', {
-            'fields': ('generation_help', 'status_display', 'expires_at'),
+        ('API Credentials', {
+            'fields': ('credentials',),
+            'description': 'Select API credentials for automatic Let\'s Encrypt certificate generation'
+        }),
+        ('Certificate Generation Status', {
+            'fields': ('generation_help',),
             'classes': ('wide',)
         }),
         ('Certificate Data', {
-            'fields': ('certificate_preview', 'certificate_pem', 'private_key_pem'),
+            'fields': ('certificate_info', 'certificate_pem', 'private_key_pem'),
             'classes': ('collapse',),
-            'description': 'Certificate data (auto-generated for Let\'s Encrypt)'
+            'description': 'Detailed certificate information'
         }),
         ('Renewal Settings', {
             'fields': ('last_renewed',),
@@ -158,7 +144,7 @@ class CertificateAdmin(admin.ModelAdmin):
     )
     
     readonly_fields = (
-        'certificate_preview', 'status_display', 'generation_help',
+        'certificate_info', 'status_display', 'generation_help',
         'expires_at', 'last_renewed', 'created_at', 'updated_at'
     )
     
@@ -329,6 +315,129 @@ class CertificateAdmin(admin.ModelAdmin):
             logger = logging.getLogger(__name__)
             logger.error(f'Certificate generation failed for {cert_obj.domain}: {e}', exc_info=True)
 
+    def certificate_info(self, obj):
+        """Display detailed certificate information"""
+        if not obj.pk:
+            return "Save certificate to see details"
+        
+        if not obj.certificate_pem:
+            return "Certificate not generated yet"
+            
+        html = '<div style="background: #f8f9fa; padding: 15px; border-radius: 4px;">'
+        
+        # Import here to avoid circular imports
+        try:
+            from cryptography import x509
+            from cryptography.hazmat.backends import default_backend
+            
+            # Parse certificate
+            cert = x509.load_pem_x509_certificate(obj.certificate_pem.encode(), default_backend())
+            
+            # Basic info
+            html += '<h4>📜 Certificate Information</h4>'
+            html += '<table style="width: 100%; font-size: 12px;">'
+            html += f'<tr><td><strong>Subject:</strong></td><td>{cert.subject.rfc4514_string()}</td></tr>'
+            html += f'<tr><td><strong>Issuer:</strong></td><td>{cert.issuer.rfc4514_string()}</td></tr>'
+            html += f'<tr><td><strong>Serial Number:</strong></td><td>{cert.serial_number}</td></tr>'
+            # Use UTC versions to avoid deprecation warnings
+            try:
+                # Try new UTC properties first (cryptography >= 42.0.0)
+                valid_from = cert.not_valid_before_utc
+                valid_until = cert.not_valid_after_utc
+                cert_not_after = valid_until
+            except AttributeError:
+                # Fall back to old properties for older cryptography versions
+                valid_from = cert.not_valid_before
+                valid_until = cert.not_valid_after
+                cert_not_after = cert.not_valid_after
+                if cert_not_after.tzinfo is None:
+                    cert_not_after = cert_not_after.replace(tzinfo=timezone.utc)
+            
+            html += f'<tr><td><strong>Valid From:</strong></td><td>{valid_from}</td></tr>'
+            html += f'<tr><td><strong>Valid Until:</strong></td><td>{valid_until}</td></tr>'
+            
+            # Status
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+            
+            days_until_expiry = (cert_not_after - now).days
+            
+            if days_until_expiry < 0:
+                status = f'<span style="color: red;">❌ Expired {abs(days_until_expiry)} days ago</span>'
+            elif days_until_expiry < 30:
+                status = f'<span style="color: orange;">⚠️ Expires in {days_until_expiry} days</span>'
+            else:
+                status = f'<span style="color: green;">✅ Valid for {days_until_expiry} days</span>'
+            
+            html += f'<tr><td><strong>Status:</strong></td><td>{status}</td></tr>'
+            
+            # Extensions
+            try:
+                san = cert.extensions.get_extension_for_oid(x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
+                domains = [name.value for name in san.value]
+                html += f'<tr><td><strong>Domains:</strong></td><td>{", ".join(domains)}</td></tr>'
+            except:
+                # No SAN extension or other error
+                pass
+            
+            html += '</table>'
+            
+        except ImportError:
+            html += '<p>⚠️ Install cryptography package to see detailed certificate information</p>'
+        except Exception as e:
+            html += f'<p>❌ Error parsing certificate: {e}</p>'
+        
+        html += '</div>'
+        return mark_safe(html)
+    certificate_info.short_description = 'Certificate Details'
+    
+    def rotate_selected_certificates(self, request, queryset):
+        """Admin action to rotate selected certificates"""
+        from vpn.tasks import generate_certificate_task
+        
+        # Filter only Let's Encrypt certificates
+        valid_certs = queryset.filter(cert_type='letsencrypt')
+        if not valid_certs.exists():
+            self.message_user(request, "No Let's Encrypt certificates selected. Only Let's Encrypt certificates can be rotated.", level='ERROR')
+            return
+        
+        # Check for certificates without credentials
+        certs_without_creds = valid_certs.filter(credentials__isnull=True)
+        if certs_without_creds.exists():
+            domains = ', '.join(certs_without_creds.values_list('domain', flat=True))
+            self.message_user(request, f"The following certificates have no credentials configured and will be skipped: {domains}", level='WARNING')
+        
+        # Filter certificates that have credentials
+        certs_to_rotate = valid_certs.filter(credentials__isnull=False)
+        
+        if not certs_to_rotate.exists():
+            self.message_user(request, "No certificates with valid credentials found.", level='ERROR')
+            return
+        
+        # Launch rotation tasks
+        rotated_count = 0
+        task_ids = []
+        
+        for certificate in certs_to_rotate:
+            try:
+                task = generate_certificate_task.delay(certificate.id)
+                task_ids.append(task.id)
+                rotated_count += 1
+            except Exception as e:
+                self.message_user(request, f"Failed to start rotation for {certificate.domain}: {str(e)}", level='ERROR')
+        
+        if rotated_count > 0:
+            domains = ', '.join(certs_to_rotate.values_list('domain', flat=True))
+            task_list = ', '.join(task_ids)
+            self.message_user(
+                request,
+                f'Successfully initiated certificate rotation for {rotated_count} certificate(s): {domains}. '
+                f'Task IDs: {task_list}. Certificates will be automatically redeployed to all servers once generated.',
+                level='SUCCESS'
+            )
+        
+    rotate_selected_certificates.short_description = "🔄 Rotate selected Let's Encrypt certificates"
+
 
 @admin.register(Inbound)
 class InboundAdmin(admin.ModelAdmin):
@@ -393,7 +502,10 @@ class InboundAdmin(admin.ModelAdmin):
         try:
             # Always regenerate config to reflect any changes
             obj.build_config()
-            messages.success(request, f'✅ Configuration generated successfully for {obj.protocol.upper()} inbound on port {obj.port}')
+            if change:
+                messages.success(request, f'✅ Inbound "{obj.name}" updated. Changes will be automatically deployed to servers.')
+            else:
+                messages.success(request, f'✅ Inbound "{obj.name}" created. It will be deployed when added to subscription groups.')
         except Exception as e:
             messages.warning(request, f'Inbound saved but config generation failed: {e}')
             # Set empty dict if generation fails
@@ -425,7 +537,8 @@ class SubscriptionGroupAdmin(admin.ModelAdmin):
         }),
         ('Inbounds', {
             'fields': ('inbounds',),
-            'description': 'Select inbounds to include in this group'
+            'description': 'Select inbounds to include in this group. ' +
+                         '<br><strong>🚀 Auto-sync enabled:</strong> Changes will be automatically deployed to servers!'
         }),
         ('Statistics', {
             'fields': ('group_statistics',),
@@ -434,6 +547,20 @@ class SubscriptionGroupAdmin(admin.ModelAdmin):
     )
     
     readonly_fields = ('group_statistics',)
+    
+    def save_model(self, request, obj, form, change):
+        """Override save to notify about auto-sync"""
+        super().save_model(request, obj, form, change)
+        if change:
+            messages.success(
+                request, 
+                f'Subscription group "{obj.name}" updated. Changes will be automatically synchronized to all Xray servers.'
+            )
+        else:
+            messages.success(
+                request, 
+                f'Subscription group "{obj.name}" created. Inbounds will be automatically deployed when you add them to this group.'
+            )
     
     def group_statistics(self, obj):
         """Display group statistics"""

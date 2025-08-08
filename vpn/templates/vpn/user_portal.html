@@ -497,7 +497,6 @@
                         <div class="server-info">
                             <div class="server-name">{{ group_name }}</div>
                             <div class="server-stats">
-                                <span class="connection-count">📊 {{ group_data.total_connections }} uses</span>
                                 <span class="connection-count">🔗 {{ group_data.inbounds|length }} inbound(s)</span>
                             </div>
                         </div>
@@ -518,16 +517,6 @@
                                 <div class="link-info">
                                     <div class="link-comment">🚀 {{ group_name }} Subscription</div>
                                     <div class="link-stats">
-                                        {% if group_data.inbounds|length > 1 %}
-                                            <span class="usage-count">✨ {{ group_data.inbounds|length }} protocols included</span>
-                                        {% else %}
-                                            <span class="usage-count">✨ {{ group_data.inbounds.0.protocol|upper }} protocol</span>
-                                        {% endif %}
-                                        <span class="recent-count">📅 
-                                        {% for inbound_data in group_data.inbounds %}
-                                            {{ inbound_data.protocol|upper }}{% if not forloop.last %}, {% endif %}
-                                        {% endfor %}
-                                        </span>
                                         <span class="last-used">🔗 {{ group_data.inbounds|length }} inbound(s)</span>
                                     </div>
                                 </div>
