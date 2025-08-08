@@ -438,8 +438,23 @@ def xray_subscription(request, user_hash):
         
         # Return with proper headers for subscription
         response = HttpResponse(subscription_b64, content_type="text/plain; charset=utf-8")
-        response['Content-Disposition'] = f'attachment; filename="{user.username}_xray_subscription.txt"'
+        response['Content-Disposition'] = f'attachment; filename="{user.username}"'
         response['Cache-Control'] = 'no-cache'
+        
+        # Add subscription-specific headers like other providers
+        import base64 as b64
+        profile_title_b64 = b64.b64encode("OutFleet VPN".encode('utf-8')).decode('utf-8')
+        response['profile-title'] = f'base64:{profile_title_b64}'
+        response['profile-update-interval'] = '24'  # Update every 24 hours
+        response['profile-web-page-url'] = f'https://{request.get_host()}/u/{user_hash}'
+        response['support-url'] = f'https://{request.get_host()}/admin/'
+        
+        # Add user info without limits (unlimited service)
+        # Set very high limits to indicate "unlimited"
+        import time
+        expire_timestamp = int(time.time()) + (365 * 24 * 60 * 60)  # 1 year from now
+        response['subscription-userinfo'] = f'upload=0; download=0; total=1099511627776; expire={expire_timestamp}'
+        
         return response
         
     except Exception as e:
@@ -540,8 +555,8 @@ def generate_xray_connection_string(user, inbound, server_name=None, server_host
             # VLESS URL format: vless://uuid@host:port?params#name
             params = []
             
-            if inbound.network != 'tcp':
-                params.append(f"type={inbound.network}")
+            # Always add transport type for VLESS
+            params.append(f"type={inbound.network}")
             
             if inbound.security != 'none':
                 params.append(f"security={inbound.security}")

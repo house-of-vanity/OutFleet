@@ -333,3 +333,10 @@ table.changelist-results td:nth-child(6) {
     margin: 0 2px;
     display: inline-block;
 }
+
+/* Hide xray-subscriptions tab if it appears */
+#xray-subscriptions-tab,
+a[href="#xray-subscriptions-tab"],
+li:has(a[href="#xray-subscriptions-tab"]) {
+    display: none !important;
+}

@@ -592,79 +592,11 @@ class UserSubscriptionInline(admin.TabularInline):
 def add_subscription_management_to_user(UserAdmin):
     """Add subscription management to existing User admin"""
     
-    # Add inline
+    # Add inline only - no fieldset or widget
     if hasattr(UserAdmin, 'inlines'):
         UserAdmin.inlines = list(UserAdmin.inlines) + [UserSubscriptionInline]
     else:
         UserAdmin.inlines = [UserSubscriptionInline]
-    
-    # Add custom fields to fieldsets
-    original_fieldsets = list(UserAdmin.fieldsets)
-    
-    # Find where to insert our fieldset
-    insert_index = len(original_fieldsets)
-    for i, (title, fields_dict) in enumerate(original_fieldsets):
-        if title and 'Statistics' in title:
-            insert_index = i + 1
-            break
-    
-    # Insert our fieldset
-    subscription_fieldset = (
-        'Xray Subscriptions', {
-            'fields': ('subscription_groups_widget',),
-            'classes': ('wide',)
-        }
-    )
-    original_fieldsets.insert(insert_index, subscription_fieldset)
-    UserAdmin.fieldsets = tuple(original_fieldsets)
-    
-    # Add readonly field
-    if hasattr(UserAdmin, 'readonly_fields'):
-        UserAdmin.readonly_fields = list(UserAdmin.readonly_fields) + ['subscription_groups_widget']
-    else:
-        UserAdmin.readonly_fields = ['subscription_groups_widget']
-    
-    # Add method for displaying subscription groups
-    def subscription_groups_widget(self, obj):
-        """Display subscription groups management widget"""
-        if not obj or not obj.pk:
-            return mark_safe('<div style="color: #6c757d;">Save user first to manage subscriptions</div>')
-        
-        # Get all groups and user's current subscriptions
-        all_groups = SubscriptionGroup.objects.filter(is_active=True)
-        user_groups = obj.xray_subscriptions.filter(active=True).values_list('subscription_group_id', flat=True)
-        
-        html = '<div style="background: #f8f9fa; padding: 15px; border-radius: 4px;">'
-        html += '<h4 style="margin-top: 0;">Available Subscription Groups:</h4>'
-        
-        if all_groups:
-            html += '<div style="display: grid; gap: 10px;">'
-            for group in all_groups:
-                checked = 'checked' if group.id in user_groups else ''
-                status = '✅' if group.id in user_groups else '⬜'
-                
-                html += f'''
-                <div style="display: flex; align-items: center; gap: 10px; padding: 8px; background: white; border-radius: 4px;">
-                    <span style="font-size: 18px;">{status}</span>
-                    <label style="flex: 1; cursor: pointer;">
-                        <strong>{group.name}</strong>
-                        {f' - {group.description}' if group.description else ''}
-                        <small style="color: #6c757d;"> ({group.inbound_count} inbounds)</small>
-                    </label>
-                </div>
-                '''
-            html += '</div>'
-            html += '<div style="margin-top: 10px; color: #6c757d; font-size: 12px;">'
-            html += 'ℹ️ Use the inline form below to manage subscriptions'
-            html += '</div>'
-        else:
-            html += '<div style="color: #6c757d;">No active subscription groups available</div>'
-        
-        html += '</div>'
-        return mark_safe(html)
-    
-    subscription_groups_widget.short_description = 'Subscription Groups Overview'
-    UserAdmin.subscription_groups_widget = subscription_groups_widget
 
 
 # UserSubscription admin will be integrated into unified Subscriptions admin

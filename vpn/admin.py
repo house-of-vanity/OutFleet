@@ -928,12 +928,38 @@ class ServerAdmin(PolymorphicParentModelAdmin):
             return redirect('admin:vpn_server_changelist')
 
 #admin.site.register(User, UserAdmin)
+# Inline for legacy VPN access (Outline/Wireguard)
+class UserACLInline(admin.TabularInline):
+    model = ACL
+    extra = 0
+    fields = ('server', 'created_at', 'link_count')
+    readonly_fields = ('created_at', 'link_count')
+    verbose_name = "Legacy VPN Server Access"
+    verbose_name_plural = "Legacy VPN Server Access (Outline/Wireguard)"
+    
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "server":
+            # Only show old-style servers (Outline/Wireguard)
+            kwargs["queryset"] = Server.objects.exclude(server_type='xray_v2')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+    
+    @admin.display(description='Links')
+    def link_count(self, obj):
+        count = obj.links.count()
+        return format_html(
+            '<span style="font-weight: bold;">{}</span> link(s)',
+            count
+        )
+
+
+
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
     form = UserForm
     list_display = ('username', 'comment', 'registration_date', 'hash_link', 'server_count')
     search_fields = ('username', 'hash')
-    readonly_fields = ('hash_link', 'user_statistics_summary')
+    readonly_fields = ('hash_link', 'vpn_access_summary', 'user_statistics_summary')
+    inlines = []  # All VPN access info is now in vpn_access_summary
     
     class Media:
         css = {
@@ -945,7 +971,7 @@ class UserAdmin(admin.ModelAdmin):
             'fields': ('username', 'first_name', 'last_name', 'email', 'comment')
         }),
         ('Access Information', {
-            'fields': ('hash_link', 'is_active')
+            'fields': ('hash_link', 'is_active', 'vpn_access_summary')
         }),
         ('Statistics & Server Management', {
             'fields': ('user_statistics_summary',),
@@ -953,6 +979,50 @@ class UserAdmin(admin.ModelAdmin):
         }),
     )
 
+    @admin.display(description='VPN Access Summary')
+    def vpn_access_summary(self, obj):
+        """Display summary of user's VPN access"""
+        if not obj.pk:
+            return "Save user first to see VPN access"
+        
+        # Get legacy VPN access
+        acl_count = ACL.objects.filter(user=obj).count()
+        legacy_links = ACLLink.objects.filter(acl__user=obj).count()
+        
+        # Get Xray access
+        from vpn.models_xray import UserSubscription
+        xray_subs = UserSubscription.objects.filter(user=obj, active=True).select_related('subscription_group')
+        xray_groups = [sub.subscription_group.name for sub in xray_subs]
+        
+        html = '<div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">'
+        
+        # Legacy VPN section
+        html += '<div style="margin-bottom: 15px;">'
+        html += '<h4 style="margin: 0 0 10px 0; color: #495057;">📡 Legacy VPN (Outline/Wireguard)</h4>'
+        if acl_count > 0:
+            html += f'<p style="margin: 5px 0;">✅ Access to <strong>{acl_count}</strong> server(s)</p>'
+            html += f'<p style="margin: 5px 0;">🔗 Total links: <strong>{legacy_links}</strong></p>'
+        else:
+            html += '<p style="margin: 5px 0; color: #6c757d;">No legacy VPN access</p>'
+        html += '</div>'
+        
+        # Xray section
+        html += '<div>'
+        html += '<h4 style="margin: 0 0 10px 0; color: #495057;">🚀 Xray VPN</h4>'
+        if xray_groups:
+            html += f'<p style="margin: 5px 0;">✅ Active subscriptions: <strong>{len(xray_groups)}</strong></p>'
+            html += '<ul style="margin: 5px 0; padding-left: 20px;">'
+            for group in xray_groups:
+                html += f'<li>{group}</li>'
+            html += '</ul>'
+        else:
+            html += '<p style="margin: 5px 0; color: #6c757d;">No Xray subscriptions</p>'
+        html += '</div>'
+        
+        html += '</div>'
+        
+        return format_html(html)
+    
     @admin.display(description='User Portal', ordering='hash')
     def hash_link(self, obj):
         portal_url = f"{EXTERNAL_ADDRESS}/u/{obj.hash}"
@@ -1016,9 +1086,22 @@ class UserAdmin(admin.ModelAdmin):
                     links = list(acl.links.all())
                     
                     # Server header (no slow server status checks)
-                    type_icon = '🔵' if server.server_type == 'outline' else '🟢' if server.server_type == 'wireguard' else '🟣' if server.server_type == 'xray_core' else ''
+                    # Determine server type icon and label
+                    if server.server_type == 'Outline':
+                        type_icon = '🔵'
+                        type_label = 'Outline'
+                    elif server.server_type == 'Wireguard':
+                        type_icon = '🟢'
+                        type_label = 'Wireguard'
+                    elif server.server_type in ['xray_core', 'xray_v2']:
+                        type_icon = '🟣'
+                        type_label = 'Xray'
+                    else:
+                        type_icon = '❓'
+                        type_label = server.server_type
+                    
                     html += f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">'
-                    html += f'<h5 style="margin: 0; color: #333; font-size: 14px; font-weight: 600;">{type_icon} {server.name}</h5>'
+                    html += f'<h5 style="margin: 0; color: #333; font-size: 14px; font-weight: 600;">{type_icon} {server.name} ({type_label})</h5>'
                     
                     # Server stats
                     server_stat = next((s for s in server_breakdown if s['server_name'] == server.name), None)
@@ -1091,10 +1174,24 @@ class UserAdmin(admin.ModelAdmin):
                 html += '<h5 style="margin: 0 0 8px 0; color: #0c5460; font-size: 13px;">➕ Available Servers</h5>'
                 html += '<div style="display: flex; gap: 8px; flex-wrap: wrap;">'
                 for server in unassigned_servers:
-                    type_icon = '🔵' if server.server_type == 'outline' else '🟢' if server.server_type == 'wireguard' else '🟣' if server.server_type == 'xray_core' else ''
+                    # Determine server type icon and label
+                    if server.server_type == 'Outline':
+                        type_icon = '🔵'
+                        type_label = 'Outline'
+                    elif server.server_type == 'Wireguard':
+                        type_icon = '🟢'
+                        type_label = 'Wireguard'
+                    elif server.server_type in ['xray_core', 'xray_v2']:
+                        type_icon = '🟣'
+                        type_label = 'Xray'
+                    else:
+                        type_icon = '❓'
+                        type_label = server.server_type
+                    
                     html += f'<button type="button" class="btn btn-sm btn-outline-info btn-sm-custom add-server-btn" '
-                    html += f'data-server-id="{server.id}" data-server-name="{server.name}">'
-                    html += f'{type_icon} {server.name}'
+                    html += f'data-server-id="{server.id}" data-server-name="{server.name}" '
+                    html += f'title="{type_label} server">'
+                    html += f'{type_icon} {server.name} ({type_label})'
                     html += f'</button>'
                 html += '</div></div>'
             
@@ -1305,24 +1402,9 @@ class UserAdmin(admin.ModelAdmin):
         
         return super().change_view(request, object_id, form_url, extra_context)
 
-    def save_model(self, request, obj, form, change):
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        super().save_model(request, obj, form, change)
-        selected_servers = form.cleaned_data.get('servers', [])
-
-        # Remove ACLs that are no longer selected
-        removed_acls = ACL.objects.filter(user=obj).exclude(server__in=selected_servers)
-        for acl in removed_acls:
-            logger.info(f"Removing ACL for user {obj.username} from server {acl.server.name}")
-        removed_acls.delete()
-
-        # Create new ACLs for newly selected servers (with default links)
-        for server in selected_servers:
-            acl, created = ACL.objects.get_or_create(user=obj, server=server)
-            if created:
-                logger.info(f"Created new ACL for user {obj.username} on server {server.name}")
+    # Removed save_model as we no longer manage servers directly through the form
+    # Legacy VPN access is now managed through the ACL admin interface
+    # Xray access is managed through the UserXraySubscriptionInline
             # Note: get_or_create will use the default save() method which creates default links
 
 @admin.register(AccessLog)
