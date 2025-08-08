@@ -265,13 +265,19 @@ def certificate_updated(sender, instance, created, **kwargs):
     if not created and instance.certificate_pem:  # Only on updates when cert is available
         logger.info(f"Certificate {instance.domain} updated, redeploying dependent inbounds")
         
-        # Find all inbounds that use this certificate
-        inbounds = Inbound.objects.filter(certificate=instance)
-        servers = get_active_xray_servers()
+        # Find all ServerInbound deployments that use this certificate
+        from vpn.models_xray import ServerInbound
+        server_inbounds = ServerInbound.objects.filter(certificate=instance).select_related('server', 'inbound')
         
-        for inbound in inbounds:
+        # Group by server for efficient syncing
+        servers_to_sync = set()
+        for server_inbound in server_inbounds:
+            servers_to_sync.add(server_inbound.server)
+        
+        # Schedule sync for each affected server
+        for server in servers_to_sync:
             transaction.on_commit(
-                lambda inb=inbound: schedule_inbound_sync_for_servers(inb, servers)
+                lambda srv=server: srv.sync_inbounds()
             )
 
 
