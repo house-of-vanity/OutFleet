@@ -515,13 +515,23 @@ class TelegramBotManager:
             selected_groups = []
             from vpn.models_xray import SubscriptionGroup
             
+            logger.info(f"Processing approval for request {request_id}")
+            
             for row in query.message.reply_markup.inline_keyboard:
                 for button in row:
-                    if button.callback_data and button.callback_data.startswith("sg_toggle_") and button.text.startswith("✅"):
-                        # Extract group_id from callback_data
-                        group_id = button.callback_data.split('_')[2]
-                        group = await sync_to_async(SubscriptionGroup.objects.get)(id=group_id)
-                        selected_groups.append(group)
+                    if button.callback_data and button.callback_data.startswith("sg_toggle_"):
+                        if button.text.startswith("✅"):
+                            # Extract group_id from callback_data
+                            group_id = button.callback_data.split('_')[2]
+                            logger.info(f"Found selected group with ID {group_id}")
+                            try:
+                                group = await sync_to_async(SubscriptionGroup.objects.get)(id=group_id)
+                                selected_groups.append(group)
+                                logger.info(f"Added group '{group.name}' to selected groups")
+                            except Exception as e:
+                                logger.error(f"Failed to get subscription group {group_id}: {e}")
+            
+            logger.info(f"Total selected groups: {len(selected_groups)}")
             
             if not selected_groups:
                 await query.edit_message_text("❌ Please select at least one subscription group")
@@ -584,22 +594,39 @@ class TelegramBotManager:
                 # Link user to request
                 request.user = user
                 await sync_to_async(request.save)()
+                logger.info(f"Linked user {user.username} (ID: {user.id}) to request {request.id}")
                 
                 # Assign subscription groups to user
+                logger.info(f"Assigning {len(selected_groups)} subscription groups to user {user.username}")
                 for subscription_group in selected_groups:
-                    user_subscription, created = await sync_to_async(UserSubscription.objects.get_or_create)(
-                        user=user,
-                        subscription_group=subscription_group,
-                        defaults={'active': True}
-                    )
-                    if created:
-                        logger.info(f"Assigned subscription group '{subscription_group.name}' to user {user.username}")
-                    else:
-                        # Ensure it's active if it already existed
-                        if not user_subscription.active:
-                            user_subscription.active = True
-                            await sync_to_async(user_subscription.save)()
-                            logger.info(f"Re-activated subscription group '{subscription_group.name}' for user {user.username}")
+                    try:
+                        # Use a more explicit approach for async operations
+                        existing_sub = await sync_to_async(
+                            UserSubscription.objects.filter(
+                                user=user,
+                                subscription_group=subscription_group
+                            ).first
+                        )()
+                        
+                        if existing_sub:
+                            # Update existing subscription
+                            if not existing_sub.active:
+                                existing_sub.active = True
+                                await sync_to_async(existing_sub.save)()
+                                logger.info(f"Re-activated subscription group '{subscription_group.name}' for user {user.username}")
+                            else:
+                                logger.info(f"Subscription group '{subscription_group.name}' already active for user {user.username}")
+                        else:
+                            # Create new subscription
+                            new_sub = await sync_to_async(UserSubscription.objects.create)(
+                                user=user,
+                                subscription_group=subscription_group,
+                                active=True
+                            )
+                            logger.info(f"Created new subscription for group '{subscription_group.name}' for user {user.username}")
+                            
+                    except Exception as e:
+                        logger.error(f"Error assigning subscription group '{subscription_group.name}' to user {user.username}: {e}")
                 
                 # Mark as approved
                 request.approved = True
