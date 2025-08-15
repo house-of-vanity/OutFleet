@@ -89,6 +89,11 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
+        'telegram_bot': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
         'requests': {
             'handlers': ['console'],
             'level': 'INFO',
@@ -115,6 +120,7 @@ INSTALLED_APPS = [
     'django_celery_results',
     'django_celery_beat',
     'vpn',
+    'telegram_bot',
 ]
 
 MIDDLEWARE = [

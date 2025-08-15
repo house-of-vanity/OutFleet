@@ -1,6 +1,7 @@
 import logging
 from django.db import models
 from django.contrib import admin
+from polymorphic.admin import PolymorphicChildModelAdmin
 from .generic import Server
 from vpn.models_xray import Inbound, UserSubscription
 
@@ -778,7 +779,9 @@ class ServerInboundInline(admin.TabularInline):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
-class XrayServerV2Admin(admin.ModelAdmin):
+class XrayServerV2Admin(PolymorphicChildModelAdmin):
+    base_model = XrayServerV2
+    show_in_index = False
     list_display = ['name', 'client_hostname', 'api_address', 'api_enabled', 'stats_enabled', 'registration_date']
     list_filter = ['api_enabled', 'stats_enabled', 'registration_date']
     search_fields = ['name', 'client_hostname', 'comment']
@@ -945,3 +948,7 @@ class XrayServerV2Admin(admin.ModelAdmin):
             return f"Error fetching statistics: {str(e)}"
     
     traffic_statistics.short_description = 'Traffic Statistics'
+
+
+# Register the admin class
+admin.site.register(XrayServerV2, XrayServerV2Admin)

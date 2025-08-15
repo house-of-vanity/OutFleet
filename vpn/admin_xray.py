@@ -3,6 +3,27 @@ Admin interface for new Xray models.
 """
 
 import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Export all admin classes for import *
+__all__ = [
+    'CredentialsAdmin',
+    'CredentialsHiddenAdmin', 
+    'CertificateAdmin',
+    'CertificateTabAdmin',
+    'InboundAdmin',
+    'InboundTabAdmin',
+    'SubscriptionGroupAdmin',
+    'UnifiedXRayAdmin',
+    'UserSubscriptionAdmin',
+    'UserSubscriptionTabAdmin',
+    'ServerInboundAdmin',
+    'InboundInline',
+    'UserSubscriptionInline',
+    'add_subscription_management_to_user'
+]
 from django.contrib import admin, messages
 from django.utils.safestring import mark_safe
 from django.utils.html import format_html
@@ -12,10 +33,16 @@ from django.shortcuts import render, redirect
 from django.urls import path, reverse
 from django.http import JsonResponse, HttpResponseRedirect
 
-from .models_xray import (
-    Credentials, Certificate,
-    Inbound, SubscriptionGroup, UserSubscription, ServerInbound
-)
+try:
+    from .models_xray import (
+        Credentials, Certificate,
+        Inbound, SubscriptionGroup, UserSubscription, ServerInbound
+    )
+except Exception as e:
+    logger.error(f"Failed to import Xray models: {e}")
+    import traceback
+    logger.error(f"Traceback: {traceback.format_exc()}")
+    raise
 
 
 
@@ -110,7 +137,6 @@ class CredentialsHiddenAdmin(CredentialsAdmin):
         return False
 
 
-@admin.register(Certificate)
 class CertificateAdmin(admin.ModelAdmin):
     """Admin for certificate management"""
     list_display = (
@@ -445,7 +471,6 @@ class CertificateAdmin(admin.ModelAdmin):
     rotate_selected_certificates.short_description = "🔄 Rotate selected Let's Encrypt certificates"
 
 
-@admin.register(Inbound)
 class InboundAdmin(admin.ModelAdmin):
     """Admin for inbound template management"""
     list_display = (
@@ -673,10 +698,10 @@ class ServerInboundAdmin(admin.ModelAdmin):
     certificate_info.short_description = 'Certificate Selection Info'
 
 
-# Unified Subscriptions Admin with tabs
+# Unified XRay-core Admin with tabs
 @admin.register(SubscriptionGroup)
-class UnifiedSubscriptionsAdmin(admin.ModelAdmin):
-    """Unified admin for managing both Subscription Groups and User Subscriptions"""
+class UnifiedXRayAdmin(admin.ModelAdmin):
+    """Unified admin for managing XRay-core: Subscription Groups, User Subscriptions, Certificates, and Inbound Templates"""
     
     # Use SubscriptionGroup as the base model but provide access to UserSubscription via tabs
     list_display = ('name', 'is_active', 'inbound_count', 'user_count', 'created_at')
@@ -685,12 +710,18 @@ class UnifiedSubscriptionsAdmin(admin.ModelAdmin):
     filter_horizontal = ('inbounds',)
     
     def get_urls(self):
-        """Add custom URLs for user subscriptions tab"""
+        """Add custom URLs for additional tabs"""
         urls = super().get_urls()
         custom_urls = [
             path('user-subscriptions/', 
                  self.admin_site.admin_view(self.user_subscriptions_view),
                  name='vpn_usersubscription_changelist_tab'),
+            path('certificates/', 
+                 self.admin_site.admin_view(self.certificates_view),
+                 name='vpn_certificate_changelist_tab'),
+            path('inbound-templates/', 
+                 self.admin_site.admin_view(self.inbound_templates_view),
+                 name='vpn_inbound_changelist_tab'),
         ]
         return custom_urls + urls
     
@@ -699,12 +730,28 @@ class UnifiedSubscriptionsAdmin(admin.ModelAdmin):
         from django.shortcuts import redirect
         return redirect('/admin/vpn/usersubscription/')
     
+    def certificates_view(self, request):
+        """Redirect to certificates with tab navigation"""
+        from django.shortcuts import redirect
+        return redirect('/admin/vpn/certificate/')
+    
+    def inbound_templates_view(self, request):
+        """Redirect to inbound templates with tab navigation"""
+        from django.shortcuts import redirect
+        return redirect('/admin/vpn/inbound/')
+    
     def changelist_view(self, request, extra_context=None):
         """Override changelist to add tab navigation"""
         extra_context = extra_context or {}
         extra_context.update({
             'show_tab_navigation': True,
-            'current_tab': 'subscription_groups'
+            'current_tab': 'subscription_groups',
+            'tabs': [
+                {'name': 'subscription_groups', 'label': 'Subscription Groups', 'url': '/admin/vpn/subscriptiongroup/', 'active': True},
+                {'name': 'user_subscriptions', 'label': 'User Subscriptions', 'url': '/admin/vpn/subscriptiongroup/user-subscriptions/', 'active': False},
+                {'name': 'certificates', 'label': 'Certificates', 'url': '/admin/vpn/subscriptiongroup/certificates/', 'active': False},
+                {'name': 'inbound_templates', 'label': 'Inbound Templates', 'url': '/admin/vpn/subscriptiongroup/inbound-templates/', 'active': False},
+            ]
         })
         return super().changelist_view(request, extra_context)
     
@@ -713,7 +760,13 @@ class UnifiedSubscriptionsAdmin(admin.ModelAdmin):
         extra_context = extra_context or {}
         extra_context.update({
             'show_tab_navigation': True,
-            'current_tab': 'subscription_groups'
+            'current_tab': 'subscription_groups',
+            'tabs': [
+                {'name': 'subscription_groups', 'label': 'Subscription Groups', 'url': '/admin/vpn/subscriptiongroup/', 'active': True},
+                {'name': 'user_subscriptions', 'label': 'User Subscriptions', 'url': '/admin/vpn/subscriptiongroup/user-subscriptions/', 'active': False},
+                {'name': 'certificates', 'label': 'Certificates', 'url': '/admin/vpn/subscriptiongroup/certificates/', 'active': False},
+                {'name': 'inbound_templates', 'label': 'Inbound Templates', 'url': '/admin/vpn/subscriptiongroup/inbound-templates/', 'active': False},
+            ]
         })
         return super().change_view(request, object_id, form_url, extra_context)
     
@@ -722,7 +775,13 @@ class UnifiedSubscriptionsAdmin(admin.ModelAdmin):
         extra_context = extra_context or {}
         extra_context.update({
             'show_tab_navigation': True,
-            'current_tab': 'subscription_groups'
+            'current_tab': 'subscription_groups',
+            'tabs': [
+                {'name': 'subscription_groups', 'label': 'Subscription Groups', 'url': '/admin/vpn/subscriptiongroup/', 'active': True},
+                {'name': 'user_subscriptions', 'label': 'User Subscriptions', 'url': '/admin/vpn/subscriptiongroup/user-subscriptions/', 'active': False},
+                {'name': 'certificates', 'label': 'Certificates', 'url': '/admin/vpn/subscriptiongroup/certificates/', 'active': False},
+                {'name': 'inbound_templates', 'label': 'Inbound Templates', 'url': '/admin/vpn/subscriptiongroup/inbound-templates/', 'active': False},
+            ]
         })
         return super().add_view(request, form_url, extra_context)
     
@@ -810,7 +869,13 @@ class UserSubscriptionTabAdmin(UserSubscriptionAdmin):
         extra_context = extra_context or {}
         extra_context.update({
             'show_tab_navigation': True,
-            'current_tab': 'user_subscriptions'
+            'current_tab': 'user_subscriptions',
+            'tabs': [
+                {'name': 'subscription_groups', 'label': 'Subscription Groups', 'url': '/admin/vpn/subscriptiongroup/', 'active': False},
+                {'name': 'user_subscriptions', 'label': 'User Subscriptions', 'url': '/admin/vpn/subscriptiongroup/user-subscriptions/', 'active': True},
+                {'name': 'certificates', 'label': 'Certificates', 'url': '/admin/vpn/subscriptiongroup/certificates/', 'active': False},
+                {'name': 'inbound_templates', 'label': 'Inbound Templates', 'url': '/admin/vpn/subscriptiongroup/inbound-templates/', 'active': False},
+            ]
         })
         return super().changelist_view(request, extra_context)
     
@@ -819,7 +884,13 @@ class UserSubscriptionTabAdmin(UserSubscriptionAdmin):
         extra_context = extra_context or {}
         extra_context.update({
             'show_tab_navigation': True,
-            'current_tab': 'user_subscriptions'
+            'current_tab': 'user_subscriptions',
+            'tabs': [
+                {'name': 'subscription_groups', 'label': 'Subscription Groups', 'url': '/admin/vpn/subscriptiongroup/', 'active': False},
+                {'name': 'user_subscriptions', 'label': 'User Subscriptions', 'url': '/admin/vpn/subscriptiongroup/user-subscriptions/', 'active': True},
+                {'name': 'certificates', 'label': 'Certificates', 'url': '/admin/vpn/subscriptiongroup/certificates/', 'active': False},
+                {'name': 'inbound_templates', 'label': 'Inbound Templates', 'url': '/admin/vpn/subscriptiongroup/inbound-templates/', 'active': False},
+            ]
         })
         return super().change_view(request, object_id, form_url, extra_context)
     
@@ -828,6 +899,157 @@ class UserSubscriptionTabAdmin(UserSubscriptionAdmin):
         extra_context = extra_context or {}
         extra_context.update({
             'show_tab_navigation': True,
-            'current_tab': 'user_subscriptions'
+            'current_tab': 'user_subscriptions',
+            'tabs': [
+                {'name': 'subscription_groups', 'label': 'Subscription Groups', 'url': '/admin/vpn/subscriptiongroup/', 'active': False},
+                {'name': 'user_subscriptions', 'label': 'User Subscriptions', 'url': '/admin/vpn/subscriptiongroup/user-subscriptions/', 'active': True},
+                {'name': 'certificates', 'label': 'Certificates', 'url': '/admin/vpn/subscriptiongroup/certificates/', 'active': False},
+                {'name': 'inbound_templates', 'label': 'Inbound Templates', 'url': '/admin/vpn/subscriptiongroup/inbound-templates/', 'active': False},
+            ]
         })
         return super().add_view(request, form_url, extra_context)
+
+
+# Certificate admin with tab navigation (hidden from main menu)
+@admin.register(Certificate)
+class CertificateTabAdmin(CertificateAdmin):
+    """Certificate admin with tab navigation"""
+    
+    def has_module_permission(self, request):
+        """Hide this model from the main admin index"""
+        return False
+        
+    def has_view_permission(self, request, obj=None):
+        """Allow viewing through direct URL access"""
+        return True
+        
+    def has_add_permission(self, request):
+        """Allow adding through direct URL access"""
+        return True
+        
+    def has_change_permission(self, request, obj=None):
+        """Allow changing through direct URL access"""
+        return True
+        
+    def has_delete_permission(self, request, obj=None):
+        """Allow deleting through direct URL access"""
+        return True
+    
+    def changelist_view(self, request, extra_context=None):
+        """Override changelist to add tab navigation"""
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_tab_navigation': True,
+            'current_tab': 'certificates',
+            'tabs': [
+                {'name': 'subscription_groups', 'label': 'Subscription Groups', 'url': '/admin/vpn/subscriptiongroup/', 'active': False},
+                {'name': 'user_subscriptions', 'label': 'User Subscriptions', 'url': '/admin/vpn/subscriptiongroup/user-subscriptions/', 'active': False},
+                {'name': 'certificates', 'label': 'Certificates', 'url': '/admin/vpn/subscriptiongroup/certificates/', 'active': True},
+                {'name': 'inbound_templates', 'label': 'Inbound Templates', 'url': '/admin/vpn/subscriptiongroup/inbound-templates/', 'active': False},
+            ]
+        })
+        return super().changelist_view(request, extra_context)
+    
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        """Override change view to add tab navigation"""
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_tab_navigation': True,
+            'current_tab': 'certificates',
+            'tabs': [
+                {'name': 'subscription_groups', 'label': 'Subscription Groups', 'url': '/admin/vpn/subscriptiongroup/', 'active': False},
+                {'name': 'user_subscriptions', 'label': 'User Subscriptions', 'url': '/admin/vpn/subscriptiongroup/user-subscriptions/', 'active': False},
+                {'name': 'certificates', 'label': 'Certificates', 'url': '/admin/vpn/subscriptiongroup/certificates/', 'active': True},
+                {'name': 'inbound_templates', 'label': 'Inbound Templates', 'url': '/admin/vpn/subscriptiongroup/inbound-templates/', 'active': False},
+            ]
+        })
+        return super().change_view(request, object_id, form_url, extra_context)
+    
+    def add_view(self, request, form_url='', extra_context=None):
+        """Override add view to add tab navigation"""
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_tab_navigation': True,
+            'current_tab': 'certificates',
+            'tabs': [
+                {'name': 'subscription_groups', 'label': 'Subscription Groups', 'url': '/admin/vpn/subscriptiongroup/', 'active': False},
+                {'name': 'user_subscriptions', 'label': 'User Subscriptions', 'url': '/admin/vpn/subscriptiongroup/user-subscriptions/', 'active': False},
+                {'name': 'certificates', 'label': 'Certificates', 'url': '/admin/vpn/subscriptiongroup/certificates/', 'active': True},
+                {'name': 'inbound_templates', 'label': 'Inbound Templates', 'url': '/admin/vpn/subscriptiongroup/inbound-templates/', 'active': False},
+            ]
+        })
+        return super().add_view(request, form_url, extra_context)
+
+
+# Inbound admin with tab navigation (hidden from main menu)
+@admin.register(Inbound)
+class InboundTabAdmin(InboundAdmin):
+    """Inbound admin with tab navigation"""
+    
+    def has_module_permission(self, request):
+        """Hide this model from the main admin index"""
+        return False
+        
+    def has_view_permission(self, request, obj=None):
+        """Allow viewing through direct URL access"""
+        return True
+        
+    def has_add_permission(self, request):
+        """Allow adding through direct URL access"""
+        return True
+        
+    def has_change_permission(self, request, obj=None):
+        """Allow changing through direct URL access"""
+        return True
+        
+    def has_delete_permission(self, request, obj=None):
+        """Allow deleting through direct URL access"""
+        return True
+    
+    def changelist_view(self, request, extra_context=None):
+        """Override changelist to add tab navigation"""
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_tab_navigation': True,
+            'current_tab': 'inbound_templates',
+            'tabs': [
+                {'name': 'subscription_groups', 'label': 'Subscription Groups', 'url': '/admin/vpn/subscriptiongroup/', 'active': False},
+                {'name': 'user_subscriptions', 'label': 'User Subscriptions', 'url': '/admin/vpn/subscriptiongroup/user-subscriptions/', 'active': False},
+                {'name': 'certificates', 'label': 'Certificates', 'url': '/admin/vpn/subscriptiongroup/certificates/', 'active': False},
+                {'name': 'inbound_templates', 'label': 'Inbound Templates', 'url': '/admin/vpn/subscriptiongroup/inbound-templates/', 'active': True},
+            ]
+        })
+        return super().changelist_view(request, extra_context)
+    
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        """Override change view to add tab navigation"""
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_tab_navigation': True,
+            'current_tab': 'inbound_templates',
+            'tabs': [
+                {'name': 'subscription_groups', 'label': 'Subscription Groups', 'url': '/admin/vpn/subscriptiongroup/', 'active': False},
+                {'name': 'user_subscriptions', 'label': 'User Subscriptions', 'url': '/admin/vpn/subscriptiongroup/user-subscriptions/', 'active': False},
+                {'name': 'certificates', 'label': 'Certificates', 'url': '/admin/vpn/subscriptiongroup/certificates/', 'active': False},
+                {'name': 'inbound_templates', 'label': 'Inbound Templates', 'url': '/admin/vpn/subscriptiongroup/inbound-templates/', 'active': True},
+            ]
+        })
+        return super().change_view(request, object_id, form_url, extra_context)
+    
+    def add_view(self, request, form_url='', extra_context=None):
+        """Override add view to add tab navigation"""
+        extra_context = extra_context or {}
+        extra_context.update({
+            'show_tab_navigation': True,
+            'current_tab': 'inbound_templates',
+            'tabs': [
+                {'name': 'subscription_groups', 'label': 'Subscription Groups', 'url': '/admin/vpn/subscriptiongroup/', 'active': False},
+                {'name': 'user_subscriptions', 'label': 'User Subscriptions', 'url': '/admin/vpn/subscriptiongroup/user-subscriptions/', 'active': False},
+                {'name': 'certificates', 'label': 'Certificates', 'url': '/admin/vpn/subscriptiongroup/certificates/', 'active': False},
+                {'name': 'inbound_templates', 'label': 'Inbound Templates', 'url': '/admin/vpn/subscriptiongroup/inbound-templates/', 'active': True},
+            ]
+        })
+        return super().add_view(request, form_url, extra_context)
+
+
+# Log successful completion of admin registration

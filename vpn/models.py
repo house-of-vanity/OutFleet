@@ -94,6 +94,38 @@ class User(AbstractUser):
     servers = models.ManyToManyField('Server', through='ACL', blank=True, help_text="Servers user has access to")
     last_access = models.DateTimeField(null=True, blank=True)
     hash = models.CharField(max_length=64, unique=True, help_text="Random user hash. It's using for client config generation.")
+    
+    # Telegram fields
+    telegram_user_id = models.BigIntegerField(
+        null=True, 
+        blank=True, 
+        unique=True,
+        help_text="Telegram user ID"
+    )
+    telegram_username = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True,
+        help_text="Telegram username (without @)"
+    )
+    telegram_first_name = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True,
+        help_text="First name from Telegram"
+    )
+    telegram_last_name = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True,
+        help_text="Last name from Telegram"
+    )
+    telegram_phone = models.CharField(
+        max_length=20, 
+        blank=True, 
+        null=True,
+        help_text="Phone number from Telegram (optional)"
+    )
 
     def get_servers(self):
         return Server.objects.filter(acl__user=self)

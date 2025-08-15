@@ -362,8 +362,8 @@ class SubscriptionGroup(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        verbose_name = "Subscriptions"
-        verbose_name_plural = "Subscriptions"
+        verbose_name = "XRay-core"
+        verbose_name_plural = "XRay-core"
         ordering = ['name']
     
     def __str__(self):

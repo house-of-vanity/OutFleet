@@ -1,0 +1,304 @@
+<!-- vpn/templates/admin/purge_users.html -->
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <link rel="stylesheet" type="text/css" href="{% static 'admin/css/server_actions.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="content-main">
+    <h1>{{ title }}</h1>
+    
+    <!-- Context Information -->
+    <div class="alert alert-info" style="margin: 10px 0; padding: 10px; border-radius: 4px; background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460;">
+        {% if servers_info|length == 1 %}
+            <strong>🎯 Single Server Operation:</strong> You are managing users for server "{{ servers_info.0.server.name }}"
+        {% elif servers_info|length > 10 %}
+            <strong>🌐 Bulk Operation:</strong> You are managing users for {{ servers_info|length }} servers (all available servers)
+        {% else %}
+            <strong>📋 Multi-Server Operation:</strong> You are managing users for {{ servers_info|length }} selected servers
+        {% endif %}
+    </div>
+    
+    <div class="alert alert-warning" style="margin: 10px 0; padding: 15px; border-radius: 4px; background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404;">
+        <strong>⚠️ WARNING:</strong> This operation will permanently delete users directly from the VPN servers. 
+        This action cannot be undone and may affect active VPN connections.
+    </div>
+    
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}" style="margin: 10px 0; padding: 10px; border-radius: 4px; 
+                {% if message.tags == 'error' %}background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24;
+                {% elif message.tags == 'success' %}background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724;
+                {% elif message.tags == 'warning' %}background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404;
+                {% elif message.tags == 'info' %}background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460;
+                {% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" id="purge-form">
+        {% csrf_token %}
+        
+        <div class="form-row" style="margin-bottom: 20px;">
+            <h3>Select Servers and Purge Mode:</h3>
+            
+            <div style="margin-bottom: 15px;">
+                <label for="purge_mode"><strong>Purge Mode:</strong></label>
+                <div style="margin-top: 5px;">
+                    <input type="radio" id="purge_unmanaged" name="purge_mode" value="unmanaged" checked onchange="updatePurgeDescription()">
+                    <label for="purge_unmanaged" style="font-weight: normal; margin-left: 5px; margin-right: 20px;">
+                        <span style="color: #28a745;">Safe Purge</span> - Only unmanaged users
+                    </label>
+                    
+                    <input type="radio" id="purge_all" name="purge_mode" value="all" onchange="updatePurgeDescription()">
+                    <label for="purge_all" style="font-weight: normal; margin-left: 5px; color: #dc3545;">
+                        <span style="color: #dc3545;">⚠️ Full Purge</span> - ALL users (including OutFleet managed)
+                    </label>
+                </div>
+            </div>
+
+            <div id="purge-description" style="padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                <!-- Description will be updated by JavaScript -->
+            </div>
+        </div>
+
+        <div class="form-row" style="margin-bottom: 20px;">
+            <h3>Select Servers to Purge:</h3>
+            <div style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px;">
+                <div style="margin-bottom: 10px;">
+                    <button type="button" onclick="toggleAllServers()" style="padding: 5px 10px; margin-right: 10px;">Select All</button>
+                    <button type="button" onclick="toggleAllServers(false)" style="padding: 5px 10px;">Deselect All</button>
+                </div>
+                
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background-color: #f5f5f5;">
+                            <th style="padding: 8px; border: 1px solid #ddd; width: 50px;">Select</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">Server Name</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">Type</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">Status</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">Users on Server</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for server_info in servers_info %}
+                        <tr class="server-row" data-server-id="{{ server_info.server.id }}">
+                            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
+                                {% if server_info.status == 'online' %}
+                                    <input type="checkbox" name="selected_servers" value="{{ server_info.server.id }}" 
+                                           class="server-checkbox" onchange="updateSubmitButton()">
+                                {% else %}
+                                    <span style="color: #ccc;" title="Server unavailable">❌</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 8px; border: 1px solid #ddd;">
+                                <strong>{{ server_info.server.name }}</strong>
+                            </td>
+                            <td style="padding: 8px; border: 1px solid #ddd;">
+                                {{ server_info.server.server_type }}
+                            </td>
+                            <td style="padding: 8px; border: 1px solid #ddd;">
+                                {% if server_info.status == 'online' %}
+                                    <span style="color: #28a745;">✅ Online</span>
+                                {% else %}
+                                    <span style="color: #dc3545;">❌ Error</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
+                                {% if server_info.status == 'online' %}
+                                    <strong>{{ server_info.user_count }}</strong>
+                                {% else %}
+                                    <span style="color: #ccc;">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 8px; border: 1px solid #ddd; font-size: 12px;">
+                                {% if server_info.status == 'online' %}
+                                    {% if server_info.user_count > 0 %}
+                                        <details>
+                                            <summary style="cursor: pointer;">View users ({{ server_info.user_count }})</summary>
+                                            <div style="margin-top: 5px; max-height: 150px; overflow-y: auto; background-color: #f8f9fa; padding: 5px; border-radius: 3px;">
+                                                {% for user in server_info.users %}
+                                                    <div style="margin: 2px 0; font-family: monospace; font-size: 11px;">
+                                                        <strong>{{ user.name }}</strong> (ID: {{ user.key_id }})
+                                                        <br><span style="color: #666;">Pass: {{ user.password|slice:":8" }}...</span>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        </details>
+                                    {% else %}
+                                        <span style="color: #666;">No users</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span style="color: #dc3545;">{{ server_info.error }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="submit-row">
+            <input type="submit" value="🗑️ Purge Selected Servers" class="default" id="submit-btn" disabled 
+                   style="background-color: #dc3545; border-color: #dc3545;">
+            <a href="{% url 'admin:vpn_server_changelist' %}" class="button cancel">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function updatePurgeDescription() {
+    var purgeMode = document.querySelector('input[name="purge_mode"]:checked').value;
+    var descriptionDiv = document.getElementById('purge-description');
+    
+    if (purgeMode === 'unmanaged') {
+        descriptionDiv.innerHTML = `
+            <div style="background-color: #d4edda; border-left: 4px solid #28a745; color: #155724;">
+                <h4 style="margin: 0 0 5px 0;">Safe Purge Mode</h4>
+                <p style="margin: 0;">
+                    • Only removes users that are <strong>NOT</strong> managed by OutFleet<br>
+                    • Preserves all users that exist in the OutFleet database<br>
+                    • Safe to use - will not affect your managed users<br>
+                    • Recommended for cleaning up orphaned or manually created users
+                </p>
+            </div>
+        `;
+    } else {
+        descriptionDiv.innerHTML = `
+            <div style="background-color: #f8d7da; border-left: 4px solid #dc3545; color: #721c24;">
+                <h4 style="margin: 0 0 5px 0;">⚠️ DANGEROUS: Full Purge Mode</h4>
+                <p style="margin: 0;">
+                    • <strong>REMOVES ALL USERS</strong> from the server, including OutFleet managed users<br>
+                    • <strong>WILL DISCONNECT ALL ACTIVE VPN SESSIONS</strong><br>
+                    • OutFleet managed users will be recreated during next sync<br>
+                    • Use only if you want to completely reset the server<br>
+                    • <strong>THIS ACTION CANNOT BE UNDONE</strong>
+                </p>
+            </div>
+        `;
+    }
+}
+
+function toggleAllServers(selectAll = true) {
+    var checkboxes = document.getElementsByClassName('server-checkbox');
+    
+    for (var i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = selectAll;
+    }
+    
+    updateSubmitButton();
+}
+
+function updateSubmitButton() {
+    var checkboxes = document.getElementsByClassName('server-checkbox');
+    var submitBtn = document.getElementById('submit-btn');
+    
+    var hasSelected = false;
+    for (var i = 0; i < checkboxes.length; i++) {
+        if (checkboxes[i].checked) {
+            hasSelected = true;
+            break;
+        }
+    }
+    
+    submitBtn.disabled = !hasSelected;
+    
+    // Update button text based on purge mode
+    var purgeMode = document.querySelector('input[name="purge_mode"]:checked').value;
+    if (purgeMode === 'all') {
+        submitBtn.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>PURGE ALL USERS';
+        submitBtn.className = 'btn btn-danger';
+    } else {
+        submitBtn.innerHTML = '<i class="fas fa-trash mr-2"></i>Purge Unmanaged Users';
+        submitBtn.className = 'btn btn-warning';
+    }
+}
+
+// Form submission confirmation
+document.getElementById('purge-form').addEventListener('submit', function(e) {
+    var checkboxes = document.getElementsByClassName('server-checkbox');
+    var selectedCount = 0;
+    var selectedServers = [];
+    
+    for (var i = 0; i < checkboxes.length; i++) {
+        if (checkboxes[i].checked) {
+            selectedCount++;
+            var row = checkboxes[i].closest('tr');
+            var serverName = row.querySelector('td:nth-child(2) strong').textContent;
+            selectedServers.push(serverName);
+        }
+    }
+    
+    var purgeMode = document.querySelector('input[name="purge_mode"]:checked').value;
+    var totalUsers = 0;
+    
+    // Calculate total users that will be affected
+    for (var i = 0; i < checkboxes.length; i++) {
+        if (checkboxes[i].checked) {
+            var row = checkboxes[i].closest('tr');
+            var userCountBadge = row.querySelector('td:nth-child(5) .badge');
+            if (userCountBadge) {
+                totalUsers += parseInt(userCountBadge.textContent) || 0;
+            }
+        }
+    }
+    
+    var confirmMessage = '';
+    
+    if (purgeMode === 'all') {
+        confirmMessage = `⚠️ DANGER: FULL PURGE CONFIRMATION ⚠️\n\n`;
+        confirmMessage += `You are about to PERMANENTLY DELETE ALL USERS from ${selectedCount} server(s):\n`;
+        confirmMessage += `${selectedServers.join(', ')}\n\n`;
+        confirmMessage += `This will:\n`;
+        confirmMessage += `• DELETE ALL ${totalUsers} users from selected servers\n`;
+        confirmMessage += `• DISCONNECT ALL ACTIVE VPN SESSIONS\n`;
+        confirmMessage += `• REMOVE BOTH managed and unmanaged users\n`;
+        confirmMessage += `• Cannot be undone\n\n`;
+        confirmMessage += `OutFleet managed users will be recreated during next sync.\n\n`;
+        confirmMessage += `Type "PURGE ALL" to confirm this dangerous operation:`;
+        
+        var userInput = prompt(confirmMessage);
+        if (userInput !== "PURGE ALL") {
+            e.preventDefault();
+            alert("Operation cancelled. You must type exactly 'PURGE ALL' to confirm.");
+            return;
+        }
+    } else {
+        confirmMessage = `Safe Purge Confirmation\n\n`;
+        confirmMessage += `You are about to purge unmanaged users from ${selectedCount} server(s):\n`;
+        confirmMessage += `${selectedServers.join(', ')}\n\n`;
+        confirmMessage += `This will:\n`;
+        confirmMessage += `• Remove only users NOT managed by OutFleet\n`;
+        confirmMessage += `• Preserve all OutFleet managed users\n`;
+        confirmMessage += `• Help clean up orphaned users\n\n`;
+        confirmMessage += `Are you sure you want to continue?`;
+        
+        if (!confirm(confirmMessage)) {
+            e.preventDefault();
+        }
+    }
+});
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    updatePurgeDescription();
+    updateSubmitButton();
+    
+    // Add event listeners to purge mode radio buttons
+    document.querySelectorAll('input[name="purge_mode"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            updatePurgeDescription();
+            updateSubmitButton();
+        });
+    });
+});
+</script>
+{% endblock %}

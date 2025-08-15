@@ -1,0 +1,166 @@
+<!-- vpn/templates/admin/vpn/server/change_list.html -->
+{% extends "admin/change_list.html" %}
+
+{% block content_title %}
+    <h1>{{ title }}</h1>
+    
+    <!-- Bulk Action Buttons -->
+    <div class="bulk-actions-section" style="margin: 20px 0; padding: 15px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px;">
+        <h3 style="margin-top: 0; color: #495057;">🚀 Bulk Server Operations</h3>
+        <p style="margin-bottom: 15px; color: #6c757d;">
+            Perform operations on all available servers at once. These actions will include all servers in the system.
+        </p>
+        
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <a href="{{ bulk_move_clients_url }}" 
+               class="bulk-action-btn btn-move-clients" 
+               style="background-color: #007cba; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px;">
+                📦 <span>Bulk Move Clients</span>
+            </a>
+            
+            <a href="{{ bulk_purge_users_url }}" 
+               class="bulk-action-btn btn-purge-users" 
+               style="background-color: #dc3545; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px;"
+               onclick="return confirm('⚠️ Warning: This will open the purge interface for ALL servers. Continue?')">
+                🗑️ <span>Bulk Purge Users</span>
+            </a>
+        </div>
+        
+        <div class="tip-section" style="margin-top: 10px; padding: 10px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 3px;">
+            <small style="color: #856404;">
+                <strong>💡 Tip:</strong> You can also select specific servers below and use the "Actions" dropdown, 
+                or click individual action buttons in the "Actions" column for single-server operations.
+            </small>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    {% load static %}
+    <link rel="stylesheet" type="text/css" href="{% static 'admin/css/server_actions.css' %}">
+    <style>
+        /* Style for action buttons in the list */
+        .field-server_actions .button {
+            background-color: #007cba;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 5px 8px;
+            font-size: 11px;
+            text-decoration: none;
+            display: inline-block;
+            margin: 2px;
+            transition: background-color 0.2s;
+        }
+        
+        .field-server_actions .button:hover {
+            background-color: #005a8b;
+            color: white;
+        }
+        
+        .field-server_actions .button[style*="background-color: #dc3545"] {
+            background-color: #dc3545 !important;
+        }
+        
+        .field-server_actions .button[style*="background-color: #dc3545"]:hover {
+            background-color: #c82333 !important;
+        }
+        
+        /* Make action column wider */
+        .field-server_actions {
+            min-width: 150px;
+        }
+        
+        /* Responsive design for action buttons */
+        @media (max-width: 768px) {
+            .field-server_actions > div {
+                flex-direction: column;
+            }
+            
+            .field-server_actions .button {
+                margin: 1px 0;
+                text-align: center;
+            }
+        }
+        
+        /* Enhanced bulk action section styling */
+        .bulk-actions-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-left: 4px solid #007cba;
+        }
+        
+        .bulk-actions-section h3 {
+            color: #007cba;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Hover effects for bulk buttons */
+        .bulk-action-btn {
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .bulk-action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        /* Status indicators */
+        .server-status-online {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .server-status-error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+    
+    <script>
+        // Add loading states to bulk action buttons
+        document.addEventListener('DOMContentLoaded', function() {
+            const bulkButtons = document.querySelectorAll('.bulk-action-btn');
+            
+            bulkButtons.forEach(button => {
+                button.addEventListener('click', function(e) {
+                    // Don't prevent default, but add loading state
+                    this.classList.add('loading');
+                    this.style.pointerEvents = 'none';
+                    
+                    // Remove loading state after a delay (in case user navigates back)
+                    setTimeout(() => {
+                        this.classList.remove('loading');
+                        this.style.pointerEvents = 'auto';
+                    }, 5000);
+                });
+            });
+        });
+    </script>
+{% endblock %}
+
+{% block result_list %}
+    <!-- Server Statistics -->
+    <div class="server-stats-section" style="margin: 15px 0; padding: 10px; background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 4px;">
+        <div class="server-stats-grid" style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
+            <div class="stat-item">
+                <strong>📊 Server Overview:</strong>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label" style="color: #007cba;">Total Servers:</span> 
+                <strong class="stat-value">{{ cl.result_count }}</strong>
+            </div>
+            {% if cl.result_count > 0 %}
+            <div class="stat-item">
+                <span class="stat-label" style="color: #28a745;">Available Operations:</span> 
+                <strong class="stat-value">Move Links, Purge Users, Bulk Actions</strong>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {{ block.super }}
+{% endblock %}
