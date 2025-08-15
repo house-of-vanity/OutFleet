@@ -5,6 +5,7 @@ from django.shortcuts import redirect
 from django.contrib import messages
 from django.utils import timezone
 from django import forms
+from django.contrib.admin.widgets import FilteredSelectMultiple
 from .models import BotSettings, TelegramMessage, AccessRequest
 from .localization import MessageLocalizer
 import logging
@@ -18,6 +19,16 @@ class AccessRequestAdminForm(forms.ModelForm):
     class Meta:
         model = AccessRequest
         fields = '__all__'
+        widgets = {
+            'selected_inbounds': FilteredSelectMultiple(
+                verbose_name='Inbound Templates',
+                is_stacked=False
+            ),
+            'selected_subscription_groups': FilteredSelectMultiple(
+                verbose_name='Subscription Groups',
+                is_stacked=False
+            ),
+        }
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -31,6 +42,21 @@ class AccessRequestAdminForm(forms.ModelForm):
             self.fields['selected_existing_user'].queryset = User.objects.filter(
                 telegram_user_id__isnull=True
             ).order_by('username')
+        
+        # Configure inbound and subscription group fields
+        if 'selected_inbounds' in self.fields:
+            from vpn.models_xray import Inbound
+            self.fields['selected_inbounds'].queryset = Inbound.objects.all().order_by('name')
+            self.fields['selected_inbounds'].label = 'Inbound Templates'
+            self.fields['selected_inbounds'].help_text = 'Select inbound templates to assign to this user'
+        
+        if 'selected_subscription_groups' in self.fields:
+            from vpn.models_xray import SubscriptionGroup
+            self.fields['selected_subscription_groups'].queryset = SubscriptionGroup.objects.filter(
+                is_active=True
+            ).order_by('name')
+            self.fields['selected_subscription_groups'].label = 'Subscription Groups'
+            self.fields['selected_subscription_groups'].help_text = 'Select subscription groups to assign to this user'
 
 
 @admin.register(BotSettings)
@@ -337,6 +363,13 @@ class AccessRequestAdmin(admin.ModelAdmin):
             ),
             'description': 'Choose existing user to link OR specify username for new user'
         }),
+        ('VPN Access Configuration', {
+            'fields': (
+                'selected_inbounds',
+                'selected_subscription_groups',
+            ),
+            'description': 'Select inbound templates and subscription groups to assign to the user'
+        }),
         ('Telegram User', {
             'fields': (
                 'telegram_user_id',
@@ -460,6 +493,13 @@ class AccessRequestAdmin(admin.ModelAdmin):
                 obj.processed_at = timezone.now()
                 obj.save()
                 
+                # Assign VPN access to the linked user
+                try:
+                    self._assign_vpn_access(obj.selected_existing_user, obj)
+                except Exception as e:
+                    logger.error(f"Failed to assign VPN access: {e}")
+                    messages.warning(request, f"User linked but VPN access assignment failed: {e}")
+                
                 # Send notification
                 self._send_approval_notification(obj)
                 
@@ -494,6 +534,13 @@ class AccessRequestAdmin(admin.ModelAdmin):
                 selected_user.telegram_first_name = access_request.telegram_first_name or ""
                 selected_user.telegram_last_name = access_request.telegram_last_name or ""
                 selected_user.save()
+                
+                # Assign VPN access to the linked user
+                try:
+                    self._assign_vpn_access(selected_user, access_request)
+                except Exception as e:
+                    logger.error(f"Failed to assign VPN access to user {selected_user.username}: {e}")
+                
                 return selected_user
             
             # Check if we can link to existing user by telegram_username
@@ -511,6 +558,13 @@ class AccessRequestAdmin(admin.ModelAdmin):
                     existing_user_by_username.telegram_first_name = access_request.telegram_first_name or ""
                     existing_user_by_username.telegram_last_name = access_request.telegram_last_name or ""
                     existing_user_by_username.save()
+                    
+                    # Assign VPN access to the linked user
+                    try:
+                        self._assign_vpn_access(existing_user_by_username, access_request)
+                    except Exception as e:
+                        logger.error(f"Failed to assign VPN access to user {existing_user_by_username.username}: {e}")
+                    
                     return existing_user_by_username
             
             # Use desired_username if provided, otherwise fallback to Telegram data
@@ -551,10 +605,79 @@ class AccessRequestAdmin(admin.ModelAdmin):
             )
             
             logger.info(f"Successfully created user {user.username} (ID: {user.id}) from Telegram request {access_request.id}")
+            
+            # Assign VPN access (inbounds and subscription groups)
+            try:
+                self._assign_vpn_access(user, access_request)
+            except Exception as e:
+                logger.error(f"Failed to assign VPN access to user {user.username}: {e}")
+                # Continue even if VPN assignment fails - user is already created
+            
             return user
             
         except Exception as e:
             logger.error(f"Error creating user from request {access_request.id}: {e}")
+            raise
+    
+    def _assign_vpn_access(self, user, access_request):
+        """Assign selected inbounds and subscription groups to the user"""
+        try:
+            from vpn.models_xray import UserSubscription, SubscriptionGroup
+            
+            # Assign subscription groups
+            for subscription_group in access_request.selected_subscription_groups.all():
+                user_subscription, created = UserSubscription.objects.get_or_create(
+                    user=user,
+                    subscription_group=subscription_group,
+                    defaults={'active': True}
+                )
+                if created:
+                    logger.info(f"Assigned subscription group '{subscription_group.name}' to user {user.username}")
+                else:
+                    # Ensure it's active if it already existed
+                    if not user_subscription.active:
+                        user_subscription.active = True
+                        user_subscription.save()
+                        logger.info(f"Re-activated subscription group '{subscription_group.name}' for user {user.username}")
+            
+            # Handle individual inbounds - create a custom subscription group for them
+            selected_inbounds = access_request.selected_inbounds.all()
+            if selected_inbounds.exists():
+                # Create a custom subscription group for this user's individual inbounds
+                custom_group_name = f"Custom_{user.username}_{access_request.id}"
+                custom_group, created = SubscriptionGroup.objects.get_or_create(
+                    name=custom_group_name,
+                    defaults={
+                        'description': f'Custom inbounds for {user.username} from Telegram request',
+                        'is_active': True
+                    }
+                )
+                
+                if created:
+                    # Add selected inbounds to the custom group
+                    custom_group.inbounds.set(selected_inbounds)
+                    logger.info(f"Created custom subscription group '{custom_group_name}' with {selected_inbounds.count()} inbounds")
+                else:
+                    # Update existing custom group
+                    custom_group.inbounds.add(*selected_inbounds)
+                    logger.info(f"Updated custom subscription group '{custom_group_name}' with additional inbounds")
+                
+                # Assign the custom group to the user
+                user_subscription, created = UserSubscription.objects.get_or_create(
+                    user=user,
+                    subscription_group=custom_group,
+                    defaults={'active': True}
+                )
+                if created:
+                    logger.info(f"Assigned custom subscription group to user {user.username}")
+            
+            inbound_count = selected_inbounds.count()
+            group_count = access_request.selected_subscription_groups.count()
+            
+            logger.info(f"Successfully assigned {group_count} subscription groups and {inbound_count} individual inbounds to user {user.username}")
+            
+        except Exception as e:
+            logger.error(f"Error assigning VPN access to user {user.username}: {e}")
             raise
     
     def _send_approval_notification(self, access_request):

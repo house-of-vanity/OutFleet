@@ -247,6 +247,18 @@ class AccessRequest(models.Model):
         help_text="First message from this user"
     )
     
+    # Inbound templates and subscription groups
+    selected_inbounds = models.ManyToManyField(
+        'vpn.Inbound',
+        blank=True,
+        help_text="Inbound templates to assign to the user"
+    )
+    selected_subscription_groups = models.ManyToManyField(
+        'vpn.SubscriptionGroup',
+        blank=True,
+        help_text="Subscription groups to assign to the user"
+    )
+    
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     processed_at = models.DateTimeField(null=True, blank=True)
