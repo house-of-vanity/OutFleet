@@ -157,12 +157,10 @@ except ImportError:
 
 # Add subscription management to User admin
 try:
-    from vpn.admin.user import add_subscription_management_to_user
-    from django.contrib.admin import site
-    for model, admin_instance in site._registry.items():
-        if model.__name__ == 'User' and hasattr(admin_instance, 'fieldsets'):
-            add_subscription_management_to_user(admin_instance.__class__)
-            break
+    from vpn.admin_xray import add_subscription_management_to_user
+    from vpn.admin.user import UserAdmin
+    add_subscription_management_to_user(UserAdmin)
+    logger.info("✅ Successfully added subscription management to User admin")
 except Exception as e:
     logger.error(f"Failed to add subscription management: {e}")
 

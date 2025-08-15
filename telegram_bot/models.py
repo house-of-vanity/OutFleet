@@ -33,6 +33,12 @@ class BotSettings(models.Model):
         default=30,
         help_text="Connection timeout in seconds"
     )
+    telegram_admins = models.ManyToManyField(
+        User,
+        blank=True,
+        related_name='bot_admin_settings',
+        help_text="Users with linked Telegram accounts who will have admin access in the bot"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

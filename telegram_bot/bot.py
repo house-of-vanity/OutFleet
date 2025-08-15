@@ -6,7 +6,7 @@ import os
 import fcntl
 from typing import Optional
 from telegram import Update, Bot
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from django.utils import timezone
 from django.conf import settings
 from asgiref.sync import sync_to_async
@@ -125,6 +125,619 @@ class TelegramBotManager:
             self._release_lock()
             raise e
     
+    async def _is_telegram_admin(self, telegram_user):
+        """Check if user is a Telegram admin"""
+        try:
+            from django.db.models import Q
+            bot_settings = await sync_to_async(BotSettings.get_settings)()
+            
+            # Check by telegram_user_id first
+            if hasattr(telegram_user, 'id'):
+                telegram_user_id = telegram_user.id
+                telegram_username = telegram_user.username if hasattr(telegram_user, 'username') else None
+            else:
+                # If just an ID was passed
+                telegram_user_id = telegram_user
+                telegram_username = None
+            
+            # Check if admin by telegram_user_id
+            admin_by_id = await sync_to_async(
+                bot_settings.telegram_admins.filter(telegram_user_id=telegram_user_id).exists
+            )()
+            
+            if admin_by_id:
+                return True
+            
+            # Also check by telegram_username if available
+            if telegram_username:
+                admin_by_username = await sync_to_async(
+                    bot_settings.telegram_admins.filter(telegram_username=telegram_username).exists
+                )()
+                
+                if admin_by_username:
+                    # Update the user's telegram_user_id for future checks
+                    admin_user = await sync_to_async(
+                        bot_settings.telegram_admins.filter(telegram_username=telegram_username).first
+                    )()
+                    if admin_user and not admin_user.telegram_user_id:
+                        admin_user.telegram_user_id = telegram_user_id
+                        await sync_to_async(admin_user.save)()
+                        logger.info(f"Linked telegram_user_id {telegram_user_id} to admin {admin_user.username}")
+                    return True
+            
+            return False
+        except Exception as e:
+            logger.error(f"Error checking admin status: {e}")
+            return False
+    
+    async def _notify_admins_new_request(self, access_request):
+        """Notify all Telegram admins about new access request"""
+        try:
+            bot_settings = await sync_to_async(BotSettings.get_settings)()
+            admins = await sync_to_async(list)(bot_settings.telegram_admins.all())
+            
+            if not admins:
+                logger.info("No Telegram admins configured, skipping notification")
+                return
+            
+            # Prepare user info
+            user_info = access_request.display_name
+            telegram_info = f"@{access_request.telegram_username}" if access_request.telegram_username else f"ID: {access_request.telegram_user_id}"
+            date = access_request.created_at.strftime("%Y-%m-%d %H:%M")
+            message = access_request.message_text[:200] + "..." if len(access_request.message_text) > 200 else access_request.message_text
+            
+            # Send notification to each admin
+            for admin in admins:
+                try:
+                    if admin.telegram_user_id:
+                        # Get admin language (default to English if not set)
+                        admin_language = 'ru' if hasattr(admin, 'telegram_user_language') else 'en'
+                        
+                        notification_text = MessageLocalizer.get_message(
+                            'admin_new_request_notification', 
+                            admin_language,
+                            user_info=user_info,
+                            telegram_info=telegram_info,
+                            date=date,
+                            message=message
+                        )
+                        
+                        await self._send_notification_to_admin(admin.telegram_user_id, notification_text)
+                        logger.info(f"Sent new request notification to admin {admin.username}")
+                        
+                except Exception as e:
+                    logger.error(f"Failed to notify admin {admin.username}: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Error notifying admins about new request: {e}")
+    
+    async def _send_notification_to_admin(self, telegram_user_id, message_text):
+        """Send notification message to specific admin"""
+        try:
+            bot_settings = await sync_to_async(BotSettings.get_settings)()
+            if not bot_settings.enabled or not bot_settings.bot_token:
+                logger.warning("Bot not configured, skipping admin notification")
+                return
+            
+            # Create a simple Bot instance for sending notification
+            from telegram import Bot
+            from telegram.request import HTTPXRequest
+            
+            request_kwargs = {
+                'connection_pool_size': 1,
+                'read_timeout': bot_settings.connection_timeout,
+                'write_timeout': bot_settings.connection_timeout,
+                'connect_timeout': bot_settings.connection_timeout,
+            }
+            
+            if bot_settings.use_proxy and bot_settings.proxy_url:
+                request_kwargs['proxy'] = bot_settings.proxy_url
+            
+            request = HTTPXRequest(**request_kwargs)
+            bot = Bot(token=bot_settings.bot_token, request=request)
+            
+            await bot.send_message(
+                chat_id=telegram_user_id,
+                text=message_text,
+                parse_mode='Markdown'
+            )
+            
+            # Clean up bot connection
+            try:
+                await request.shutdown()
+            except:
+                pass
+                
+        except Exception as e:
+            logger.error(f"Failed to send notification to admin {telegram_user_id}: {e}")
+    
+    async def _create_main_keyboard(self, telegram_user):
+        """Create main keyboard for existing users, with admin buttons if user is admin"""
+        from telegram import ReplyKeyboardMarkup, KeyboardButton
+        
+        # Get basic buttons
+        access_button = get_localized_button(telegram_user, 'access')
+        guide_button = get_localized_button(telegram_user, 'guide')
+        
+        # Check if user is admin
+        is_admin = await self._is_telegram_admin(telegram_user)
+        
+        if is_admin:
+            # Admin keyboard with additional admin button
+            access_requests_button = get_localized_button(telegram_user, 'access_requests')
+            keyboard = [
+                [KeyboardButton(access_button), KeyboardButton(guide_button)],
+                [KeyboardButton(access_requests_button)]
+            ]
+        else:
+            # Regular user keyboard
+            keyboard = [
+                [KeyboardButton(access_button), KeyboardButton(guide_button)]
+            ]
+        
+        return ReplyKeyboardMarkup(
+            keyboard,
+            resize_keyboard=True,
+            one_time_keyboard=False
+        )
+    
+    async def _handle_access_requests_command(self, update: Update):
+        """Handle access requests button - show pending requests to admin"""
+        try:
+            # Get pending access requests
+            pending_requests = await sync_to_async(list)(
+                AccessRequest.objects.filter(approved=False).order_by('-created_at')
+            )
+            
+            if not pending_requests:
+                # No pending requests
+                no_requests_msg = get_localized_message(update.message.from_user, 'admin_no_pending_requests')
+                reply_markup = await self._create_main_keyboard(update.message.from_user)
+                
+                sent_message = await update.message.reply_text(
+                    no_requests_msg,
+                    reply_markup=reply_markup
+                )
+                
+                await self._save_outgoing_message(sent_message, update.message.from_user)
+                return
+            
+            # Show pending requests with inline keyboards for approve/reject
+            title_msg = get_localized_message(update.message.from_user, 'admin_access_requests_title')
+            
+            # Send title message with main keyboard 
+            reply_markup = await self._create_main_keyboard(update.message.from_user)
+            title_sent = await update.message.reply_text(
+                title_msg,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+            await self._save_outgoing_message(title_sent, update.message.from_user)
+            
+            # Send each request with inline keyboard for actions
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+            
+            for request in pending_requests[:5]:  # Show max 5 requests
+                # Format request info
+                user_info = request.display_name
+                date = request.created_at.strftime("%Y-%m-%d %H:%M")
+                message_preview = request.message_text[:100] + "..." if len(request.message_text) > 100 else request.message_text
+                
+                request_text = get_localized_message(
+                    update.message.from_user, 
+                    'admin_request_item',
+                    user_info=user_info,
+                    date=date,
+                    message_preview=message_preview
+                )
+                
+                # Create inline keyboard for this request
+                approve_btn_text = get_localized_button(update.message.from_user, 'approve')
+                reject_btn_text = get_localized_button(update.message.from_user, 'reject')
+                details_btn_text = get_localized_button(update.message.from_user, 'details')
+                
+                inline_keyboard = [
+                    [
+                        InlineKeyboardButton(approve_btn_text, callback_data=f"approve_{request.id}"),
+                        InlineKeyboardButton(reject_btn_text, callback_data=f"reject_{request.id}")
+                    ],
+                    [InlineKeyboardButton(details_btn_text, callback_data=f"details_{request.id}")]
+                ]
+                inline_markup = InlineKeyboardMarkup(inline_keyboard)
+                
+                request_sent = await update.message.reply_text(
+                    request_text,
+                    reply_markup=inline_markup,
+                    parse_mode='Markdown'
+                )
+                await self._save_outgoing_message(request_sent, update.message.from_user)
+            
+            if len(pending_requests) > 5:
+                remaining_msg = f"... и еще {len(pending_requests) - 5} заявок" if get_user_language(update.message.from_user) == 'ru' else f"... and {len(pending_requests) - 5} more requests"
+                await update.message.reply_text(remaining_msg)
+            
+            logger.info(f"Showed {len(pending_requests)} pending requests to admin {update.message.from_user.username}")
+            
+        except Exception as e:
+            logger.error(f"Error handling access requests command: {e}")
+            error_msg = get_localized_message(update.message.from_user, 'admin_error_processing', error=str(e))
+            await update.message.reply_text(error_msg)
+    
+    async def _handle_callback_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle inline keyboard button presses (callback queries)"""
+        try:
+            query = update.callback_query
+            await query.answer()  # Acknowledge the callback
+            
+            # Check if user is admin
+            if not await self._is_telegram_admin(query.from_user):
+                await query.edit_message_text("❌ Access denied. Admin rights required.")
+                return
+            
+            # Parse callback data
+            callback_data = query.data
+            action, request_id = callback_data.split('_', 1)
+            
+            if action == "approve":
+                await self._handle_approve_callback(query, request_id)
+            elif action == "reject":
+                await self._handle_reject_callback(query, request_id)
+            elif action == "details":
+                await self._handle_details_callback(query, request_id)
+            elif action == "sg":  # Subscription group selection
+                await self._handle_subscription_group_callback(query, callback_data)
+            elif action == "confirm":  # Confirm approval with selected groups
+                await self._handle_confirm_approval_callback(query, request_id)
+            elif action == "cancel":  # Cancel approval process
+                await self._handle_cancel_callback(query, request_id)
+            else:
+                await query.edit_message_text("❌ Unknown action")
+                
+        except Exception as e:
+            logger.error(f"Error handling callback query: {e}")
+            try:
+                await query.edit_message_text(f"❌ Error: {str(e)}")
+            except:
+                pass
+    
+    async def _handle_approve_callback(self, query, request_id):
+        """Handle approve button press - show subscription groups selection"""
+        try:
+            # Get the request
+            request = await sync_to_async(AccessRequest.objects.get)(id=request_id)
+            
+            # Check if already processed
+            if request.approved:
+                already_processed_msg = get_localized_message(query.from_user, 'admin_request_already_processed')
+                await query.edit_message_text(already_processed_msg)
+                return
+            
+            # Get available subscription groups
+            from vpn.models_xray import SubscriptionGroup
+            groups = await sync_to_async(list)(
+                SubscriptionGroup.objects.filter(is_active=True).order_by('name')
+            )
+            
+            if not groups:
+                await query.edit_message_text("❌ No subscription groups available")
+                return
+            
+            # Create inline keyboard with subscription groups
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+            
+            user_info = request.display_name
+            choose_groups_msg = get_localized_message(
+                query.from_user, 
+                'admin_choose_subscription_groups',
+                user_info=user_info
+            )
+            
+            # Create buttons for each group (max 2 per row)
+            keyboard = []
+            for i in range(0, len(groups), 2):
+                row = []
+                for j in range(2):
+                    if i + j < len(groups):
+                        group = groups[i + j]
+                        button_text = f"⚪ {group.name}"
+                        callback_data = f"sg_toggle_{group.id}_{request_id}"
+                        row.append(InlineKeyboardButton(button_text, callback_data=callback_data))
+                keyboard.append(row)
+            
+            # Add confirm and cancel buttons
+            confirm_btn_text = get_localized_button(query.from_user, 'confirm_approval')
+            cancel_btn_text = get_localized_button(query.from_user, 'cancel')
+            
+            keyboard.append([
+                InlineKeyboardButton(confirm_btn_text, callback_data=f"confirm_{request_id}"),
+                InlineKeyboardButton(cancel_btn_text, callback_data=f"cancel_{request_id}")
+            ])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(choose_groups_msg, reply_markup=reply_markup, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Error handling approve callback: {e}")
+            error_msg = get_localized_message(query.from_user, 'admin_error_processing', error=str(e))
+            await query.edit_message_text(error_msg)
+    
+    async def _handle_subscription_group_callback(self, query, callback_data):
+        """Handle subscription group toggle button"""
+        try:
+            # Parse callback data: sg_toggle_{group_id}_{request_id}
+            parts = callback_data.split('_')
+            group_id = parts[2]
+            request_id = parts[3]
+            
+            # Get current message text and keyboard
+            current_text = query.message.text
+            current_keyboard = query.message.reply_markup.inline_keyboard
+            
+            # Toggle the group selection
+            updated_keyboard = []
+            for row in current_keyboard:
+                updated_row = []
+                for button in row:
+                    if button.callback_data and button.callback_data.startswith(f"sg_toggle_{group_id}_"):
+                        # Toggle this button
+                        if button.text.startswith("⚪"):
+                            # Select it
+                            new_text = button.text.replace("⚪", "✅")
+                        else:
+                            # Deselect it
+                            new_text = button.text.replace("✅", "⚪")
+                        from telegram import InlineKeyboardButton
+                        updated_row.append(InlineKeyboardButton(new_text, callback_data=button.callback_data))
+                    else:
+                        updated_row.append(button)
+                updated_keyboard.append(updated_row)
+            
+            from telegram import InlineKeyboardMarkup
+            updated_markup = InlineKeyboardMarkup(updated_keyboard)
+            await query.edit_message_reply_markup(reply_markup=updated_markup)
+            
+        except Exception as e:
+            logger.error(f"Error handling subscription group callback: {e}")
+    
+    async def _handle_confirm_approval_callback(self, query, request_id):
+        """Handle confirm approval button - create user and assign groups"""
+        try:
+            # Get the request
+            request = await sync_to_async(AccessRequest.objects.get)(id=request_id)
+            
+            # Check if already processed
+            if request.approved:
+                already_processed_msg = get_localized_message(query.from_user, 'admin_request_already_processed')
+                await query.edit_message_text(already_processed_msg)
+                return
+            
+            # Get selected groups from the keyboard
+            selected_groups = []
+            from vpn.models_xray import SubscriptionGroup
+            
+            for row in query.message.reply_markup.inline_keyboard:
+                for button in row:
+                    if button.callback_data and button.callback_data.startswith("sg_toggle_") and button.text.startswith("✅"):
+                        # Extract group_id from callback_data
+                        group_id = button.callback_data.split('_')[2]
+                        group = await sync_to_async(SubscriptionGroup.objects.get)(id=group_id)
+                        selected_groups.append(group)
+            
+            if not selected_groups:
+                await query.edit_message_text("❌ Please select at least one subscription group")
+                return
+            
+            # Save selected groups to the request
+            await sync_to_async(request.selected_subscription_groups.set)(selected_groups)
+            
+            try:
+                # Create or get user
+                from vpn.models import User
+                from vpn.models_xray import UserSubscription
+                import secrets
+                import string
+                
+                # Check if user already exists
+                existing_user = await sync_to_async(
+                    User.objects.filter(telegram_user_id=request.telegram_user_id).first
+                )()
+                
+                if existing_user:
+                    user = existing_user
+                    logger.info(f"Using existing user {user.username} for telegram_user_id {request.telegram_user_id}")
+                else:
+                    # Check if selected_existing_user is set
+                    if request.selected_existing_user:
+                        # Link telegram to existing user
+                        user = request.selected_existing_user
+                        user.telegram_user_id = request.telegram_user_id
+                        user.telegram_username = request.telegram_username
+                        await sync_to_async(user.save)()
+                        logger.info(f"Linked telegram account to existing user {user.username}")
+                    else:
+                        # Create new user
+                        username = request.desired_username or request.telegram_username or f"tg_{request.telegram_user_id}"
+                        
+                        # Ensure unique username
+                        base_username = username
+                        counter = 1
+                        while await sync_to_async(User.objects.filter(username=username).exists)():
+                            username = f"{base_username}_{counter}"
+                            counter += 1
+                        
+                        # Generate random password
+                        alphabet = string.ascii_letters + string.digits
+                        password = ''.join(secrets.choice(alphabet) for _ in range(16))
+                        
+                        # Create user
+                        user = await sync_to_async(User.objects.create_user)(
+                            username=username,
+                            password=password,
+                            telegram_user_id=request.telegram_user_id,
+                            telegram_username=request.telegram_username,
+                            first_name=request.telegram_first_name or '',
+                            last_name=request.telegram_last_name or '',
+                            comment=f"Created from Telegram request #{request.id}"
+                        )
+                        logger.info(f"Created new user {user.username} from Telegram request")
+                
+                # Link user to request
+                request.user = user
+                await sync_to_async(request.save)()
+                
+                # Assign subscription groups to user
+                for subscription_group in selected_groups:
+                    user_subscription, created = await sync_to_async(UserSubscription.objects.get_or_create)(
+                        user=user,
+                        subscription_group=subscription_group,
+                        defaults={'active': True}
+                    )
+                    if created:
+                        logger.info(f"Assigned subscription group '{subscription_group.name}' to user {user.username}")
+                    else:
+                        # Ensure it's active if it already existed
+                        if not user_subscription.active:
+                            user_subscription.active = True
+                            await sync_to_async(user_subscription.save)()
+                            logger.info(f"Re-activated subscription group '{subscription_group.name}' for user {user.username}")
+                
+                # Mark as approved
+                request.approved = True
+                await sync_to_async(request.save)()
+                
+                # Send success message to admin
+                groups_list = ", ".join([group.name for group in selected_groups])
+                success_msg = get_localized_message(
+                    query.from_user,
+                    'admin_approval_success',
+                    user_info=request.display_name,
+                    groups=groups_list
+                )
+                await query.edit_message_text(success_msg, parse_mode='Markdown')
+                
+                # Send approval notification to user
+                # Create a dummy user object for localization
+                class DummyUser:
+                    def __init__(self, lang):
+                        self.language_code = lang
+                
+                user_lang = DummyUser(request.user_language if hasattr(request, 'user_language') else 'en')
+                approval_msg = get_localized_message(user_lang, 'approval_notification')
+                await self._send_notification_to_admin(request.telegram_user_id, approval_msg)
+                
+                logger.info(f"Admin {query.from_user.username} approved request {request_id} with {len(selected_groups)} groups")
+                
+            except Exception as e:
+                logger.error(f"Error in approval process: {e}")
+                error_msg = get_localized_message(query.from_user, 'admin_error_processing', error=str(e))
+                await query.edit_message_text(error_msg)
+                
+        except Exception as e:
+            logger.error(f"Error handling confirm approval callback: {e}")
+            error_msg = get_localized_message(query.from_user, 'admin_error_processing', error=str(e))
+            await query.edit_message_text(error_msg)
+    
+    async def _handle_reject_callback(self, query, request_id):
+        """Handle reject button press"""
+        try:
+            # Get the request
+            request = await sync_to_async(AccessRequest.objects.get)(id=request_id)
+            
+            # Check if already processed
+            if request.approved:
+                already_processed_msg = get_localized_message(query.from_user, 'admin_request_already_processed')
+                await query.edit_message_text(already_processed_msg)
+                return
+            
+            # Mark as rejected (we can add a rejected field or just delete)
+            await sync_to_async(request.delete)()
+            
+            # Send success message to admin
+            success_msg = get_localized_message(
+                query.from_user,
+                'admin_rejection_success',
+                user_info=request.display_name
+            )
+            await query.edit_message_text(success_msg, parse_mode='Markdown')
+            
+            logger.info(f"Admin {query.from_user.username} rejected request {request_id}")
+            
+        except Exception as e:
+            logger.error(f"Error handling reject callback: {e}")
+            error_msg = get_localized_message(query.from_user, 'admin_error_processing', error=str(e))
+            await query.edit_message_text(error_msg)
+    
+    async def _handle_details_callback(self, query, request_id):
+        """Handle details button press - show full request info"""
+        try:
+            # Get the request
+            request = await sync_to_async(AccessRequest.objects.get)(id=request_id)
+            
+            # Format detailed information
+            details = f"**📋 Request Details**\n\n"
+            details += f"**👤 User:** {request.display_name}\n"
+            details += f"**📱 Telegram:** @{request.telegram_username}" if request.telegram_username else f"**📱 Telegram ID:** {request.telegram_user_id}\n"
+            details += f"**📅 Date:** {request.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            details += f"**🆔 Request ID:** {request.id}\n"
+            details += f"**👤 Desired Username:** {request.desired_username}\n\n"
+            details += f"**💬 Full Message:**\n{request.message_text}"
+            
+            # Create back button
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+            back_keyboard = [[
+                InlineKeyboardButton("⬅️ Back", callback_data=f"approve_{request_id}"),
+                InlineKeyboardButton("❌ Reject", callback_data=f"reject_{request_id}")
+            ]]
+            reply_markup = InlineKeyboardMarkup(back_keyboard)
+            
+            await query.edit_message_text(details, reply_markup=reply_markup, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Error handling details callback: {e}")
+            error_msg = get_localized_message(query.from_user, 'admin_error_processing', error=str(e))
+            await query.edit_message_text(error_msg)
+    
+    async def _handle_cancel_callback(self, query, request_id):
+        """Handle cancel button press - return to original request view"""
+        try:
+            # Get the request
+            request = await sync_to_async(AccessRequest.objects.get)(id=request_id)
+            
+            # Recreate original request display
+            user_info = request.display_name
+            date = request.created_at.strftime("%Y-%m-%d %H:%M")
+            message_preview = request.message_text[:100] + "..." if len(request.message_text) > 100 else request.message_text
+            
+            request_text = get_localized_message(
+                query.from_user, 
+                'admin_request_item',
+                user_info=user_info,
+                date=date,
+                message_preview=message_preview
+            )
+            
+            # Create original inline keyboard
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+            approve_btn_text = get_localized_button(query.from_user, 'approve')
+            reject_btn_text = get_localized_button(query.from_user, 'reject')
+            details_btn_text = get_localized_button(query.from_user, 'details')
+            
+            inline_keyboard = [
+                [
+                    InlineKeyboardButton(approve_btn_text, callback_data=f"approve_{request.id}"),
+                    InlineKeyboardButton(reject_btn_text, callback_data=f"reject_{request.id}")
+                ],
+                [InlineKeyboardButton(details_btn_text, callback_data=f"details_{request.id}")]
+            ]
+            inline_markup = InlineKeyboardMarkup(inline_keyboard)
+            
+            await query.edit_message_text(request_text, reply_markup=inline_markup, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Error handling cancel callback: {e}")
+            error_msg = get_localized_message(query.from_user, 'admin_error_processing', error=str(e))
+            await query.edit_message_text(error_msg)
+
     def stop(self):
         """Stop the bot"""
         if not self._running:
@@ -217,6 +830,7 @@ class TelegramBotManager:
             
             # Add handlers
             self._application.add_handler(CommandHandler("start", self._handle_start))
+            self._application.add_handler(CallbackQueryHandler(self._handle_callback_query))
             self._application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message))
             self._application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, self._handle_other))
             
@@ -276,19 +890,7 @@ class TelegramBotManager:
             
             if user_response['action'] == 'existing_user':
                 # User already exists - show keyboard with options
-                from telegram import ReplyKeyboardMarkup, KeyboardButton
-                
-                # Create keyboard for registered users with localized buttons
-                access_button = get_localized_button(update.message.from_user, 'access')
-                guide_button = get_localized_button(update.message.from_user, 'guide')
-                keyboard = [
-                    [KeyboardButton(access_button), KeyboardButton(guide_button)],
-                ]
-                reply_markup = ReplyKeyboardMarkup(
-                    keyboard, 
-                    resize_keyboard=True,
-                    one_time_keyboard=False
-                )
+                reply_markup = await self._create_main_keyboard(update.message.from_user)
                 
                 help_text = get_localized_message(update.message.from_user, 'help_text')
                 sent_message = await update.message.reply_text(
@@ -331,6 +933,7 @@ class TelegramBotManager:
                 # Get localized button texts for comparison
                 access_btn = get_localized_button(update.message.from_user, 'access')
                 guide_btn = get_localized_button(update.message.from_user, 'guide')
+                access_requests_btn = get_localized_button(update.message.from_user, 'access_requests')
                 all_in_one_btn = get_localized_button(update.message.from_user, 'all_in_one')
                 back_btn = get_localized_button(update.message.from_user, 'back')
                 group_prefix = get_localized_button(update.message.from_user, 'group_prefix')
@@ -340,6 +943,12 @@ class TelegramBotManager:
                     await self._handle_access_command(update, user_response['user'])
                 elif update.message.text == guide_btn:
                     await self._handle_guide_command(update)
+                elif update.message.text == access_requests_btn:
+                    # Admin command - check permissions and handle
+                    if await self._is_telegram_admin(update.message.from_user):
+                        await self._handle_access_requests_command(update)
+                    else:
+                        await self._send_help_message(update)
                 elif update.message.text.startswith(group_prefix):
                     # Handle specific group selection
                     group_name = update.message.text.replace(group_prefix, "")
@@ -653,16 +1262,7 @@ class TelegramBotManager:
                 )
             else:
                 # No active subscriptions - show main keyboard
-                access_button = get_localized_button(update.message.from_user, 'access')
-                guide_button = get_localized_button(update.message.from_user, 'guide')
-                keyboard = [
-                    [KeyboardButton(access_button), KeyboardButton(guide_button)],
-                ]
-                reply_markup = ReplyKeyboardMarkup(
-                    keyboard, 
-                    resize_keyboard=True,
-                    one_time_keyboard=False
-                )
+                reply_markup = await self._create_main_keyboard(update.message.from_user)
                 
                 no_subs_msg = get_localized_message(update.message.from_user, 'no_subscriptions')
                 sent_message = await update.message.reply_text(
@@ -711,6 +1311,10 @@ class TelegramBotManager:
             )
             
             logger.info(f"Created access request for user {telegram_user.username or telegram_user.id}")
+            
+            # Notify admins about new request
+            await self._notify_admins_new_request(request)
+            
             return request
             
         except Exception as e:
@@ -721,17 +1325,7 @@ class TelegramBotManager:
         """Send help message for unrecognized commands"""
         try:
             # Create main keyboard for existing users with localized buttons
-            from telegram import ReplyKeyboardMarkup, KeyboardButton
-            access_button = get_localized_button(update.message.from_user, 'access')
-            guide_button = get_localized_button(update.message.from_user, 'guide')
-            keyboard = [
-                [KeyboardButton(access_button), KeyboardButton(guide_button)],
-            ]
-            reply_markup = ReplyKeyboardMarkup(
-                keyboard, 
-                resize_keyboard=True,
-                one_time_keyboard=False
-            )
+            reply_markup = await self._create_main_keyboard(update.message.from_user)
             
             help_text = get_localized_message(update.message.from_user, 'help_text')
             sent_message = await update.message.reply_text(
@@ -978,19 +1572,8 @@ class TelegramBotManager:
     async def _handle_back_to_main(self, update: Update, user):
         """Handle back button - return to main menu"""
         try:
-            from telegram import ReplyKeyboardMarkup, KeyboardButton
-            
             # Create main keyboard with localized buttons
-            access_btn = get_localized_button(update.message.from_user, 'access')
-            guide_btn = get_localized_button(update.message.from_user, 'guide')
-            keyboard = [
-                [KeyboardButton(access_btn), KeyboardButton(guide_btn)],
-            ]
-            reply_markup = ReplyKeyboardMarkup(
-                keyboard, 
-                resize_keyboard=True,
-                one_time_keyboard=False
-            )
+            reply_markup = await self._create_main_keyboard(update.message.from_user)
             
             help_text = get_localized_message(update.message.from_user, 'help_text')
             sent_message = await update.message.reply_text(

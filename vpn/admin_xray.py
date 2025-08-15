@@ -614,14 +614,15 @@ class UserSubscriptionInline(admin.TabularInline):
 
 
 # Extension for User admin
-def add_subscription_management_to_user(UserAdmin):
+def add_subscription_management_to_user(UserAdminClass):
     """Add subscription management to existing User admin"""
     
-    # Add inline only - no fieldset or widget
-    if hasattr(UserAdmin, 'inlines'):
-        UserAdmin.inlines = list(UserAdmin.inlines) + [UserSubscriptionInline]
+    # Add inline to the User admin class
+    if hasattr(UserAdminClass, 'inlines'):
+        if UserSubscriptionInline not in UserAdminClass.inlines:
+            UserAdminClass.inlines = list(UserAdminClass.inlines) + [UserSubscriptionInline]
     else:
-        UserAdmin.inlines = [UserSubscriptionInline]
+        UserAdminClass.inlines = [UserSubscriptionInline]
 
 
 # UserSubscription admin will be integrated into unified Subscriptions admin

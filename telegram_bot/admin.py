@@ -8,9 +8,35 @@ from django import forms
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from .models import BotSettings, TelegramMessage, AccessRequest
 from .localization import MessageLocalizer
+from vpn.models import User
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class BotSettingsAdminForm(forms.ModelForm):
+    """Custom form for BotSettings with Telegram admin selection"""
+    
+    class Meta:
+        model = BotSettings
+        fields = '__all__'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Show all users for telegram_admins selection
+        if 'telegram_admins' in self.fields:
+            self.fields['telegram_admins'].queryset = User.objects.all().order_by('username')
+            self.fields['telegram_admins'].help_text = (
+                "Select users who will have admin access in the bot. "
+                "Users will get admin rights when they connect to the bot with their Telegram account."
+            )
+    
+    def clean_telegram_admins(self):
+        """Validate that selected admins have telegram_user_id or telegram_username"""
+        admins = self.cleaned_data.get('telegram_admins')
+        # No validation needed - admins can be selected even without telegram connection
+        # They will get admin rights when they connect via bot
+        return admins
 
 
 class AccessRequestAdminForm(forms.ModelForm):
@@ -20,10 +46,6 @@ class AccessRequestAdminForm(forms.ModelForm):
         model = AccessRequest
         fields = '__all__'
         widgets = {
-            'selected_inbounds': FilteredSelectMultiple(
-                verbose_name='Inbound Templates',
-                is_stacked=False
-            ),
             'selected_subscription_groups': FilteredSelectMultiple(
                 verbose_name='Subscription Groups',
                 is_stacked=False
@@ -43,13 +65,7 @@ class AccessRequestAdminForm(forms.ModelForm):
                 telegram_user_id__isnull=True
             ).order_by('username')
         
-        # Configure inbound and subscription group fields
-        if 'selected_inbounds' in self.fields:
-            from vpn.models_xray import Inbound
-            self.fields['selected_inbounds'].queryset = Inbound.objects.all().order_by('name')
-            self.fields['selected_inbounds'].label = 'Inbound Templates'
-            self.fields['selected_inbounds'].help_text = 'Select inbound templates to assign to this user'
-        
+        # Configure subscription group fields
         if 'selected_subscription_groups' in self.fields:
             from vpn.models_xray import SubscriptionGroup
             self.fields['selected_subscription_groups'].queryset = SubscriptionGroup.objects.filter(
@@ -61,11 +77,16 @@ class AccessRequestAdminForm(forms.ModelForm):
 
 @admin.register(BotSettings)
 class BotSettingsAdmin(admin.ModelAdmin):
-    list_display = ('__str__', 'enabled', 'bot_token_display', 'updated_at')
+    form = BotSettingsAdminForm
+    list_display = ('__str__', 'enabled', 'bot_token_display', 'admin_count_display', 'updated_at')
     fieldsets = (
         ('Bot Configuration', {
             'fields': ('bot_token', 'enabled', 'bot_status_display'),
             'description': 'Configure bot settings and view current status'
+        }),
+        ('Admin Management', {
+            'fields': ('telegram_admins', 'admin_info_display'),
+            'description': 'Select users with linked Telegram accounts who will have admin access in the bot'
         }),
         ('Connection Settings', {
             'fields': ('api_base_url', 'connection_timeout', 'use_proxy', 'proxy_url'),
@@ -76,7 +97,8 @@ class BotSettingsAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
-    readonly_fields = ('created_at', 'updated_at', 'bot_status_display')
+    readonly_fields = ('created_at', 'updated_at', 'bot_status_display', 'admin_info_display')
+    filter_horizontal = ('telegram_admins',)
     
     def bot_token_display(self, obj):
         """Mask bot token for security"""
@@ -87,6 +109,60 @@ class BotSettingsAdmin(admin.ModelAdmin):
             return "Token set"
         return "No token set"
     bot_token_display.short_description = "Bot Token"
+    
+    def admin_count_display(self, obj):
+        """Display count of Telegram admins"""
+        count = obj.telegram_admins.count()
+        if count == 0:
+            return "No admins"
+        elif count == 1:
+            return "1 admin"
+        else:
+            return f"{count} admins"
+    admin_count_display.short_description = "Telegram Admins"
+    
+    def admin_info_display(self, obj):
+        """Display detailed admin information"""
+        if not obj.pk:
+            return "Save settings first to manage admins"
+        
+        admins = obj.telegram_admins.all()
+        
+        if not admins.exists():
+            html = '<div style="background: #fff3cd; padding: 10px; border-radius: 4px; border-left: 4px solid #ffc107;">'
+            html += '<p style="margin: 0; color: #856404;"><strong>⚠️ No Telegram admins configured</strong></p>'
+            html += '<p style="margin: 5px 0 0 0; color: #856404;">Select users above to give them admin access in the Telegram bot.</p>'
+            html += '</div>'
+        else:
+            html = '<div style="background: #d4edda; padding: 10px; border-radius: 4px; border-left: 4px solid #28a745;">'
+            html += f'<p style="margin: 0; color: #155724;"><strong>✅ {admins.count()} Telegram admin(s) configured</strong></p>'
+            html += '<div style="margin-top: 8px;">'
+            
+            for admin in admins:
+                html += '<div style="background: white; margin: 4px 0; padding: 6px 10px; border-radius: 3px; border: 1px solid #c3e6cb;">'
+                html += f'<strong>{admin.username}</strong>'
+                
+                if admin.telegram_username:
+                    html += f' (@{admin.telegram_username})'
+                
+                html += f' <small style="color: #6c757d;">ID: {admin.telegram_user_id}</small>'
+                
+                if admin.first_name or admin.last_name:
+                    name_parts = []
+                    if admin.first_name:
+                        name_parts.append(admin.first_name)
+                    if admin.last_name:
+                        name_parts.append(admin.last_name)
+                    html += f'<br><small style="color: #6c757d;">Name: {" ".join(name_parts)}</small>'
+                
+                html += '</div>'
+            
+            html += '</div>'
+            html += '<p style="margin: 8px 0 0 0; color: #155724; font-size: 12px;">These users will receive notifications about new access requests and can approve/reject them directly in Telegram.</p>'
+            html += '</div>'
+        
+        return format_html(html)
+    admin_info_display.short_description = "Admin Configuration"
     
     def bot_status_display(self, obj):
         """Display bot status with control buttons"""
@@ -365,10 +441,9 @@ class AccessRequestAdmin(admin.ModelAdmin):
         }),
         ('VPN Access Configuration', {
             'fields': (
-                'selected_inbounds',
                 'selected_subscription_groups',
             ),
-            'description': 'Select inbound templates and subscription groups to assign to the user'
+            'description': 'Select subscription groups to assign to the user'
         }),
         ('Telegram User', {
             'fields': (
@@ -620,11 +695,12 @@ class AccessRequestAdmin(admin.ModelAdmin):
             raise
     
     def _assign_vpn_access(self, user, access_request):
-        """Assign selected inbounds and subscription groups to the user"""
+        """Assign selected subscription groups to the user"""
         try:
-            from vpn.models_xray import UserSubscription, SubscriptionGroup
+            from vpn.models_xray import UserSubscription
             
             # Assign subscription groups
+            group_count = 0
             for subscription_group in access_request.selected_subscription_groups.all():
                 user_subscription, created = UserSubscription.objects.get_or_create(
                     user=user,
@@ -633,48 +709,16 @@ class AccessRequestAdmin(admin.ModelAdmin):
                 )
                 if created:
                     logger.info(f"Assigned subscription group '{subscription_group.name}' to user {user.username}")
+                    group_count += 1
                 else:
                     # Ensure it's active if it already existed
                     if not user_subscription.active:
                         user_subscription.active = True
                         user_subscription.save()
                         logger.info(f"Re-activated subscription group '{subscription_group.name}' for user {user.username}")
+                        group_count += 1
             
-            # Handle individual inbounds - create a custom subscription group for them
-            selected_inbounds = access_request.selected_inbounds.all()
-            if selected_inbounds.exists():
-                # Create a custom subscription group for this user's individual inbounds
-                custom_group_name = f"Custom_{user.username}_{access_request.id}"
-                custom_group, created = SubscriptionGroup.objects.get_or_create(
-                    name=custom_group_name,
-                    defaults={
-                        'description': f'Custom inbounds for {user.username} from Telegram request',
-                        'is_active': True
-                    }
-                )
-                
-                if created:
-                    # Add selected inbounds to the custom group
-                    custom_group.inbounds.set(selected_inbounds)
-                    logger.info(f"Created custom subscription group '{custom_group_name}' with {selected_inbounds.count()} inbounds")
-                else:
-                    # Update existing custom group
-                    custom_group.inbounds.add(*selected_inbounds)
-                    logger.info(f"Updated custom subscription group '{custom_group_name}' with additional inbounds")
-                
-                # Assign the custom group to the user
-                user_subscription, created = UserSubscription.objects.get_or_create(
-                    user=user,
-                    subscription_group=custom_group,
-                    defaults={'active': True}
-                )
-                if created:
-                    logger.info(f"Assigned custom subscription group to user {user.username}")
-            
-            inbound_count = selected_inbounds.count()
-            group_count = access_request.selected_subscription_groups.count()
-            
-            logger.info(f"Successfully assigned {group_count} subscription groups and {inbound_count} individual inbounds to user {user.username}")
+            logger.info(f"Successfully assigned {group_count} subscription groups to user {user.username}")
             
         except Exception as e:
             logger.error(f"Error assigning VPN access to user {user.username}: {e}")

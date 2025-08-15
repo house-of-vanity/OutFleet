@@ -23,8 +23,8 @@ class UserAdmin(BaseVPNAdmin):
     form = UserForm
     list_display = ('username', 'comment', 'registration_date', 'hash_link', 'server_count')
     search_fields = ('username', 'hash', 'telegram_user_id', 'telegram_username')
-    readonly_fields = ('hash_link', 'vpn_access_summary', 'user_statistics_summary', 'telegram_info_display')
-    inlines = []  # All VPN access info is now in vpn_access_summary
+    readonly_fields = ('hash_link', 'vpn_access_summary', 'user_statistics_summary', 'telegram_info_display', 'subscription_management_info')
+    inlines = []  # Inlines will be added by subscription management function
     
     fieldsets = (
         ('User Information', {
@@ -41,6 +41,11 @@ class UserAdmin(BaseVPNAdmin):
         ('Statistics & Server Management', {
             'fields': ('user_statistics_summary',),
             'classes': ('wide',)
+        }),
+        ('Subscription Management', {
+            'fields': ('subscription_management_info',),
+            'classes': ('wide',),
+            'description': 'Manage user\'s Xray subscription groups. Use the "User\'s Subscription Groups" section below to add/remove subscriptions.'
         }),
     )
 
@@ -449,6 +454,99 @@ class UserAdmin(BaseVPNAdmin):
         
         html += '</div>'
         return mark_safe(html)
+
+    @admin.display(description='Subscription Management')
+    def subscription_management_info(self, obj):
+        """Display subscription management information and quick access"""
+        if not obj.pk:
+            return "Save user first to manage subscriptions"
+        
+        try:
+            from vpn.models_xray import UserSubscription, SubscriptionGroup
+            
+            # Get user's current subscriptions
+            user_subscriptions = UserSubscription.objects.filter(user=obj).select_related('subscription_group')
+            active_subs = user_subscriptions.filter(active=True)
+            inactive_subs = user_subscriptions.filter(active=False)
+            
+            # Get available subscription groups
+            all_groups = SubscriptionGroup.objects.filter(is_active=True)
+            subscribed_group_ids = user_subscriptions.values_list('subscription_group_id', flat=True)
+            available_groups = all_groups.exclude(id__in=subscribed_group_ids)
+            
+            html = '<div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">'
+            html += '<h4 style="margin: 0 0 15px 0; color: #495057;">🚀 Xray Subscription Management</h4>'
+            
+            # Active subscriptions
+            if active_subs.exists():
+                html += '<div style="margin-bottom: 15px;">'
+                html += '<h5 style="color: #28a745; margin: 0 0 8px 0;">✅ Active Subscriptions</h5>'
+                for sub in active_subs:
+                    html += f'<div style="background: #d4edda; padding: 8px 12px; border-radius: 4px; margin: 4px 0; display: flex; justify-content: space-between; align-items: center;">'
+                    html += f'<span><strong>{sub.subscription_group.name}</strong>'
+                    if sub.subscription_group.description:
+                        html += f' - {sub.subscription_group.description[:50]}{"..." if len(sub.subscription_group.description) > 50 else ""}'
+                    html += f'</span>'
+                    html += f'<small style="color: #155724;">Since: {sub.created_at.strftime("%Y-%m-%d")}</small>'
+                    html += f'</div>'
+                html += '</div>'
+            
+            # Inactive subscriptions
+            if inactive_subs.exists():
+                html += '<div style="margin-bottom: 15px;">'
+                html += '<h5 style="color: #dc3545; margin: 0 0 8px 0;">❌ Inactive Subscriptions</h5>'
+                for sub in inactive_subs:
+                    html += f'<div style="background: #f8d7da; padding: 8px 12px; border-radius: 4px; margin: 4px 0;">'
+                    html += f'<span style="color: #721c24;"><strong>{sub.subscription_group.name}</strong></span>'
+                    html += f'</div>'
+                html += '</div>'
+            
+            # Available subscription groups
+            if available_groups.exists():
+                html += '<div style="margin-bottom: 15px;">'
+                html += '<h5 style="color: #007cba; margin: 0 0 8px 0;">➕ Available Subscription Groups</h5>'
+                html += '<div style="display: flex; gap: 8px; flex-wrap: wrap;">'
+                for group in available_groups[:10]:  # Limit to avoid clutter
+                    html += f'<span style="background: #cce7ff; color: #004085; padding: 4px 8px; border-radius: 3px; font-size: 12px;">'
+                    html += f'{group.name}'
+                    html += f'</span>'
+                if available_groups.count() > 10:
+                    html += f'<span style="color: #6c757d; font-style: italic;">+{available_groups.count() - 10} more...</span>'
+                html += '</div>'
+                html += '</div>'
+            
+            # Quick access links
+            html += '<div style="border-top: 1px solid #dee2e6; padding-top: 12px; margin-top: 15px;">'
+            html += '<h5 style="margin: 0 0 8px 0; color: #495057;">🔗 Quick Access</h5>'
+            html += '<div style="display: flex; gap: 10px; flex-wrap: wrap;">'
+            
+            # Link to standalone UserSubscription admin
+            subscription_admin_url = f"/admin/vpn/usersubscription/?user__id__exact={obj.id}"
+            html += f'<a href="{subscription_admin_url}" class="button" style="background: #007cba; color: white; text-decoration: none; padding: 6px 12px; border-radius: 3px; font-size: 12px;">📋 Manage All Subscriptions</a>'
+            
+            # Link to add new subscription
+            add_subscription_url = f"/admin/vpn/usersubscription/add/?user={obj.id}"
+            html += f'<a href="{add_subscription_url}" class="button" style="background: #28a745; color: white; text-decoration: none; padding: 6px 12px; border-radius: 3px; font-size: 12px;">➕ Add New Subscription</a>'
+            
+            # Link to subscription groups admin  
+            groups_admin_url = "/admin/vpn/subscriptiongroup/"
+            html += f'<a href="{groups_admin_url}" class="button" style="background: #17a2b8; color: white; text-decoration: none; padding: 6px 12px; border-radius: 3px; font-size: 12px;">⚙️ Manage Groups</a>'
+            
+            html += '</div>'
+            html += '</div>'
+            
+            # Statistics
+            total_subs = user_subscriptions.count()
+            if total_subs > 0:
+                html += '<div style="border-top: 1px solid #dee2e6; padding-top: 8px; margin-top: 10px;">'
+                html += f'<small style="color: #6c757d;">📊 Total: {total_subs} subscription(s) | Active: {active_subs.count()} | Inactive: {inactive_subs.count()}</small>'
+                html += '</div>'
+            
+            html += '</div>'
+            return mark_safe(html)
+            
+        except Exception as e:
+            return mark_safe(f'<div style="background: #f8d7da; padding: 10px; border-radius: 4px; color: #721c24;">❌ Error loading subscription management: {e}</div>')
 
     @admin.display(description='Allowed servers', ordering='server_count')
     def server_count(self, obj):
