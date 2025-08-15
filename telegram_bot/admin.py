@@ -4,11 +4,33 @@ from django.urls import path, reverse
 from django.shortcuts import redirect
 from django.contrib import messages
 from django.utils import timezone
+from django import forms
 from .models import BotSettings, TelegramMessage, AccessRequest
 from .localization import MessageLocalizer
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class AccessRequestAdminForm(forms.ModelForm):
+    """Custom form for AccessRequest with existing user selection"""
+    
+    class Meta:
+        model = AccessRequest
+        fields = '__all__'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Rename the field for better UI
+        if 'selected_existing_user' in self.fields:
+            self.fields['selected_existing_user'].label = 'Link to existing user'
+            self.fields['selected_existing_user'].empty_label = "— Create new user —"
+            self.fields['selected_existing_user'].help_text = "Select an existing user without Telegram to link, or leave empty to create new user"
+            # Get users without telegram_user_id
+            from vpn.models import User
+            self.fields['selected_existing_user'].queryset = User.objects.filter(
+                telegram_user_id__isnull=True
+            ).order_by('username')
 
 
 @admin.register(BotSettings)
@@ -259,6 +281,7 @@ class TelegramMessageAdmin(admin.ModelAdmin):
 
 @admin.register(AccessRequest)
 class AccessRequestAdmin(admin.ModelAdmin):
+    form = AccessRequestAdminForm
     list_display = (
         'created_at',
         'user_display', 
@@ -309,9 +332,10 @@ class AccessRequestAdmin(admin.ModelAdmin):
         }),
         ('User Creation', {
             'fields': (
+                'selected_existing_user',
                 'desired_username',
             ),
-            'description': 'Edit username before approving the request'
+            'description': 'Choose existing user to link OR specify username for new user'
         }),
         ('Telegram User', {
             'fields': (
@@ -416,6 +440,35 @@ class AccessRequestAdmin(admin.ModelAdmin):
     
     approve_requests.short_description = "✅ Approve selected requests"
     
+    def save_model(self, request, obj, form, change):
+        """Override save to handle existing user linking"""
+        super().save_model(request, obj, form, change)
+        
+        # If approved and existing user was selected, link them
+        if obj.approved and obj.selected_existing_user and not obj.created_user:
+            try:
+                # Link telegram data to selected user
+                obj.selected_existing_user.telegram_user_id = obj.telegram_user_id
+                obj.selected_existing_user.telegram_username = obj.telegram_username
+                obj.selected_existing_user.telegram_first_name = obj.telegram_first_name or ""
+                obj.selected_existing_user.telegram_last_name = obj.telegram_last_name or ""
+                obj.selected_existing_user.save()
+                
+                # Update the request to reference the linked user
+                obj.created_user = obj.selected_existing_user
+                obj.processed_by = request.user
+                obj.processed_at = timezone.now()
+                obj.save()
+                
+                # Send notification
+                self._send_approval_notification(obj)
+                
+                messages.success(request, f"Successfully linked Telegram user to existing user {obj.selected_existing_user.username}")
+                logger.info(f"Linked Telegram user {obj.telegram_user_id} to existing user {obj.selected_existing_user.username}")
+                
+            except Exception as e:
+                messages.error(request, f"Failed to link existing user: {e}")
+                logger.error(f"Failed to link existing user: {e}")
     
     def _create_user_from_request(self, access_request, admin_user):
         """Create User from AccessRequest or link to existing user"""
@@ -429,6 +482,19 @@ class AccessRequestAdmin(admin.ModelAdmin):
             if existing_user:
                 logger.info(f"User already exists: {existing_user.username}")
                 return existing_user
+            
+            # Check if admin selected an existing user to link
+            if access_request.selected_existing_user:
+                selected_user = access_request.selected_existing_user
+                logger.info(f"Linking Telegram user {access_request.telegram_user_id} to selected existing user {selected_user.username}")
+                
+                # Link telegram data to selected user
+                selected_user.telegram_user_id = access_request.telegram_user_id
+                selected_user.telegram_username = access_request.telegram_username
+                selected_user.telegram_first_name = access_request.telegram_first_name or ""
+                selected_user.telegram_last_name = access_request.telegram_last_name or ""
+                selected_user.save()
+                return selected_user
             
             # Check if we can link to existing user by telegram_username
             if access_request.telegram_username:

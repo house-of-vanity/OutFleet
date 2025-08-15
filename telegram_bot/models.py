@@ -216,6 +216,14 @@ class AccessRequest(models.Model):
     )
     
     # Related objects
+    selected_existing_user = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='selected_for_requests',
+        help_text="Existing user selected to link with this Telegram account"
+    )
     created_user = models.ForeignKey(
         User,
         null=True,
