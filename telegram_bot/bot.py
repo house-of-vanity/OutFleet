@@ -280,8 +280,9 @@ class TelegramBotManager:
                 
                 # Create keyboard for registered users with localized buttons
                 access_button = get_localized_button(update.message.from_user, 'access')
+                guide_button = get_localized_button(update.message.from_user, 'guide')
                 keyboard = [
-                    [KeyboardButton(access_button)],
+                    [KeyboardButton(access_button), KeyboardButton(guide_button)],
                 ]
                 reply_markup = ReplyKeyboardMarkup(
                     keyboard, 
@@ -329,6 +330,7 @@ class TelegramBotManager:
             if user_response['action'] == 'existing_user':
                 # Get localized button texts for comparison
                 access_btn = get_localized_button(update.message.from_user, 'access')
+                guide_btn = get_localized_button(update.message.from_user, 'guide')
                 all_in_one_btn = get_localized_button(update.message.from_user, 'all_in_one')
                 back_btn = get_localized_button(update.message.from_user, 'back')
                 group_prefix = get_localized_button(update.message.from_user, 'group_prefix')
@@ -336,6 +338,8 @@ class TelegramBotManager:
                 # Check if this is a keyboard command
                 if update.message.text == access_btn:
                     await self._handle_access_command(update, user_response['user'])
+                elif update.message.text == guide_btn:
+                    await self._handle_guide_command(update)
                 elif update.message.text.startswith(group_prefix):
                     # Handle specific group selection
                     group_name = update.message.text.replace(group_prefix, "")
@@ -346,6 +350,15 @@ class TelegramBotManager:
                 elif update.message.text == back_btn:
                     # Handle back button
                     await self._handle_back_to_main(update, user_response['user'])
+                elif update.message.text == get_localized_button(update.message.from_user, 'android'):
+                    # Handle Android guide
+                    await self._handle_android_guide(update)
+                elif update.message.text == get_localized_button(update.message.from_user, 'ios'):
+                    # Handle iOS guide
+                    await self._handle_ios_guide(update)
+                elif update.message.text == get_localized_button(update.message.from_user, 'web_portal'):
+                    # Handle web portal
+                    await self._handle_web_portal(update, user_response['user'])
                 else:
                     # Unrecognized command - send help message
                     await self._send_help_message(update)
@@ -641,8 +654,9 @@ class TelegramBotManager:
             else:
                 # No active subscriptions - show main keyboard
                 access_button = get_localized_button(update.message.from_user, 'access')
+                guide_button = get_localized_button(update.message.from_user, 'guide')
                 keyboard = [
-                    [KeyboardButton(access_button)],
+                    [KeyboardButton(access_button), KeyboardButton(guide_button)],
                 ]
                 reply_markup = ReplyKeyboardMarkup(
                     keyboard, 
@@ -709,8 +723,9 @@ class TelegramBotManager:
             # Create main keyboard for existing users with localized buttons
             from telegram import ReplyKeyboardMarkup, KeyboardButton
             access_button = get_localized_button(update.message.from_user, 'access')
+            guide_button = get_localized_button(update.message.from_user, 'guide')
             keyboard = [
-                [KeyboardButton(access_button)],
+                [KeyboardButton(access_button), KeyboardButton(guide_button)],
             ]
             reply_markup = ReplyKeyboardMarkup(
                 keyboard, 
@@ -751,17 +766,62 @@ class TelegramBotManager:
             # Also generate user portal link
             portal_link = f"{base_url}/u/{user.hash}"
             
+            # Get server information for this group
+            from vpn.models_xray import SubscriptionGroup, ServerInbound
+            group_servers_info = ""
+            try:
+                # Find the subscription group by name
+                subscription_group = await sync_to_async(
+                    SubscriptionGroup.objects.filter(
+                        name=group_name,
+                        is_active=True
+                    ).prefetch_related('inbounds').first
+                )()
+                
+                if subscription_group:
+                    # Get servers where this group's inbounds are deployed
+                    deployed_servers = await sync_to_async(
+                        lambda: list(
+                            ServerInbound.objects.filter(
+                                inbound__in=subscription_group.inbounds.all(),
+                                active=True
+                            ).select_related('server', 'inbound').values_list(
+                                'server__name', 'inbound__protocol'
+                            ).distinct()
+                        )
+                    )()
+                    
+                    if deployed_servers:
+                        # Group by server
+                        servers_data = {}
+                        for server_name, protocol in deployed_servers:
+                            if server_name not in servers_data:
+                                servers_data[server_name] = []
+                            if protocol.upper() not in servers_data[server_name]:
+                                servers_data[server_name].append(protocol.upper())
+                        
+                        # Build server info text
+                        if servers_data:
+                            servers_header = get_localized_message(update.message.from_user, 'servers_in_group')
+                            group_servers_info = f"\n{servers_header}\n"
+                            for server_name, protocols in servers_data.items():
+                                protocols_str = ", ".join(protocols)
+                                group_servers_info += f"   • {server_name} ({protocols_str})\n"
+                            group_servers_info += "\n"
+                            
+            except Exception as e:
+                logger.warning(f"Could not get server info for group {group_name}: {e}")
+            
             # Build localized message
             group_title = get_localized_message(update.message.from_user, 'group_subscription', group_name=group_name)
             sub_link_label = get_localized_message(update.message.from_user, 'subscription_link')
             portal_label = get_localized_message(update.message.from_user, 'web_portal')
             tap_note = get_localized_message(update.message.from_user, 'tap_to_copy')
             
-            message_text = f"{group_title}\n\n"
+            message_text = f"{group_title}\n"
+            message_text += group_servers_info  # Add server info
             message_text += f"{sub_link_label}\n"
             message_text += f"`{subscription_link}`\n\n"
-            message_text += f"{portal_label}\n"
-            message_text += f"{portal_link}\n\n"
             message_text += tap_note
             
             # Create back navigation keyboard with only back button
@@ -878,11 +938,6 @@ class TelegramBotManager:
                 
                 message_text += f"{universal_link_label}\n"
                 message_text += f"`{subscription_link}`\n\n"
-                
-                # Add portal link
-                message_text += f"{portal_label}\n"
-                message_text += f"{portal_link}\n\n"
-                
                 message_text += all_subs_note
                 
                 # Create back navigation keyboard with only back button
@@ -927,8 +982,9 @@ class TelegramBotManager:
             
             # Create main keyboard with localized buttons
             access_btn = get_localized_button(update.message.from_user, 'access')
+            guide_btn = get_localized_button(update.message.from_user, 'guide')
             keyboard = [
-                [KeyboardButton(access_btn)],
+                [KeyboardButton(access_btn), KeyboardButton(guide_btn)],
             ]
             reply_markup = ReplyKeyboardMarkup(
                 keyboard, 
@@ -1053,6 +1109,177 @@ class TelegramBotManager:
             else:
                 logger.error(f"Failed to auto-start bot: {e}")
         return False
+    
+    async def _handle_guide_command(self, update: Update):
+        """Handle guide button - show platform selection"""
+        try:
+            from telegram import ReplyKeyboardMarkup, KeyboardButton
+            
+            # Get localized buttons
+            android_btn = get_localized_button(update.message.from_user, 'android')
+            ios_btn = get_localized_button(update.message.from_user, 'ios')
+            web_portal_btn = get_localized_button(update.message.from_user, 'web_portal')
+            back_btn = get_localized_button(update.message.from_user, 'back')
+            
+            # Create platform selection keyboard
+            keyboard = [
+                [KeyboardButton(android_btn), KeyboardButton(ios_btn)],
+                [KeyboardButton(web_portal_btn)],
+                [KeyboardButton(back_btn)]
+            ]
+            reply_markup = ReplyKeyboardMarkup(
+                keyboard, 
+                resize_keyboard=True,
+                one_time_keyboard=False
+            )
+            
+            # Get localized messages
+            guide_title = get_localized_message(update.message.from_user, 'guide_title')
+            choose_platform = get_localized_message(update.message.from_user, 'guide_choose_platform')
+            
+            message_text = f"{guide_title}\n\n{choose_platform}"
+            
+            sent_message = await update.message.reply_text(
+                message_text,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+            
+            # Save outgoing message
+            await self._save_outgoing_message(
+                sent_message,
+                update.message.from_user
+            )
+            
+            logger.info(f"Showed guide platform selection to user")
+            
+        except Exception as e:
+            logger.error(f"Error handling guide command: {e}")
+    
+    async def _handle_android_guide(self, update: Update):
+        """Handle Android guide selection"""
+        try:
+            from telegram import ReplyKeyboardMarkup, KeyboardButton
+            
+            # Create back navigation keyboard
+            back_btn = get_localized_button(update.message.from_user, 'back')
+            keyboard = [
+                [KeyboardButton(back_btn)]
+            ]
+            reply_markup = ReplyKeyboardMarkup(
+                keyboard, 
+                resize_keyboard=True,
+                one_time_keyboard=False
+            )
+            
+            # Get Android guide text
+            android_guide = get_localized_message(update.message.from_user, 'android_guide')
+            
+            sent_message = await update.message.reply_text(
+                android_guide,
+                reply_markup=reply_markup,
+                parse_mode='Markdown',
+                disable_web_page_preview=True
+            )
+            
+            # Save outgoing message
+            await self._save_outgoing_message(
+                sent_message,
+                update.message.from_user
+            )
+            
+            logger.info(f"Sent Android guide to user")
+            
+        except Exception as e:
+            logger.error(f"Error handling Android guide: {e}")
+    
+    async def _handle_ios_guide(self, update: Update):
+        """Handle iOS guide selection"""
+        try:
+            from telegram import ReplyKeyboardMarkup, KeyboardButton
+            
+            # Create back navigation keyboard
+            back_btn = get_localized_button(update.message.from_user, 'back')
+            keyboard = [
+                [KeyboardButton(back_btn)]
+            ]
+            reply_markup = ReplyKeyboardMarkup(
+                keyboard, 
+                resize_keyboard=True,
+                one_time_keyboard=False
+            )
+            
+            # Get iOS guide text
+            ios_guide = get_localized_message(update.message.from_user, 'ios_guide')
+            
+            sent_message = await update.message.reply_text(
+                ios_guide,
+                reply_markup=reply_markup,
+                parse_mode='Markdown',
+                disable_web_page_preview=True
+            )
+            
+            # Save outgoing message
+            await self._save_outgoing_message(
+                sent_message,
+                update.message.from_user
+            )
+            
+            logger.info(f"Sent iOS guide to user")
+            
+        except Exception as e:
+            logger.error(f"Error handling iOS guide: {e}")
+    
+    async def _handle_web_portal(self, update: Update, user):
+        """Handle web portal button - send portal link"""
+        try:
+            from django.conf import settings
+            from telegram import ReplyKeyboardMarkup, KeyboardButton
+            
+            # Get the base URL for portal links from settings
+            base_url = getattr(settings, 'EXTERNAL_ADDRESS', 'https://your-server.com')
+            
+            # Parse base_url to ensure it has https:// scheme
+            if not base_url.startswith(('http://', 'https://')):
+                base_url = f"https://{base_url}"
+            
+            # Generate user portal link
+            portal_link = f"{base_url}/u/{user.hash}"
+            
+            # Create back navigation keyboard
+            back_btn = get_localized_button(update.message.from_user, 'back')
+            keyboard = [
+                [KeyboardButton(back_btn)]
+            ]
+            reply_markup = ReplyKeyboardMarkup(
+                keyboard, 
+                resize_keyboard=True,
+                one_time_keyboard=False
+            )
+            
+            # Get localized messages
+            portal_label = get_localized_message(update.message.from_user, 'web_portal')
+            portal_description = get_localized_message(update.message.from_user, 'web_portal_description')
+            
+            message_text = f"{portal_label}\n{portal_link}\n\n{portal_description}"
+            
+            sent_message = await update.message.reply_text(
+                message_text,
+                reply_markup=reply_markup,
+                parse_mode='Markdown',
+                disable_web_page_preview=True
+            )
+            
+            # Save outgoing message
+            await self._save_outgoing_message(
+                sent_message,
+                update.message.from_user
+            )
+            
+            logger.info(f"Sent web portal link to user {user.username}")
+            
+        except Exception as e:
+            logger.error(f"Error handling web portal: {e}")
     
     @property
     def is_running(self):
