@@ -297,7 +297,8 @@ def sync_users(self, server_id):
             logger.info(f"Directly synced {added_count} users for Xray server {server.name}")
         else:
             # For non-Xray servers, sync users directly (non-Xray servers should not create tasks)
-            sync_result = server.sync_all_users()
+            real_server = server.get_real_instance()
+            sync_result = real_server.sync_users()
         
         # Check if sync was successful (can be boolean or dict/string)
         sync_successful = bool(sync_result) and (

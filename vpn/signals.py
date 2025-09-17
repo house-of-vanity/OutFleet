@@ -276,9 +276,14 @@ def certificate_updated(sender, instance, created, **kwargs):
         
         # Schedule sync for each affected server
         for server in servers_to_sync:
-            transaction.on_commit(
-                lambda srv=server: srv.sync_inbounds()
-            )
+            # Only sync if server has sync_inbounds method (Xray servers)
+            real_server = server.get_real_instance()
+            if hasattr(real_server, 'sync_inbounds'):
+                transaction.on_commit(
+                    lambda srv=real_server: srv.sync_inbounds()
+                )
+            else:
+                logger.debug(f"Server {server.name} does not support inbound sync")
 
 
 @receiver(post_save, sender=SubscriptionGroup)
