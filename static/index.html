@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xray Admin - Test Interface</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .section { background: white; margin: 20px 0; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        h2 { color: #666; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #f9f9f9; }
+        .btn { padding: 6px 12px; margin: 2px; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .form-group { margin: 10px 0; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input, .form-group select { width: 300px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            pointer-events: none;
+        }
+        .toast {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            margin-bottom: 10px;
+            padding: 16px 20px;
+            min-width: 300px;
+            max-width: 400px;
+            position: relative;
+            transform: translateX(100%);
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            opacity: 0;
+            pointer-events: auto;
+            border-left: 4px solid #007bff;
+        }
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        .toast.success {
+            border-left-color: #28a745;
+        }
+        .toast.error {
+            border-left-color: #dc3545;
+        }
+        .toast-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .toast-title {
+            font-weight: bold;
+            color: #333;
+        }
+        .toast-close {
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #999;
+            cursor: pointer;
+            padding: 0;
+            margin-left: 10px;
+        }
+        .toast-close:hover {
+            color: #666;
+        }
+        .toast-body {
+            color: #666;
+            line-height: 1.4;
+        }
+        .toast.success .toast-title {
+            color: #155724;
+        }
+        .toast.error .toast-title {
+            color: #721c24;
+        }
+        .tabs { border-bottom: 1px solid #ddd; margin-bottom: 20px; }
+        .tab { display: inline-block; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab.active { border-bottom-color: #007bff; background: #f8f9fa; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .loading { text-align: center; padding: 20px; color: #666; }
+        
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .modal-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #999;
+            cursor: pointer;
+        }
+        .modal-close:hover {
+            color: #666;
+        }
+        .modal-body {
+            margin-bottom: 20px;
+        }
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+        }
+        .cert-details {
+            font-family: monospace;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            max-height: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Xray Admin Panel - Test Interface</h1>
+        
+        <!-- Toast notifications container -->
+        <div class="toast-container" id="toastContainer"></div>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('dashboard')">Dashboard</div>
+            <div class="tab" onclick="showTab('servers')">Servers</div>
+            <div class="tab" onclick="showTab('templates')">Inbound Templates</div>
+            <div class="tab" onclick="showTab('certificates')">Certificates</div>
+            <div class="tab" onclick="showTab('inbounds')">Inbound Binding</div>
+            <div class="tab" onclick="showTab('users')">Users</div>
+        </div>
+        
+        <!-- Dashboard -->
+        <div id="dashboard" class="tab-content active">
+            <div class="section">
+                <h2>Statistics</h2>
+                <p>Servers: <span id="serverCount">Loading...</span></p>
+                <p>Templates: <span id="templateCount">Loading...</span></p>
+                <p>Certificates: <span id="certCount">Loading...</span></p>
+                <p>Users: <span id="userCount">Loading...</span></p>
+            </div>
+        </div>
+        
+        <!-- Servers -->
+        <div id="servers" class="tab-content">
+            <div class="section">
+                <h2>Add Server</h2>
+                <form id="serverForm">
+                    <div class="form-group">
+                        <label>Name:</label>
+                        <input type="text" id="serverName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Hostname:</label>
+                        <input type="text" id="serverHostname" required>
+                    </div>
+                    <div class="form-group">
+                        <label>gRPC Port:</label>
+                        <input type="number" id="serverPort" value="2053">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Server</button>
+                </form>
+            </div>
+            
+            <div class="section">
+                <h2>Servers List</h2>
+                <div id="serversList" class="loading">Loading...</div>
+            </div>
+        </div>
+        
+        <!-- Templates -->
+        <div id="templates" class="tab-content">
+            <div class="section">
+                <h2>Add Template</h2>
+                <form id="templateForm">
+                    <div class="form-group">
+                        <label>Name:</label>
+                        <input type="text" id="templateName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Protocol:</label>
+                        <select id="templateProtocol" required>
+                            <option value="vless">VLESS</option>
+                            <option value="vmess">VMess</option>
+                            <option value="trojan">Trojan</option>
+                            <option value="shadowsocks">Shadowsocks</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Default Port:</label>
+                        <input type="number" id="templatePort" value="443" required>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="templateTls"> Requires TLS
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Configuration Template:</label>
+                        <textarea id="templateConfig" rows="6" style="width: 300px;">{
+  "protocol": "{{protocol}}",
+  "port": {{port}},
+  "settings": {
+    "clients": []
+  }
+}</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Template</button>
+                </form>
+            </div>
+            
+            <div class="section">
+                <h2>Templates List</h2>
+                <div id="templatesList" class="loading">Loading...</div>
+            </div>
+        </div>
+        
+        <!-- Certificates -->
+        <div id="certificates" class="tab-content">
+            <div class="section">
+                <h2>Add Certificate</h2>
+                <form id="certificateForm">
+                    <div class="form-group">
+                        <label>Name:</label>
+                        <input type="text" id="certName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Domain:</label>
+                        <input type="text" id="certDomain" placeholder="example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Certificate Type:</label>
+                        <select id="certType" required>
+                            <option value="self_signed">Self-Signed</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="certAutoRenew" checked> Auto Renew
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Generate Certificate</button>
+                </form>
+            </div>
+            
+            <div class="section">
+                <h2>Certificates List</h2>
+                <div id="certificatesList" class="loading">Loading...</div>
+            </div>
+        </div>
+        
+        <!-- Server Inbounds -->
+        <div id="inbounds" class="tab-content">
+            <div class="section">
+                <h2>Bind Template to Server</h2>
+                <form id="inboundForm">
+                    <div class="form-group">
+                        <label>Server:</label>
+                        <select id="inboundServer" required>
+                            <option value="">Select Server...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Template:</label>
+                        <select id="inboundTemplate" required>
+                            <option value="">Select Template...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Port:</label>
+                        <input type="number" id="inboundPort" value="443" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Certificate:</label>
+                        <select id="inboundCertificate">
+                            <option value="">No Certificate</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="inboundActive" checked> Active
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Bind Template</button>
+                </form>
+            </div>
+            
+            <div class="section">
+                <h2>Server Inbounds</h2>
+                <div id="inboundsList" class="loading">Loading...</div>
+            </div>
+        </div>
+        
+        <!-- Users -->
+        <div id="users" class="tab-content">
+            <div class="section">
+                <h2>Add User</h2>
+                <form id="userForm">
+                    <div class="form-group">
+                        <label>Name:</label>
+                        <input type="text" id="userName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Comment:</label>
+                        <input type="text" id="userComment">
+                    </div>
+                    <div class="form-group">
+                        <label>Telegram ID:</label>
+                        <input type="number" id="userTelegram">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add User</button>
+                </form>
+            </div>
+            
+            <div class="section">
+                <h2>Users List</h2>
+                <div id="usersList" class="loading">Loading...</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal dialogs -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="editModalTitle">Edit Item</div>
+                <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="editModalBody">
+                <!-- Content will be dynamically loaded -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('editModal')">Cancel</button>
+                <button class="btn btn-primary" id="saveEditBtn" onclick="saveEdit()">Save</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="viewModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="viewModalTitle">View Details</div>
+                <button class="modal-close" onclick="closeModal('viewModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="viewModalBody">
+                <!-- Content will be dynamically loaded -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('viewModal')">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '/api';
+        
+        // Tab switching
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+            
+            loadTabData(tabName);
+        }
+        
+        function loadTabData(tab) {
+            switch(tab) {
+                case 'dashboard': loadDashboard(); break;
+                case 'servers': loadServers(); break;
+                case 'templates': loadTemplates(); break;
+                case 'certificates': loadCertificates(); break;
+                case 'inbounds': loadInbounds(); break;
+                case 'users': loadUsers(); break;
+            }
+        }
+        
+        // Dashboard
+        async function loadDashboard() {
+            try {
+                const [servers, templates, certificates, users] = await Promise.all([
+                    fetch(`${API_BASE}/servers`).then(r => r.json()),
+                    fetch(`${API_BASE}/templates`).then(r => r.json()),
+                    fetch(`${API_BASE}/certificates`).then(r => r.json()),
+                    fetch(`${API_BASE}/users`).then(r => r.json())
+                ]);
+                
+                document.getElementById('serverCount').textContent = servers.length;
+                document.getElementById('templateCount').textContent = templates.length;
+                document.getElementById('certCount').textContent = certificates.length;
+                document.getElementById('userCount').textContent = users.users ? users.users.length : users.length;
+            } catch (error) {
+                showStatus('Error loading dashboard: ' + error.message, 'error');
+            }
+        }
+        
+        // Servers
+        async function loadServers() {
+            try {
+                const servers = await fetch(`${API_BASE}/servers`).then(r => r.json());
+                
+                if (servers.length === 0) {
+                    document.getElementById('serversList').innerHTML = '<p>No servers found</p>';
+                    return;
+                }
+                
+                const table = `
+                    <table>
+                        <tr><th>Name</th><th>Hostname</th><th>Port</th><th>Status</th><th>Actions</th></tr>
+                        ${servers.map(s => `
+                            <tr>
+                                <td>${s.name}</td>
+                                <td>${s.hostname}</td>
+                                <td>${s.grpc_port}</td>
+                                <td>${s.status}</td>
+                                <td>
+                                    <button class="btn btn-success" onclick="testServer('${s.id}')">Test</button>
+                                    <button class="btn btn-primary" onclick="editServer('${s.id}')">Edit</button>
+                                    <button class="btn btn-danger" onclick="deleteServer('${s.id}')">Delete</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                `;
+                
+                document.getElementById('serversList').innerHTML = table;
+            } catch (error) {
+                document.getElementById('serversList').innerHTML = '<p>Error: ' + error.message + '</p>';
+            }
+        }
+        
+        // Templates
+        async function loadTemplates() {
+            try {
+                const templates = await fetch(`${API_BASE}/templates`).then(r => r.json());
+                
+                if (templates.length === 0) {
+                    document.getElementById('templatesList').innerHTML = '<p>No templates found</p>';
+                    return;
+                }
+                
+                const table = `
+                    <table>
+                        <tr><th>Name</th><th>Protocol</th><th>Port</th><th>TLS</th><th>Active</th><th>Actions</th></tr>
+                        ${templates.map(t => `
+                            <tr>
+                                <td>${t.name}</td>
+                                <td>${t.protocol}</td>
+                                <td>${t.default_port}</td>
+                                <td>${t.requires_tls ? 'Yes' : 'No'}</td>
+                                <td>${t.is_active ? 'Yes' : 'No'}</td>
+                                <td>
+                                    <button class="btn btn-primary" onclick="editTemplate('${t.id}')">Edit</button>
+                                    <button class="btn btn-danger" onclick="deleteTemplate('${t.id}')">Delete</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                `;
+                
+                document.getElementById('templatesList').innerHTML = table;
+            } catch (error) {
+                document.getElementById('templatesList').innerHTML = '<p>Error: ' + error.message + '</p>';
+            }
+        }
+        
+        // Certificates
+        async function loadCertificates() {
+            try {
+                const certificates = await fetch(`${API_BASE}/certificates`).then(r => r.json());
+                
+                if (certificates.length === 0) {
+                    document.getElementById('certificatesList').innerHTML = '<p>No certificates found</p>';
+                    return;
+                }
+                
+                const table = `
+                    <table>
+                        <tr><th>Name</th><th>Domain</th><th>Type</th><th>Expires</th><th>Auto Renew</th><th>Actions</th></tr>
+                        ${certificates.map(c => `
+                            <tr>
+                                <td>${c.name}</td>
+                                <td>${c.domain}</td>
+                                <td>${c.cert_type}</td>
+                                <td>${new Date(c.expires_at).toLocaleDateString()}</td>
+                                <td>${c.auto_renew ? 'Yes' : 'No'}</td>
+                                <td>
+                                    <button class="btn btn-secondary" onclick="viewCertificate('${c.id}')">View</button>
+                                    <button class="btn btn-primary" onclick="editCertificate('${c.id}')">Edit</button>
+                                    <button class="btn btn-danger" onclick="deleteCertificate('${c.id}')">Delete</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                `;
+                
+                document.getElementById('certificatesList').innerHTML = table;
+            } catch (error) {
+                document.getElementById('certificatesList').innerHTML = '<p>Error: ' + error.message + '</p>';
+            }
+        }
+        
+        // Users
+        async function loadUsers() {
+            try {
+                const response = await fetch(`${API_BASE}/users`);
+                const data = await response.json();
+                const users = data.users || data;
+                
+                if (users.length === 0) {
+                    document.getElementById('usersList').innerHTML = '<p>No users found</p>';
+                    return;
+                }
+                
+                const table = `
+                    <table>
+                        <tr><th>Name</th><th>Comment</th><th>Telegram</th><th>Created</th><th>Actions</th></tr>
+                        ${users.map(u => `
+                            <tr>
+                                <td>${u.name}</td>
+                                <td>${u.comment || '-'}</td>
+                                <td>${u.telegram_id || '-'}</td>
+                                <td>${new Date(u.created_at).toLocaleDateString()}</td>
+                                <td>
+                                    <button class="btn btn-primary" onclick="editUser('${u.id}')">Edit</button>
+                                    <button class="btn btn-danger" onclick="deleteUser('${u.id}')">Delete</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                `;
+                
+                document.getElementById('usersList').innerHTML = table;
+            } catch (error) {
+                document.getElementById('usersList').innerHTML = '<p>Error: ' + error.message + '</p>';
+            }
+        }
+        
+        // Server Inbounds
+        async function loadInbounds() {
+            try {
+                // Load dropdown options
+                await loadInboundOptions();
+                
+                // Load data for lookups
+                const [servers, templates, certificates] = await Promise.all([
+                    fetch(`${API_BASE}/servers`).then(r => r.json()),
+                    fetch(`${API_BASE}/templates`).then(r => r.json()),
+                    fetch(`${API_BASE}/certificates`).then(r => r.json())
+                ]);
+                
+                // Create lookup maps
+                const serverMap = Object.fromEntries(servers.map(s => [s.id, s]));
+                const templateMap = Object.fromEntries(templates.map(t => [t.id, t]));
+                const certificateMap = Object.fromEntries(certificates.map(c => [c.id, c]));
+                
+                // Load inbounds list (we'll fetch all servers and their inbounds)
+                let allInbounds = [];
+                for (const server of servers) {
+                    try {
+                        const inbounds = await fetch(`${API_BASE}/servers/${server.id}/inbounds`).then(r => r.json());
+                        allInbounds = allInbounds.concat(inbounds.map(inbound => ({
+                            ...inbound,
+                            server_name: server.name,
+                            server_id: server.id,
+                            template_name: templateMap[inbound.template_id]?.name || 'Unknown',
+                            certificate_name: inbound.certificate_id ? certificateMap[inbound.certificate_id]?.name || 'Unknown' : 'None'
+                        })));
+                    } catch (e) {
+                        // Skip if server has no inbounds
+                    }
+                }
+                
+                if (allInbounds.length === 0) {
+                    document.getElementById('inboundsList').innerHTML = '<p>No inbound bindings found</p>';
+                    return;
+                }
+                
+                const table = `
+                    <table>
+                        <tr><th>Server</th><th>Template</th><th>Port</th><th>Certificate</th><th>Status</th><th>Actions</th></tr>
+                        ${allInbounds.map(inbound => `
+                            <tr>
+                                <td>${inbound.server_name}</td>
+                                <td>${inbound.template_name}</td>
+                                <td>${inbound.port}</td>
+                                <td>${inbound.certificate_name}</td>
+                                <td>${inbound.is_active ? 'Active' : 'Inactive'}</td>
+                                <td>
+                                    <button class="btn btn-primary" onclick="editInbound('${inbound.server_id}', '${inbound.id}')">Edit</button>
+                                    <button class="btn btn-danger" onclick="deleteInbound('${inbound.server_id}', '${inbound.id}')">Delete</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                `;
+                
+                document.getElementById('inboundsList').innerHTML = table;
+            } catch (error) {
+                document.getElementById('inboundsList').innerHTML = '<p>Error: ' + error.message + '</p>';
+            }
+        }
+        
+        async function loadInboundOptions() {
+            try {
+                const [servers, templates, certificates] = await Promise.all([
+                    fetch(`${API_BASE}/servers`).then(r => r.json()),
+                    fetch(`${API_BASE}/templates`).then(r => r.json()),
+                    fetch(`${API_BASE}/certificates`).then(r => r.json())
+                ]);
+                
+                // Store templates data globally for port loading
+                templatesData = templates;
+                
+                // Populate server dropdown
+                const serverSelect = document.getElementById('inboundServer');
+                serverSelect.innerHTML = '<option value="">Select Server...</option>';
+                servers.forEach(server => {
+                    serverSelect.innerHTML += `<option value="${server.id}">${server.name} (${server.hostname})</option>`;
+                });
+                
+                // Populate template dropdown
+                const templateSelect = document.getElementById('inboundTemplate');
+                templateSelect.innerHTML = '<option value="">Select Template...</option>';
+                templates.forEach(template => {
+                    templateSelect.innerHTML += `<option value="${template.id}">${template.name} (${template.protocol})</option>`;
+                });
+                
+                // Add event listener for template change
+                templateSelect.removeEventListener('change', onTemplateChange); // Remove if exists
+                templateSelect.addEventListener('change', onTemplateChange);
+                
+                // Populate certificate dropdown
+                const certSelect = document.getElementById('inboundCertificate');
+                certSelect.innerHTML = '<option value="">No Certificate</option>';
+                certificates.forEach(cert => {
+                    certSelect.innerHTML += `<option value="${cert.id}">${cert.name} (${cert.domain})</option>`;
+                });
+            } catch (error) {
+                console.error('Error loading inbound options:', error);
+            }
+        }
+        
+        // Template change handler for automatic port loading
+        function onTemplateChange(event) {
+            const templateId = event.target.value;
+            const portInput = document.getElementById('inboundPort');
+            
+            if (templateId && templatesData.length > 0) {
+                const selectedTemplate = templatesData.find(t => t.id === templateId);
+                if (selectedTemplate) {
+                    portInput.value = selectedTemplate.default_port;
+                    console.log('Auto-loaded port', selectedTemplate.default_port, 'from template', selectedTemplate.name);
+                }
+            }
+        }
+        
+        // Server form
+        document.getElementById('serverForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const data = {
+                name: document.getElementById('serverName').value,
+                hostname: document.getElementById('serverHostname').value,
+                grpc_port: parseInt(document.getElementById('serverPort').value)
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/servers`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    showStatus('Server added successfully', 'success');
+                    document.getElementById('serverForm').reset();
+                    loadServers();
+                } else {
+                    showStatus('Error adding server', 'error');
+                }
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+            }
+        });
+        
+        // Template form
+        document.getElementById('templateForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const data = {
+                name: document.getElementById('templateName').value,
+                protocol: document.getElementById('templateProtocol').value,
+                default_port: parseInt(document.getElementById('templatePort').value),
+                requires_tls: document.getElementById('templateTls').checked,
+                config_template: document.getElementById('templateConfig').value
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/templates`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    showStatus('Template added successfully', 'success');
+                    document.getElementById('templateForm').reset();
+                    loadTemplates();
+                } else {
+                    showStatus('Error adding template', 'error');
+                }
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+            }
+        });
+        
+        // Certificate form
+        document.getElementById('certificateForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const data = {
+                name: document.getElementById('certName').value,
+                domain: document.getElementById('certDomain').value,
+                cert_type: document.getElementById('certType').value,
+                auto_renew: document.getElementById('certAutoRenew').checked
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/certificates`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    showStatus('Certificate generated successfully', 'success');
+                    document.getElementById('certificateForm').reset();
+                    loadCertificates();
+                } else {
+                    showStatus('Error generating certificate', 'error');
+                }
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+            }
+        });
+        
+        // Inbound form
+        document.getElementById('inboundForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const serverId = document.getElementById('inboundServer').value;
+            const data = {
+                template_id: document.getElementById('inboundTemplate').value,
+                port: parseInt(document.getElementById('inboundPort').value),
+                certificate_id: document.getElementById('inboundCertificate').value || null,
+                is_active: document.getElementById('inboundActive').checked
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/servers/${serverId}/inbounds`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    showStatus('Server inbound created successfully', 'success');
+                    document.getElementById('inboundForm').reset();
+                    loadInbounds();
+                } else {
+                    showStatus('Error creating server inbound', 'error');
+                }
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+            }
+        });
+        
+        // User form
+        document.getElementById('userForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const data = {
+                name: document.getElementById('userName').value
+            };
+            
+            const comment = document.getElementById('userComment').value;
+            const telegram = document.getElementById('userTelegram').value;
+            
+            if (comment) data.comment = comment;
+            if (telegram) data.telegram_id = parseInt(telegram);
+            
+            try {
+                const response = await fetch(`${API_BASE}/users`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    showStatus('User added successfully', 'success');
+                    document.getElementById('userForm').reset();
+                    loadUsers();
+                } else {
+                    showStatus('Error adding user', 'error');
+                }
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+            }
+        });
+        
+        // Actions
+        async function testServer(id) {
+            try {
+                const response = await fetch(`${API_BASE}/servers/${id}/test`, { method: 'POST' });
+                const result = await response.json();
+                showStatus(result.connected ? 'Connection OK' : 'Connection failed', result.connected ? 'success' : 'error');
+            } catch (error) {
+                showStatus('Test error: ' + error.message, 'error');
+            }
+        }
+        
+        async function deleteServer(id) {
+            if (!confirm('Delete server?')) return;
+            
+            try {
+                await fetch(`${API_BASE}/servers/${id}`, { method: 'DELETE' });
+                showStatus('Server deleted', 'success');
+                loadServers();
+            } catch (error) {
+                showStatus('Delete error: ' + error.message, 'error');
+            }
+        }
+        
+        async function deleteUser(id) {
+            if (!confirm('Delete user?')) return;
+            
+            try {
+                await fetch(`${API_BASE}/users/${id}`, { method: 'DELETE' });
+                showStatus('User deleted', 'success');
+                loadUsers();
+            } catch (error) {
+                showStatus('Delete error: ' + error.message, 'error');
+            }
+        }
+        
+        async function deleteTemplate(id) {
+            if (!confirm('Delete template?')) return;
+            
+            try {
+                await fetch(`${API_BASE}/templates/${id}`, { method: 'DELETE' });
+                showStatus('Template deleted', 'success');
+                loadTemplates();
+            } catch (error) {
+                showStatus('Delete error: ' + error.message, 'error');
+            }
+        }
+        
+        async function deleteCertificate(id) {
+            if (!confirm('Delete certificate?')) return;
+            
+            try {
+                await fetch(`${API_BASE}/certificates/${id}`, { method: 'DELETE' });
+                showStatus('Certificate deleted', 'success');
+                loadCertificates();
+            } catch (error) {
+                showStatus('Delete error: ' + error.message, 'error');
+            }
+        }
+        
+        async function deleteInbound(serverId, inboundId) {
+            if (!confirm('Delete server inbound?')) return;
+            
+            try {
+                await fetch(`${API_BASE}/servers/${serverId}/inbounds/${inboundId}`, { method: 'DELETE' });
+                showStatus('Server inbound deleted', 'success');
+                loadInbounds();
+            } catch (error) {
+                showStatus('Delete error: ' + error.message, 'error');
+            }
+        }
+        
+        function showStatus(message, type) {
+            showToast(message, type);
+        }
+        
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toastId = 'toast-' + Date.now();
+            
+            const typeTitle = {
+                'success': 'Success',
+                'error': 'Error',
+                'info': 'Info'
+            };
+            
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.id = toastId;
+            toast.innerHTML = `
+                <div class="toast-header">
+                    <div class="toast-title">${typeTitle[type] || 'Notification'}</div>
+                    <button class="toast-close" onclick="closeToast('${toastId}')">&times;</button>
+                </div>
+                <div class="toast-body">${message}</div>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Trigger animation
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 10);
+            
+            // Auto-remove after 4 seconds
+            setTimeout(() => {
+                closeToast(toastId);
+            }, 4000);
+        }
+        
+        function closeToast(toastId) {
+            const toast = document.getElementById(toastId);
+            if (toast) {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }
+        }
+        
+        // Modal management
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('show');
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+        
+        // Global variables for edit state
+        let currentEditType = '';
+        let currentEditId = '';
+        let currentEditServerId = '';
+        
+        // Global template data for port loading
+        let templatesData = [];
+        
+        // Edit functions
+        async function editServer(id) {
+            try {
+                const server = await fetch(`${API_BASE}/servers/${id}`).then(r => r.json());
+                currentEditType = 'server';
+                currentEditId = id;
+                
+                document.getElementById('editModalTitle').textContent = 'Edit Server';
+                document.getElementById('editModalBody').innerHTML = `
+                    <div class="form-group">
+                        <label>Name:</label>
+                        <input type="text" id="editName" value="${server.name}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Hostname:</label>
+                        <input type="text" id="editHostname" value="${server.hostname}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>gRPC Port:</label>
+                        <input type="number" id="editPort" value="${server.grpc_port}" required>
+                    </div>
+                `;
+                showModal('editModal');
+            } catch (error) {
+                showStatus('Error loading server: ' + error.message, 'error');
+            }
+        }
+        
+        async function editUser(id) {
+            try {
+                const user = await fetch(`${API_BASE}/users/${id}`).then(r => r.json());
+                currentEditType = 'user';
+                currentEditId = id;
+                
+                document.getElementById('editModalTitle').textContent = 'Edit User';
+                document.getElementById('editModalBody').innerHTML = `
+                    <div class="form-group">
+                        <label>Name:</label>
+                        <input type="text" id="editName" value="${user.name}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Comment:</label>
+                        <input type="text" id="editComment" value="${user.comment || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Telegram ID:</label>
+                        <input type="number" id="editTelegram" value="${user.telegram_id || ''}">
+                    </div>
+                `;
+                showModal('editModal');
+            } catch (error) {
+                showStatus('Error loading user: ' + error.message, 'error');
+            }
+        }
+        
+        async function editTemplate(id) {
+            try {
+                const template = await fetch(`${API_BASE}/templates/${id}`).then(r => r.json());
+                currentEditType = 'template';
+                currentEditId = id;
+                
+                document.getElementById('editModalTitle').textContent = 'Edit Template';
+                document.getElementById('editModalBody').innerHTML = `
+                    <div class="form-group">
+                        <label>Name:</label>
+                        <input type="text" id="editName" value="${template.name}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Protocol:</label>
+                        <select id="editProtocol" required>
+                            <option value="vless" ${template.protocol === 'vless' ? 'selected' : ''}>VLESS</option>
+                            <option value="vmess" ${template.protocol === 'vmess' ? 'selected' : ''}>VMess</option>
+                            <option value="trojan" ${template.protocol === 'trojan' ? 'selected' : ''}>Trojan</option>
+                            <option value="shadowsocks" ${template.protocol === 'shadowsocks' ? 'selected' : ''}>Shadowsocks</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Default Port:</label>
+                        <input type="number" id="editPort" value="${template.default_port}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="editTls" ${template.requires_tls ? 'checked' : ''}> Requires TLS
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="editActive" ${template.is_active ? 'checked' : ''}> Active
+                        </label>
+                    </div>
+                `;
+                showModal('editModal');
+            } catch (error) {
+                showStatus('Error loading template: ' + error.message, 'error');
+            }
+        }
+        
+        async function editCertificate(id) {
+            try {
+                const cert = await fetch(`${API_BASE}/certificates/${id}`).then(r => r.json());
+                currentEditType = 'certificate';
+                currentEditId = id;
+                
+                document.getElementById('editModalTitle').textContent = 'Edit Certificate';
+                document.getElementById('editModalBody').innerHTML = `
+                    <div class="form-group">
+                        <label>Name:</label>
+                        <input type="text" id="editName" value="${cert.name}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Domain:</label>
+                        <input type="text" id="editDomain" value="${cert.domain}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="editAutoRenew" ${cert.auto_renew ? 'checked' : ''}> Auto Renew
+                        </label>
+                    </div>
+                `;
+                showModal('editModal');
+            } catch (error) {
+                showStatus('Error loading certificate: ' + error.message, 'error');
+            }
+        }
+        
+        async function editInbound(serverId, inboundId) {
+            try {
+                const response = await fetch(`${API_BASE}/servers/${serverId}/inbounds/${inboundId}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const inbound = await response.json();
+                const [templates, certificates] = await Promise.all([
+                    fetch(`${API_BASE}/templates`).then(r => r.json()),
+                    fetch(`${API_BASE}/certificates`).then(r => r.json())
+                ]);
+                
+                currentEditType = 'inbound';
+                currentEditId = inboundId;
+                currentEditServerId = serverId;
+                
+                document.getElementById('editModalTitle').textContent = 'Edit Inbound Binding';
+                document.getElementById('editModalBody').innerHTML = `
+                    <div class="form-group">
+                        <label>Template:</label>
+                        <select id="editTemplate" required>
+                            ${templates.map(t => 
+                                `<option value="${t.id}" ${t.id === inbound.template_id ? 'selected' : ''}>${t.name}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Port:</label>
+                        <input type="number" id="editPort" value="${inbound.port}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Certificate:</label>
+                        <select id="editCertificate">
+                            <option value="">No Certificate</option>
+                            ${certificates.map(c => 
+                                `<option value="${c.id}" ${c.id === inbound.certificate_id ? 'selected' : ''}>${c.name}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="editActive" ${inbound.is_active ? 'checked' : ''}> Active
+                        </label>
+                    </div>
+                `;
+                showModal('editModal');
+            } catch (error) {
+                showStatus('Error loading inbound: ' + error.message, 'error');
+            }
+        }
+        
+        async function viewCertificate(id) {
+            try {
+                const cert = await fetch(`${API_BASE}/certificates/${id}/details`).then(r => r.json());
+                
+                document.getElementById('viewModalTitle').textContent = 'Certificate Details';
+                document.getElementById('viewModalBody').innerHTML = `
+                    <h4>Basic Information</h4>
+                    <p><strong>Name:</strong> ${cert.name}</p>
+                    <p><strong>Domain:</strong> ${cert.domain}</p>
+                    <p><strong>Type:</strong> ${cert.cert_type}</p>
+                    <p><strong>Auto Renew:</strong> ${cert.auto_renew ? 'Yes' : 'No'}</p>
+                    <p><strong>Created:</strong> ${new Date(cert.created_at).toLocaleString()}</p>
+                    <p><strong>Expires:</strong> ${new Date(cert.expires_at).toLocaleString()}</p>
+                    
+                    <h4>Certificate PEM</h4>
+                    <div class="cert-details">${cert.certificate_pem || 'Not available'}</div>
+                    
+                    <h4>Private Key</h4>
+                    <div class="cert-details">${cert.has_private_key ? '[Hidden for security]' : 'Not available'}</div>
+                `;
+                showModal('viewModal');
+            } catch (error) {
+                showStatus('Error loading certificate: ' + error.message, 'error');
+            }
+        }
+        
+        async function saveEdit() {
+            try {
+                let url, data;
+                
+                switch (currentEditType) {
+                    case 'server':
+                        url = `${API_BASE}/servers/${currentEditId}`;
+                        data = {
+                            name: document.getElementById('editName').value,
+                            hostname: document.getElementById('editHostname').value,
+                            grpc_port: parseInt(document.getElementById('editPort').value)
+                        };
+                        break;
+                        
+                    case 'user':
+                        url = `${API_BASE}/users/${currentEditId}`;
+                        data = {
+                            name: document.getElementById('editName').value,
+                            comment: document.getElementById('editComment').value || null,
+                            telegram_id: document.getElementById('editTelegram').value ? parseInt(document.getElementById('editTelegram').value) : null
+                        };
+                        break;
+                        
+                    case 'template':
+                        url = `${API_BASE}/templates/${currentEditId}`;
+                        data = {
+                            name: document.getElementById('editName').value,
+                            protocol: document.getElementById('editProtocol').value,
+                            default_port: parseInt(document.getElementById('editPort').value),
+                            requires_tls: document.getElementById('editTls').checked,
+                            is_active: document.getElementById('editActive').checked
+                        };
+                        break;
+                        
+                    case 'certificate':
+                        url = `${API_BASE}/certificates/${currentEditId}`;
+                        data = {
+                            name: document.getElementById('editName').value,
+                            domain: document.getElementById('editDomain').value,
+                            auto_renew: document.getElementById('editAutoRenew').checked
+                        };
+                        break;
+                        
+                    case 'inbound':
+                        url = `${API_BASE}/servers/${currentEditServerId}/inbounds/${currentEditId}`;
+                        data = {
+                            port_override: parseInt(document.getElementById('editPort').value),
+                            certificate_id: document.getElementById('editCertificate').value || null,
+                            is_active: document.getElementById('editActive').checked
+                        };
+                        break;
+                        
+                    default:
+                        throw new Error('Unknown edit type');
+                }
+                
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    showStatus(`${currentEditType.charAt(0).toUpperCase() + currentEditType.slice(1)} updated successfully`, 'success');
+                    closeModal('editModal');
+                    
+                    // Reload appropriate data
+                    switch (currentEditType) {
+                        case 'server': loadServers(); break;
+                        case 'user': loadUsers(); break;
+                        case 'template': loadTemplates(); break;
+                        case 'certificate': loadCertificates(); break;
+                        case 'inbound': loadInbounds(); break;
+                    }
+                } else {
+                    showStatus('Error updating ' + currentEditType, 'error');
+                }
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Initialize
+        loadDashboard();
+    </script>
+</body>
+</html>

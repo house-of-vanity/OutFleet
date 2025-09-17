@@ -1,5 +1,0 @@
-platforms:
-  - name: amd64
-    architecture: amd64
-  - name: arm64
-    architecture: arm64
