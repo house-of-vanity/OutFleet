@@ -469,13 +469,45 @@ class ServerAdmin(PolymorphicParentModelAdmin, BaseVPNAdmin):
         
         try:
             from vpn.tasks import sync_server_users
+            from celery import current_app
             
             tasks_started = 0
             errors = []
+            scheduled_tasks = set()  # Track already scheduled tasks to avoid duplicates
             
             for server in queryset:
                 try:
+                    # Check if a task is already running for this server
+                    task_key = f"sync_server_{server.id}"
+                    
+                    # Use Celery's inspect to check active tasks (optional, for better UX)
+                    inspect = current_app.control.inspect()
+                    active_tasks = inspect.active()
+                    
+                    # Check if task is already scheduled for this server
+                    task_already_running = False
+                    if active_tasks:
+                        for worker, tasks in active_tasks.items():
+                            for task_info in tasks:
+                                if task_info.get('name') == 'sync_server_users' and \
+                                   server.id in str(task_info.get('args', [])):
+                                    task_already_running = True
+                                    break
+                    
+                    if task_already_running:
+                        self.message_user(
+                            request,
+                            f"⏳ Sync already in progress for '{server.name}'",
+                            level=messages.WARNING
+                        )
+                        continue
+                    
+                    # Avoid scheduling duplicate tasks in this batch
+                    if server.id in scheduled_tasks:
+                        continue
+                        
                     task = sync_server_users.delay(server.id)
+                    scheduled_tasks.add(server.id)
                     tasks_started += 1
                     self.message_user(
                         request,

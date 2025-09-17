@@ -815,9 +815,14 @@ class XrayServerV2Admin(PolymorphicChildModelAdmin):
     actions = ['sync_users', 'sync_inbounds', 'get_status']
     
     def sync_users(self, request, queryset):
+        from vpn.tasks import sync_server_users
+        scheduled_count = 0
         for server in queryset:
-            server.sync_users()
-        self.message_user(request, f"Scheduled user sync for {queryset.count()} servers")
+            # Directly schedule the task instead of calling server.sync_users() 
+            # to avoid potential recursion issues
+            sync_server_users.delay(server.id)
+            scheduled_count += 1
+        self.message_user(request, f"Scheduled user sync for {scheduled_count} servers")
     sync_users.short_description = "Sync users for selected servers"
     
     def sync_inbounds(self, request, queryset):

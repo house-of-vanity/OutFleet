@@ -155,7 +155,7 @@ class TelegramMessage(models.Model):
     def display_name(self):
         """Get best available display name"""
         if self.telegram_username:
-            return f"@{self.telegram_username}"
+            return f"`@{self.telegram_username}`"
         return self.full_name
 
 
@@ -294,7 +294,7 @@ class AccessRequest(models.Model):
     def display_name(self):
         """Get best available display name"""
         if self.telegram_username:
-            return f"@{self.telegram_username}"
+            return f"`@{self.telegram_username}`"
         
         name_parts = []
         if self.telegram_first_name:

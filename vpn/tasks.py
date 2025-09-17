@@ -123,8 +123,29 @@ def sync_xray_users(self, server_id):
         create_task_log(task_id, "sync_xray_users", f"Starting user sync for {server.name}", 'STARTED', server=server)
         logger.info(f"Starting user sync for Xray server {server.name}")
         
+        # Don't call sync_users() which would create another task - directly perform the sync
+        from vpn.models import User
+        from vpn.models_xray import UserSubscription
+        
+        # Get all users who should have access to this server
+        users_to_sync = User.objects.filter(
+            xray_subscriptions__active=True,
+            xray_subscriptions__subscription_group__is_active=True
+        ).distinct()
+        
         real_server = server.get_real_instance()
-        user_result = real_server.sync_users()
+        
+        added_count = 0
+        failed_count = 0
+        for user in users_to_sync:
+            try:
+                if real_server.add_user(user):
+                    added_count += 1
+            except Exception as e:
+                failed_count += 1
+                logger.error(f"Failed to sync user {user.username} on server {server.name}: {e}")
+        
+        user_result = {"users_added": added_count, "total_users": users_to_sync.count(), "failed": failed_count}
         
         success_message = f"Successfully synced {user_result.get('users_added', 0)} users for {server.name}"
         logger.info(f"{success_message}. Result: {user_result}")
@@ -247,16 +268,36 @@ def sync_users(self, server_id):
         
         create_task_log(task_id, "sync_all_users_on_server", f"Found {user_count} users to sync", 'STARTED', server=server, message=f"Users: {user_list}")
         
-        # For Xray servers, use the new sync methods
+        # For Xray servers, use the sync_server_users task to avoid recursion
         from vpn.server_plugins.xray_v2 import XrayServerV2
         if isinstance(server.get_real_instance(), XrayServerV2):
             logger.info(f"Using XrayServerV2 sync for server {server.name}")
-            # Just call the sync method which schedules tasks asynchronously
-            sync_result = server.sync_users()
-            logger.info(f"Scheduled async sync for Xray server {server.name}")
+            # Call sync_server_users directly to perform the actual sync
+            # Avoid calling server.sync_users() which would create another task
+            from vpn.models import User
+            from vpn.models_xray import UserSubscription
+            
+            # Get all users who should have access to this server
+            users_to_sync = User.objects.filter(
+                xray_subscriptions__active=True,
+                xray_subscriptions__subscription_group__is_active=True
+            ).distinct()
+            
+            added_count = 0
+            failed_count = 0
+            for user in users_to_sync:
+                try:
+                    if server.add_user(user):
+                        added_count += 1
+                except Exception as e:
+                    failed_count += 1
+                    logger.error(f"Failed to sync user {user.username} on server {server.name}: {e}")
+            
+            sync_result = {"users_added": added_count, "total_users": users_to_sync.count(), "failed": failed_count}
+            logger.info(f"Directly synced {added_count} users for Xray server {server.name}")
         else:
-            # For non-Xray servers, just sync users
-            sync_result = server.sync_users()
+            # For non-Xray servers, sync users directly (non-Xray servers should not create tasks)
+            sync_result = server.sync_all_users()
         
         # Check if sync was successful (can be boolean or dict/string)
         sync_successful = bool(sync_result) and (

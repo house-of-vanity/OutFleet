@@ -182,7 +182,7 @@ class TelegramBotManager:
             
             # Prepare user info
             user_info = access_request.display_name
-            telegram_info = f"@{access_request.telegram_username}" if access_request.telegram_username else f"ID: {access_request.telegram_user_id}"
+            telegram_info = f"`@{access_request.telegram_username}`" if access_request.telegram_username else f"ID: {access_request.telegram_user_id}"
             date = access_request.created_at.strftime("%Y-%m-%d %H:%M")
             message = access_request.message_text[:200] + "..." if len(access_request.message_text) > 200 else access_request.message_text
             
@@ -703,7 +703,7 @@ class TelegramBotManager:
             # Format detailed information
             details = f"**📋 Request Details**\n\n"
             details += f"**👤 User:** {request.display_name}\n"
-            details += f"**📱 Telegram:** @{request.telegram_username}" if request.telegram_username else f"**📱 Telegram ID:** {request.telegram_user_id}\n"
+            details += f"**📱 Telegram:** `@{request.telegram_username}`" if request.telegram_username else f"**📱 Telegram ID:** {request.telegram_user_id}\n"
             details += f"**📅 Date:** {request.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
             details += f"**🆔 Request ID:** {request.id}\n"
             details += f"**👤 Desired Username:** {request.desired_username}\n\n"
