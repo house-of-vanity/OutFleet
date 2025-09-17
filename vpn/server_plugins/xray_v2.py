@@ -351,27 +351,37 @@ class XrayServerV2(Server):
             
             logger.debug(f"Inbound config for {inbound.name}: {len(str(inbound_config))} chars")
             
-            # Add inbound using the client's add_inbound method which handles wrapping
-            try:
+            # Check if inbound already exists
+            existing_inbounds = client.list_inbounds()
+            inbound_exists = any(ib.get('tag') == inbound.name for ib in existing_inbounds)
+            
+            if inbound_exists:
+                # Inbound already exists, update it instead of recreating
+                logger.info(f"Inbound {inbound.name} already exists, updating it")
+                # First remove the old one
+                client.remove_inbound(inbound.name)
+                # Then add the updated one
                 result = client.add_inbound(inbound_config)
-                logger.info(f"Deploy inbound result: {result}")
-                
-                # Check if command was successful
-                if result is not None and not (isinstance(result, dict) and 'error' in result):
-                    # Mark as deployed on this server
-                    from vpn.models_xray import ServerInbound
-                    ServerInbound.objects.update_or_create(
-                        server=self,
-                        inbound=inbound,
-                        defaults={'active': True}
-                    )
-                    logger.info(f"Successfully deployed inbound {inbound.name} on server {self.name}")
-                    return True
-                else:
-                    logger.error(f"Failed to deploy inbound {inbound.name} on server {self.name}. Result: {result}")
-                    return False
-            except Exception as cmd_error:
-                logger.error(f"Command execution error: {cmd_error}")
+            else:
+                # Add new inbound
+                logger.info(f"Creating new inbound {inbound.name}")
+                result = client.add_inbound(inbound_config)
+            
+            logger.info(f"Deploy inbound result: {result}")
+            
+            # Check if command was successful
+            if result is not None and not (isinstance(result, dict) and 'error' in result):
+                # Mark as deployed on this server
+                from vpn.models_xray import ServerInbound
+                ServerInbound.objects.update_or_create(
+                    server=self,
+                    inbound=inbound,
+                    defaults={'active': True}
+                )
+                logger.info(f"Successfully deployed inbound {inbound.name} on server {self.name}")
+                return True
+            else:
+                logger.error(f"Failed to deploy inbound {inbound.name} on server {self.name}. Result: {result}")
                 return False
             
         except Exception as e:
@@ -709,13 +719,10 @@ class XrayServerV2(Server):
                         logger.error(f"Failed to create inbound {inbound.name} with users")
                         continue
                 else:
-                    # Inbound exists, add user using recreation approach
-                    logger.info(f"Inbound {inbound.name} exists, adding user via recreation")
-                    if self.add_user_to_inbound(user, inbound):
-                        added_count += 1
-                        logger.info(f"Successfully added user {user.username} to existing inbound {inbound.name}")
-                    else:
-                        logger.error(f"Failed to add user {user.username} to existing inbound {inbound.name}")
+                    # Inbound exists, skip individual user addition to avoid constant recreation
+                    # User will be added during the next full inbound sync
+                    logger.info(f"Inbound {inbound.name} exists, user {user.username} will be added during next sync")
+                    added_count += 1
             
             logger.info(f"Added user {user.username} to {added_count} inbounds on server {self.name}")
             return added_count > 0

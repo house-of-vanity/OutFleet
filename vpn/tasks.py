@@ -870,10 +870,9 @@ def sync_server_inbounds(self, server_id, auto_sync_users=True):
         
         logger.info(f"Successfully deployed {deployed_count} inbounds on server {server.name}")
         
-        # Automatically sync users after inbound deployment if requested
-        if auto_sync_users and deployed_count > 0:
-            logger.info(f"Scheduling user sync for server {server.name} after inbound deployment")
-            sync_server_users.apply_async(args=[server_id], countdown=5)  # 5 second delay
+        # Don't automatically sync users to avoid loops
+        # Users are already added when deploying inbounds
+        logger.info(f"Inbound sync completed for server {server.name}, users were already synced during deployment")
         
         return {"inbounds_deployed": deployed_count, "auto_sync_users": auto_sync_users}
         
