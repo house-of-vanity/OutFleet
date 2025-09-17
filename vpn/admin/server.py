@@ -481,26 +481,32 @@ class ServerAdmin(PolymorphicParentModelAdmin, BaseVPNAdmin):
                     task_key = f"sync_server_{server.id}"
                     
                     # Use Celery's inspect to check active tasks (optional, for better UX)
-                    inspect = current_app.control.inspect()
-                    active_tasks = inspect.active()
-                    
-                    # Check if task is already scheduled for this server
-                    task_already_running = False
-                    if active_tasks:
-                        for worker, tasks in active_tasks.items():
-                            for task_info in tasks:
-                                if task_info.get('name') == 'sync_server_users' and \
-                                   server.id in str(task_info.get('args', [])):
-                                    task_already_running = True
-                                    break
-                    
-                    if task_already_running:
-                        self.message_user(
-                            request,
-                            f"⏳ Sync already in progress for '{server.name}'",
-                            level=messages.WARNING
-                        )
-                        continue
+                    try:
+                        inspect = current_app.control.inspect()
+                        active_tasks = inspect.active()
+                        
+                        # Check if task is already scheduled for this server
+                        task_already_running = False
+                        if active_tasks:
+                            for worker, tasks in active_tasks.items():
+                                for task_info in tasks:
+                                    if task_info.get('name') == 'sync_server_users':
+                                        # Check if server.id is in the task args
+                                        task_args = task_info.get('args', [])
+                                        if task_args and len(task_args) > 0 and task_args[0] == server.id:
+                                            task_already_running = True
+                                            break
+                        
+                        if task_already_running:
+                            self.message_user(
+                                request,
+                                f"⏳ Sync already in progress for '{server.name}'",
+                                level=messages.WARNING
+                            )
+                            continue
+                    except Exception as e:
+                        # If we can't check active tasks, just proceed
+                        logger.debug(f"Could not check active tasks: {e}")
                     
                     # Avoid scheduling duplicate tasks in this batch
                     if server.id in scheduled_tasks:
