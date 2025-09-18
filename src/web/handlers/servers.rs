@@ -479,14 +479,21 @@ pub async fn add_user_to_inbound(
         return Err(StatusCode::BAD_REQUEST);
     }
     
-    // Extract user data
-    let username = user_data["username"].as_str().unwrap_or("").to_string();
+    // Extract user data with better error handling
+    tracing::debug!("Received user_data: {}", serde_json::to_string_pretty(&user_data).unwrap_or_else(|_| "invalid json".to_string()));
+    
+    let username = user_data["username"].as_str()
+        .or_else(|| user_data["email"].as_str()) // Try email as fallback
+        .or_else(|| user_data["name"].as_str())  // Try name as fallback
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            // Generate username if not provided
+            format!("user_{}", Uuid::new_v4().to_string()[..8].to_string())
+        });
+    
     let level = user_data["level"].as_u64().unwrap_or(0) as i32;
     
-    if username.is_empty() {
-        tracing::error!("Missing required user data: username");
-        return Err(StatusCode::BAD_REQUEST);
-    }
+    tracing::info!("Creating user with username: '{}' and level: {}", username, level);
     
     // Create inbound user repository
     let inbound_users_repo = InboundUsersRepository::new(app_state.db.connection().clone());
