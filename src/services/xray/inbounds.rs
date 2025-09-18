@@ -81,16 +81,16 @@ impl<'a> InboundClient<'a> {
             
             tracing::info!("Creating StreamConfig with TLS like working example");
             
-            // Create TLS certificate with empty content but paths (even though we don't use files)
+            // Create TLS certificate exactly like working example - PEM content as bytes
             let tls_cert = TlsCertificate {
-                certificate: vec![], // Empty - try using content in different way
-                key: vec![], // Empty - try using content in different way
+                certificate: cert_pem.as_bytes().to_vec(), // PEM content as bytes like working example
+                key: key_pem.as_bytes().to_vec(), // PEM content as bytes like working example
                 usage: 0,
-                ocsp_stapling: 3600, // From Marzban examples
-                one_time_loading: true,
+                ocsp_stapling: 3600, // From working example
+                one_time_loading: true, // From working example
                 build_chain: false,
-                certificate_path: cert_pem.to_string(), // Try putting PEM content here
-                key_path: key_pem.to_string(), // Try putting PEM content here
+                certificate_path: "".to_string(), // Empty paths since we use content
+                key_path: "".to_string(), // Empty paths since we use content
             };
             
             // Create TLS config with proper fields like working example
