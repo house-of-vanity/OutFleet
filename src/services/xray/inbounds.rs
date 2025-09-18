@@ -7,7 +7,7 @@ use xray_core::{
     common::serial::TypedMessage,
     common::protocol::User,
     app::proxyman::ReceiverConfig,
-    common::net::{PortList, PortRange},
+    common::net::{PortList, PortRange, IpOrDomain},
     transport::internet::StreamConfig,
     transport::internet::tls::{Config as TlsConfig, Certificate as TlsCertificate},
     proxy::vless::inbound::Config as VlessInboundConfig,
@@ -22,6 +22,23 @@ use xray_core::{
     prost_types,
 };
 use prost::Message;
+
+/// Convert PEM format to DER (x509) format
+fn pem_to_der(pem_data: &str) -> Result<Vec<u8>> {
+    // Remove PEM headers and whitespace, then decode base64
+    let base64_data: String = pem_data.lines()
+        .filter(|line| !line.starts_with("-----") && !line.trim().is_empty())
+        .map(|line| line.trim())
+        .collect::<Vec<&str>>()
+        .join("");
+    
+    tracing::debug!("Base64 data length: {}", base64_data.len());
+    tracing::debug!("Base64 data: {}", &base64_data[..std::cmp::min(100, base64_data.len())]);
+    
+    use base64::{Engine as _, engine::general_purpose};
+    general_purpose::STANDARD.decode(&base64_data)
+        .map_err(|e| anyhow!("Failed to decode base64 PEM data: {}", e))
+}
 
 pub struct InboundClient<'a> {
     endpoint: String,
@@ -57,47 +74,48 @@ impl<'a> InboundClient<'a> {
             }],
         };
 
-        // Create stream settings with TLS if certificates are provided
+        // Create StreamConfig with proper structure and TLS like working example
         let stream_settings = if cert_pem.is_some() && key_pem.is_some() {
             let cert_pem = cert_pem.unwrap();
             let key_pem = key_pem.unwrap();
             
-            tracing::info!("Creating TLS stream settings for inbound");
-            tracing::debug!("Certificate length: {}, Key length: {}", cert_pem.len(), key_pem.len());
+            tracing::info!("Creating StreamConfig with TLS like working example");
             
-            // Create TLS certificate with OneTimeLoading = true
-            // Convert PEM strings to byte vectors (certificate should be raw bytes, not PEM string)
+            // Create TLS certificate with empty content but paths (even though we don't use files)
             let tls_cert = TlsCertificate {
-                certificate: cert_pem.as_bytes().to_vec(), // PEM as bytes
-                key: key_pem.as_bytes().to_vec(), // PEM key as bytes
-                usage: 0, // Default usage
-                ocsp_stapling: 0, // Default OCSP
-                one_time_loading: true, // OneTimeLoading = true as in example
+                certificate: vec![], // Empty - try using content in different way
+                key: vec![], // Empty - try using content in different way
+                usage: 0,
+                ocsp_stapling: 3600, // From Marzban examples
+                one_time_loading: true,
                 build_chain: false,
-                certificate_path: "".to_string(),
-                key_path: "".to_string(),
+                certificate_path: cert_pem.to_string(), // Try putting PEM content here
+                key_path: key_pem.to_string(), // Try putting PEM content here
             };
             
-            // Create TLS config using Default and set only necessary fields
+            // Create TLS config with proper fields like working example
             let mut tls_config = TlsConfig::default();
             tls_config.certificate = vec![tls_cert];
+            tls_config.next_protocol = vec!["h2".to_string(), "http/1.1".to_string()]; // From working example
+            tls_config.server_name = "localhost".to_string(); // From working example
+            tls_config.min_version = "1.2".to_string(); // From Marzban examples
             
-            // Create TLS security settings using prost_types::Any instead of TypedMessage
-            let tls_any = prost_types::Any::from_msg(&tls_config)
-                .map_err(|e| anyhow!("Failed to serialize TLS config: {}", e))?;
-            
+            // Create TypedMessage for TLS config
             let tls_message = TypedMessage {
-                r#type: tls_any.type_url,
-                value: tls_any.value,
+                r#type: "xray.transport.internet.tls.Config".to_string(),
+                value: tls_config.encode_to_vec(),
             };
             
-            // Create stream config with TLS security settings
+            tracing::info!("Created TLS config with server_name: {}, next_protocol: {:?}", 
+                tls_config.server_name, tls_config.next_protocol);
+            
+            // Create StreamConfig like working example
             Some(StreamConfig {
-                address: None,
-                port: port,
+                address: Some(IpOrDomain { address: None }), 
+                port: 0, // No port in working example streamSettings
                 protocol_name: "tcp".to_string(),
                 transport_settings: vec![],
-                security_type: "tls".to_string(),
+                security_type: "xray.transport.internet.tls.Config".to_string(), // Full type like working example
                 security_settings: vec![tls_message],
                 socket_settings: None,
             })
@@ -108,11 +126,11 @@ impl<'a> InboundClient<'a> {
 
         let receiver_config = ReceiverConfig {
             port_list: Some(port_list),
-            listen: None,
+            listen: Some(IpOrDomain { address: None }), // Use proper IpOrDomain for listen
             allocation_strategy: None,
             stream_settings: stream_settings,
             receive_original_destination: false,
-            sniffing_settings: None,
+            sniffing_settings: None, // TODO: add sniffing settings if needed
         };
 
         let receiver_message = TypedMessage {
@@ -273,11 +291,12 @@ impl<'a> InboundClient<'a> {
             proxy_settings: Some(proxy_message),
         };
 
+        tracing::info!("Sending AddInboundRequest for '{}'", tag);
+        tracing::debug!("InboundConfig: {:?}", inbound_config);
+        
         let request = Request::new(AddInboundRequest {
             inbound: Some(inbound_config),
         });
-
-        tracing::info!("Sending AddInboundRequest for '{}'", tag);
         let mut handler_client = self.client.handler();
         match handler_client.add_inbound(request).await {
             Ok(response) => {

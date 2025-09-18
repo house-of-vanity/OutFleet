@@ -54,6 +54,7 @@ xray-core = "0.2.1"  # gRPC client for Xray
 tonic = "0.12"       # gRPC client/server framework
 prost = "0.13"       # Protocol Buffers implementation
 rcgen = "0.12"       # For self-signed certificates
+base64 = "0.21"      # For PEM to DER conversion
 
 [dev-dependencies]
 tempfile = "3.0"
