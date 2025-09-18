@@ -7,7 +7,7 @@ use xray_core::{
     common::serial::TypedMessage,
     common::protocol::User,
     app::proxyman::ReceiverConfig,
-    common::net::{PortList, PortRange, IpOrDomain},
+    common::net::{PortList, PortRange, IpOrDomain, ip_or_domain::Address},
     transport::internet::StreamConfig,
     transport::internet::tls::{Config as TlsConfig, Certificate as TlsCertificate},
     proxy::vless::inbound::Config as VlessInboundConfig,
@@ -111,7 +111,7 @@ impl<'a> InboundClient<'a> {
             
             // Create StreamConfig like working example
             Some(StreamConfig {
-                address: Some(IpOrDomain { address: None }), 
+                address: None, // No address in streamSettings according to working example
                 port: 0, // No port in working example streamSettings
                 protocol_name: "tcp".to_string(),
                 transport_settings: vec![],
@@ -126,7 +126,9 @@ impl<'a> InboundClient<'a> {
 
         let receiver_config = ReceiverConfig {
             port_list: Some(port_list),
-            listen: Some(IpOrDomain { address: None }), // Use proper IpOrDomain for listen
+            listen: Some(IpOrDomain { 
+                address: Some(Address::Ip(vec![0, 0, 0, 0])) // "0.0.0.0" as IPv4 bytes
+            }),
             allocation_strategy: None,
             stream_settings: stream_settings,
             receive_original_destination: false,
