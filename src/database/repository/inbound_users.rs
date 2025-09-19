@@ -44,23 +44,23 @@ impl InboundUsersRepository {
         Ok(users)
     }
 
-    /// Find user by username and inbound (for uniqueness check)
-    pub async fn find_by_username_and_inbound(&self, username: &str, inbound_id: Uuid) -> Result<Option<Model>> {
+    /// Find user by user_id and inbound (for uniqueness check - one user per inbound)
+    pub async fn find_by_user_and_inbound(&self, user_id: Uuid, inbound_id: Uuid) -> Result<Option<Model>> {
         let user = Entity::find()
-            .filter(Column::Username.eq(username))
+            .filter(Column::UserId.eq(user_id))
             .filter(Column::ServerInboundId.eq(inbound_id))
             .one(&self.db)
             .await?;
         Ok(user)
     }
 
-    /// Find user by email
-    pub async fn find_by_email(&self, email: &str) -> Result<Option<Model>> {
-        let user = Entity::find()
-            .filter(Column::Email.eq(email))
-            .one(&self.db)
+    /// Find all inbound access for a specific user
+    pub async fn find_by_user_id(&self, user_id: Uuid) -> Result<Vec<Model>> {
+        let users = Entity::find()
+            .filter(Column::UserId.eq(user_id))
+            .all(&self.db)
             .await?;
-        Ok(user)
+        Ok(users)
     }
 
     pub async fn create(&self, dto: CreateInboundUserDto) -> Result<Model> {
@@ -124,9 +124,9 @@ impl InboundUsersRepository {
         Ok(result.rows_affected)
     }
 
-    /// Check if username already exists on this inbound
-    pub async fn username_exists_on_inbound(&self, username: &str, inbound_id: Uuid) -> Result<bool> {
-        let exists = self.find_by_username_and_inbound(username, inbound_id).await?;
+    /// Check if user already has access to this inbound
+    pub async fn user_has_access_to_inbound(&self, user_id: Uuid, inbound_id: Uuid) -> Result<bool> {
+        let exists = self.find_by_user_and_inbound(user_id, inbound_id).await?;
         Ok(exists.is_some())
     }
 }

@@ -1,5 +1,6 @@
 use anyhow::{Result, anyhow};
 use serde_json::Value;
+use uuid;
 use xray_core::{
     tonic::Request,
     app::proxyman::command::{AddInboundRequest, RemoveInboundRequest},
@@ -7,7 +8,7 @@ use xray_core::{
     common::serial::TypedMessage,
     common::protocol::User,
     app::proxyman::ReceiverConfig,
-    common::net::{PortList, PortRange, IpOrDomain, ip_or_domain::Address},
+    common::net::{PortList, PortRange, IpOrDomain, ip_or_domain::Address, Network},
     transport::internet::StreamConfig,
     transport::internet::tls::{Config as TlsConfig, Certificate as TlsCertificate},
     proxy::vless::inbound::Config as VlessInboundConfig,
@@ -17,7 +18,7 @@ use xray_core::{
     proxy::trojan::ServerConfig as TrojanServerConfig,
     proxy::trojan::Account as TrojanAccount,
     proxy::shadowsocks::ServerConfig as ShadowsocksServerConfig,
-    proxy::shadowsocks::Account as ShadowsocksAccount,
+    proxy::shadowsocks::{Account as ShadowsocksAccount, CipherType},
     Client,
     prost_types,
 };
@@ -32,8 +33,7 @@ fn pem_to_der(pem_data: &str) -> Result<Vec<u8>> {
         .collect::<Vec<&str>>()
         .join("");
     
-    tracing::debug!("Base64 data length: {}", base64_data.len());
-    tracing::debug!("Base64 data: {}", &base64_data[..std::cmp::min(100, base64_data.len())]);
+    tracing::debug!("PEM to DER conversion: {} bytes", base64_data.len());
     
     use base64::{Engine as _, engine::general_purpose};
     general_purpose::STANDARD.decode(&base64_data)
@@ -57,14 +57,11 @@ impl<'a> InboundClient<'a> {
 
     /// Add inbound configuration with TLS certificate and users
     pub async fn add_inbound_with_certificate(&self, inbound: &Value, users: Option<&[Value]>, cert_pem: Option<&str>, key_pem: Option<&str>) -> Result<()> {
-        tracing::info!("Adding inbound to Xray server at {}", self.endpoint);
-        tracing::debug!("Inbound config: {}", serde_json::to_string_pretty(inbound)?);
-        
         let tag = inbound["tag"].as_str().unwrap_or("").to_string();
         let port = inbound["port"].as_u64().unwrap_or(8080) as u32;
         let protocol = inbound["protocol"].as_str().unwrap_or("vless");
+        let user_count = users.map_or(0, |u| u.len());
         
-        tracing::debug!("Creating inbound: tag={}, port={}, protocol={}", tag, port, protocol);
         
         // Create receiver configuration (port binding) - use simple port number
         let port_list = PortList {
@@ -78,8 +75,6 @@ impl<'a> InboundClient<'a> {
         let stream_settings = if cert_pem.is_some() && key_pem.is_some() {
             let cert_pem = cert_pem.unwrap();
             let key_pem = key_pem.unwrap();
-            
-            tracing::info!("Creating StreamConfig with TLS like working example");
             
             // Create TLS certificate exactly like working example - PEM content as bytes
             let tls_cert = TlsCertificate {
@@ -106,7 +101,7 @@ impl<'a> InboundClient<'a> {
                 value: tls_config.encode_to_vec(),
             };
             
-            tracing::info!("Created TLS config with server_name: {}, next_protocol: {:?}", 
+            tracing::debug!("TLS config: server_name={}, protocols={:?}", 
                 tls_config.server_name, tls_config.next_protocol);
             
             // Create StreamConfig like working example
@@ -120,7 +115,6 @@ impl<'a> InboundClient<'a> {
                 socket_settings: None,
             })
         } else {
-            tracing::info!("No certificates provided, creating inbound without TLS");
             None
         };
 
@@ -186,18 +180,31 @@ impl<'a> InboundClient<'a> {
                         let email = user["email"].as_str().unwrap_or("").to_string();
                         let level = user["level"].as_u64().unwrap_or(0) as u32;
                         
+                        // Validate required fields
+                        if user_id.is_empty() || email.is_empty() {
+                            tracing::warn!("Skipping VMess user: missing id or email");
+                            continue;
+                        }
+                        
+                        // Validate UUID format
+                        if uuid::Uuid::parse_str(&user_id).is_err() {
+                            tracing::warn!("VMess user '{}' has invalid UUID format", user_id);
+                        }
+                        
                         if !user_id.is_empty() && !email.is_empty() {
                             let account = VmessAccount {
-                                id: user_id,
+                                id: user_id.clone(),
                                 security_settings: None,
-                                tests_enabled: "".to_string(),
+                                tests_enabled: "".to_string(), // Keep empty as in examples
                             };
+                            let account_bytes = account.encode_to_vec();
+                            
                             vmess_users.push(User {
-                                email,
+                                email: email.clone(),
                                 level,
                                 account: Some(TypedMessage {
                                     r#type: "xray.proxy.vmess.Account".to_string(),
-                                    value: account.encode_to_vec(),
+                                    value: account_bytes,
                                 }),
                             });
                         }
@@ -255,14 +262,15 @@ impl<'a> InboundClient<'a> {
                         let email = user["email"].as_str().unwrap_or("").to_string();
                         let level = user["level"].as_u64().unwrap_or(0) as u32;
                         
+                        
                         if !password.is_empty() && !email.is_empty() {
                             let account = ShadowsocksAccount {
                                 password,
-                                cipher_type: 0, // Default cipher
+                                cipher_type: CipherType::Aes256Gcm as i32, // Use AES-256-GCM cipher
                                 iv_check: false, // Default IV check
                             };
                             ss_users.push(User {
-                                email,
+                                email: email.clone(),
                                 level,
                                 account: Some(TypedMessage {
                                     r#type: "xray.proxy.shadowsocks.Account".to_string(),
@@ -275,7 +283,7 @@ impl<'a> InboundClient<'a> {
                 
                 let shadowsocks_config = ShadowsocksServerConfig {
                     users: ss_users,
-                    network: vec![], // Support all networks by default
+                    network: vec![Network::Tcp as i32, Network::Udp as i32], // Support TCP and UDP
                 };
                 TypedMessage {
                     r#type: "xray.proxy.shadowsocks.ServerConfig".to_string(),
@@ -293,21 +301,17 @@ impl<'a> InboundClient<'a> {
             proxy_settings: Some(proxy_message),
         };
 
-        tracing::info!("Sending AddInboundRequest for '{}'", tag);
-        tracing::debug!("InboundConfig: {:?}", inbound_config);
-        
         let request = Request::new(AddInboundRequest {
             inbound: Some(inbound_config),
         });
         let mut handler_client = self.client.handler();
         match handler_client.add_inbound(request).await {
-            Ok(response) => {
-                let _response_inner = response.into_inner();
-                tracing::info!("Successfully added inbound {}", tag);
+            Ok(_) => {
+                tracing::info!("Added {} inbound '{}' successfully", protocol, tag);
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Failed to add inbound {}: {}", tag, e);
+                tracing::error!("Failed to add {} inbound '{}': {}", protocol, tag, e);
                 Err(anyhow!("Failed to add inbound {}: {}", tag, e))
             }
         }
@@ -315,8 +319,6 @@ impl<'a> InboundClient<'a> {
 
     /// Remove inbound by tag
     pub async fn remove_inbound(&self, tag: &str) -> Result<()> {
-        tracing::info!("Removing inbound '{}' from Xray server at {}", tag, self.endpoint);
-        
         let mut handler_client = self.client.handler();
         let request = Request::new(RemoveInboundRequest {
             tag: tag.to_string(),
@@ -324,11 +326,11 @@ impl<'a> InboundClient<'a> {
         
         match handler_client.remove_inbound(request).await {
             Ok(_) => {
-                tracing::info!("Successfully removed inbound");
+                tracing::info!("Removed inbound '{}' from {}", tag, self.endpoint);
                 Ok(())
             },
             Err(e) => {
-                tracing::error!("Failed to remove inbound: {}", e);
+                tracing::error!("Failed to remove inbound '{}': {}", tag, e);
                 Err(anyhow!("Failed to remove inbound: {}", e))
             }
         }
@@ -336,8 +338,7 @@ impl<'a> InboundClient<'a> {
 
     /// Restart Xray with new configuration
     pub async fn restart_with_config(&self, config: &crate::services::xray::XrayConfig) -> Result<()> {
-        tracing::info!("Restarting Xray server at {} with new config", self.endpoint);
-        tracing::debug!("Config: {}", serde_json::to_string_pretty(&config.to_json())?);
+        tracing::debug!("Restarting Xray server at {} with new config", self.endpoint);
         
         // TODO: Implement restart with config using xray-core
         // For now just return success

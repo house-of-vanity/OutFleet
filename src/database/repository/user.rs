@@ -30,6 +30,11 @@ impl UserRepository {
         Ok(user)
     }
 
+    /// Find user by ID (alias for get_by_id)
+    pub async fn find_by_id(&self, id: Uuid) -> Result<Option<Model>> {
+        self.get_by_id(id).await
+    }
+
     /// Get user by telegram ID
     pub async fn get_by_telegram_id(&self, telegram_id: i64) -> Result<Option<Model>> {
         let user = User::find()

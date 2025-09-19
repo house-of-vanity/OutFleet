@@ -2,7 +2,7 @@ use anyhow::Result;
 use tokio_cron_scheduler::{JobScheduler, Job};
 use tracing::{info, error, warn};
 use crate::database::DatabaseManager;
-use crate::database::repository::{ServerRepository, ServerInboundRepository, InboundTemplateRepository, InboundUsersRepository, CertificateRepository};
+use crate::database::repository::{ServerRepository, ServerInboundRepository, InboundTemplateRepository, InboundUsersRepository, CertificateRepository, UserRepository};
 use crate::database::entities::inbound_users;
 use crate::services::XrayService;
 use crate::services::events::SyncEvent;
@@ -60,17 +60,12 @@ impl TaskScheduler {
         let xray_service = XrayService::new();
         
         tokio::spawn(async move {
-            info!("Starting event-driven sync handler");
             
             while let Ok(event) = event_receiver.recv().await {
                 match event {
                     SyncEvent::InboundChanged(server_id) | SyncEvent::UserAccessChanged(server_id) => {
-                        info!("Received sync event for server {}", server_id);
-                        
                         if let Err(e) = sync_single_server_by_id(&xray_service, &db, server_id).await {
                             error!("Failed to sync server {} from event: {}", server_id, e);
-                        } else {
-                            info!("Successfully synced server {} from event", server_id);
                         }
                     }
                 }
@@ -79,7 +74,6 @@ impl TaskScheduler {
     }
 
     pub async fn start(&mut self, db: DatabaseManager, xray_service: XrayService) -> Result<()> {
-        info!("Starting task scheduler with database synchronization");
         
         // Initialize task status
         {
@@ -100,7 +94,6 @@ impl TaskScheduler {
         }
         
         // Run initial sync on startup
-        info!("Running initial xray synchronization on startup");
         let start_time = Utc::now();
         self.update_task_status("xray_sync", TaskState::Running, None);
         
@@ -108,7 +101,6 @@ impl TaskScheduler {
             Ok(_) => {
                 let duration = (Utc::now() - start_time).num_milliseconds() as u64;
                 self.update_task_status("xray_sync", TaskState::Success, Some(duration));
-                info!("Initial xray sync completed successfully");
             },
             Err(e) => {
                 let duration = (Utc::now() - start_time).num_milliseconds() as u64;
@@ -128,7 +120,6 @@ impl TaskScheduler {
             let task_status = task_status_clone.clone();
             
             Box::pin(async move {
-                info!("Running scheduled xray synchronization");
                 let start_time = Utc::now();
                 
                 // Update status to running
@@ -152,7 +143,6 @@ impl TaskScheduler {
                             task.last_duration_ms = Some(duration);
                             task.last_error = None;
                         }
-                        info!("Scheduled xray sync completed successfully in {}ms", duration);
                     },
                     Err(e) => {
                         let duration = (Utc::now() - start_time).num_milliseconds() as u64;
@@ -171,7 +161,6 @@ impl TaskScheduler {
         
         self.scheduler.add(sync_job).await?;
         
-        info!("Task scheduler started with sync job running every minute");
         
         self.scheduler.start().await?;
         Ok(())
@@ -202,7 +191,6 @@ impl TaskScheduler {
     }
 
     pub async fn shutdown(&mut self) -> Result<()> {
-        info!("Shutting down task scheduler");
         self.scheduler.shutdown().await?;
         Ok(())
     }
@@ -210,7 +198,6 @@ impl TaskScheduler {
 
 /// Synchronize xray server state with database state
 async fn sync_xray_state(db: DatabaseManager, xray_service: XrayService) -> Result<()> {
-    info!("Starting xray state synchronization");
     
     let server_repo = ServerRepository::new(db.connection().clone());
     let inbound_repo = ServerInboundRepository::new(db.connection().clone());
@@ -225,18 +212,13 @@ async fn sync_xray_state(db: DatabaseManager, xray_service: XrayService) -> Resu
         }
     };
     
-    info!("Found {} servers to synchronize", servers.len());
     
     for server in servers {
-        info!("Synchronizing server: {} ({}:{})", server.name, server.hostname, server.grpc_port);
         
         let endpoint = format!("{}:{}", server.hostname, server.grpc_port);
         
         // Test connection first
         match xray_service.test_connection(server.id, &endpoint).await {
-            Ok(true) => {
-                info!("Connection to server {} successful", server.name);
-            },
             Ok(false) => {
                 warn!("Cannot connect to server {} at {}, skipping", server.name, endpoint);
                 continue;
@@ -245,6 +227,7 @@ async fn sync_xray_state(db: DatabaseManager, xray_service: XrayService) -> Resu
                 error!("Error testing connection to server {}: {}", server.name, e);
                 continue;
             }
+            _ => {}
         }
         
         // Get desired inbounds from database
@@ -256,7 +239,6 @@ async fn sync_xray_state(db: DatabaseManager, xray_service: XrayService) -> Resu
             }
         };
         
-        info!("Server {}: desired={} inbounds", server.name, desired_inbounds.len());
         
         // Synchronize inbounds
         if let Err(e) = sync_server_inbounds(
@@ -266,12 +248,9 @@ async fn sync_xray_state(db: DatabaseManager, xray_service: XrayService) -> Resu
             &desired_inbounds
         ).await {
             error!("Failed to sync inbounds for server {}: {}", server.name, e);
-        } else {
-            info!("Successfully synchronized server {}", server.name);
         }
     }
     
-    info!("Xray state synchronization completed");
     Ok(())
 }
 
@@ -283,7 +262,6 @@ async fn get_desired_inbounds_from_db(
     inbound_repo: &ServerInboundRepository,
     template_repo: &InboundTemplateRepository,
 ) -> Result<HashMap<String, DesiredInbound>> {
-    info!("Getting desired inbounds for server {} from database", server.name);
     
     // Get all inbounds for this server
     let inbounds = inbound_repo.find_by_server_id(server.id).await?;
@@ -302,7 +280,6 @@ async fn get_desired_inbounds_from_db(
         // Get users for this inbound
         let users = get_users_for_inbound(db, inbound.id).await?;
         
-        info!("Inbound {}: {} users found", inbound.tag, users.len());
         
         // Get port from template or override
         let port = inbound.port_override.unwrap_or(template.default_port);
@@ -334,7 +311,6 @@ async fn get_desired_inbounds_from_db(
         desired_inbounds.insert(inbound.tag.clone(), desired_inbound);
     }
     
-    info!("Found {} desired inbounds for server {}", desired_inbounds.len(), server.name);
     Ok(desired_inbounds)
 }
 
@@ -344,13 +320,20 @@ async fn get_users_for_inbound(db: &DatabaseManager, inbound_id: Uuid) -> Result
     
     let inbound_users = inbound_users_repo.find_active_by_inbound_id(inbound_id).await?;
     
-    let users: Vec<XrayUser> = inbound_users.into_iter().map(|user| {
-        XrayUser {
-            id: user.xray_user_id,
-            email: user.email,
-            level: user.level,
+    // Get user details to generate emails
+    let user_repo = UserRepository::new(db.connection().clone());
+    
+    let mut users: Vec<XrayUser> = Vec::new();
+    for inbound_user in inbound_users {
+        if let Some(user) = user_repo.find_by_id(inbound_user.user_id).await? {
+            let email = inbound_user.generate_client_email(&user.name);
+            users.push(XrayUser {
+                id: inbound_user.xray_user_id,
+                email,
+                level: inbound_user.level,
+            });
         }
-    }).collect();
+    }
     
     Ok(users)
 }
@@ -366,7 +349,6 @@ async fn load_certificate_from_db(db: &DatabaseManager, cert_id: Option<Uuid>) -
     
     match cert_repo.find_by_id(cert_id).await? {
         Some(cert) => {
-            info!("Loaded certificate: {}", cert.domain);
             Ok((Some(cert.certificate_pem()), Some(cert.private_key_pem())))
         },
         None => {
@@ -387,13 +369,9 @@ async fn sync_server_inbounds(
     // Create or update inbounds
     // Since xray has no API to list inbounds, we always recreate them
     for (tag, desired) in desired_inbounds {
-        info!("Creating/updating inbound: {} with {} users", tag, desired.users.len());
         
         // Always try to remove inbound first (ignore errors if it doesn't exist)
-        if let Err(e) = xray_service.remove_inbound(server_id, endpoint, tag).await {
-            // Log but don't fail - inbound might not exist
-            info!("Inbound {} removal result: {} (this is normal if inbound didn't exist)", tag, e);
-        }
+        let _ = xray_service.remove_inbound(server_id, endpoint, tag).await;
         
         // Create inbound with users
         let users_json: Vec<Value> = desired.users.iter().map(|user| {
@@ -416,12 +394,10 @@ async fn sync_server_inbounds(
             desired.cert_pem.as_deref(),
             desired.key_pem.as_deref(),
         ).await {
-            Ok(_) => {
-                info!("Successfully created inbound {} with {} users", tag, desired.users.len());
-            },
             Err(e) => {
                 error!("Failed to create inbound {}: {}", tag, e);
             }
+            _ => {}
         }
     }
     

@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::{
     database::{
         entities::{server, server_inbound},
-        repository::{ServerRepository, ServerInboundRepository, InboundTemplateRepository, CertificateRepository, InboundUsersRepository},
+        repository::{ServerRepository, ServerInboundRepository, InboundTemplateRepository, CertificateRepository, InboundUsersRepository, UserRepository},
     },
     web::AppState,
 };
@@ -183,7 +183,7 @@ pub async fn create_server_inbound(
     Path(server_id): Path<Uuid>,
     JsonExtractor(inbound_data): JsonExtractor<server_inbound::CreateServerInboundDto>,
 ) -> Result<Json<server_inbound::ServerInboundResponse>, StatusCode> {
-    tracing::info!("Creating server inbound for server {}: {:?}", server_id, inbound_data);
+    tracing::debug!("Creating server inbound for server {}", server_id);
     
     let server_repo = ServerRepository::new(app_state.db.connection().clone());
     let inbound_repo = ServerInboundRepository::new(app_state.db.connection().clone());
@@ -223,11 +223,10 @@ pub async fn create_server_inbound(
         let (cert_pem, key_pem) = if let Some(cert_id) = inbound.certificate_id {
             match cert_repo.find_by_id(cert_id).await {
                 Ok(Some(cert)) => {
-                    tracing::info!("Using certificate {} for inbound {}", cert.domain, inbound.tag);
                     (Some(cert.certificate_pem()), Some(cert.private_key_pem()))
                 },
                 Ok(None) => {
-                    tracing::warn!("Certificate {} not found, creating inbound without TLS", cert_id);
+                    tracing::warn!("Certificate {} not found", cert_id);
                     (None, None)
                 },
                 Err(e) => {
@@ -236,7 +235,6 @@ pub async fn create_server_inbound(
                 }
             }
         } else {
-            tracing::info!("No certificate specified for inbound {}, creating without TLS", inbound.tag);
             (None, None)
         };
 
@@ -252,16 +250,16 @@ pub async fn create_server_inbound(
             key_pem.as_deref(),
         ).await {
             Ok(_) => {
-                tracing::info!("Successfully created inbound {} on xray server {}", inbound.tag, endpoint);
+                tracing::info!("Created inbound '{}' on {}", inbound.tag, endpoint);
             },
             Err(e) => {
-                tracing::error!("Failed to create inbound on xray server {}: {}", endpoint, e);
+                tracing::error!("Failed to create inbound '{}' on {}: {}", inbound.tag, endpoint, e);
                 // Note: We don't fail the request since the inbound is already in DB
                 // The user can manually sync or retry later
             }
         }
     } else {
-        tracing::info!("Inbound {} created as inactive, skipping xray server creation", inbound.tag);
+        tracing::debug!("Inbound '{}' created as inactive", inbound.tag);
     }
     
     Ok(Json(inbound.into()))
@@ -273,7 +271,7 @@ pub async fn update_server_inbound(
     Path((server_id, inbound_id)): Path<(Uuid, Uuid)>,
     JsonExtractor(inbound_data): JsonExtractor<server_inbound::UpdateServerInboundDto>,
 ) -> Result<Json<server_inbound::ServerInboundResponse>, StatusCode> {
-    tracing::info!("Updating server inbound {} for server {}: {:?}", inbound_id, server_id, inbound_data);
+    tracing::debug!("Updating server inbound {} for server {}", inbound_id, server_id);
     
     let server_repo = ServerRepository::new(app_state.db.connection().clone());
     let inbound_repo = ServerInboundRepository::new(app_state.db.connection().clone());
@@ -303,19 +301,17 @@ pub async fn update_server_inbound(
     // Handle xray server changes based on active status change
     if old_is_active && !new_is_active {
         // Becoming inactive - remove from xray server
-        tracing::info!("Inbound {} becoming inactive, removing from xray server {}", current_inbound.tag, endpoint);
         match app_state.xray_service.remove_inbound(server_id, &endpoint, &current_inbound.tag).await {
             Ok(_) => {
-                tracing::info!("Successfully removed inbound {} from xray server", current_inbound.tag);
+                tracing::info!("Deactivated inbound '{}' on {}", current_inbound.tag, endpoint);
             },
             Err(e) => {
-                tracing::error!("Failed to remove inbound {} from xray server: {}", current_inbound.tag, e);
+                tracing::error!("Failed to deactivate inbound '{}': {}", current_inbound.tag, e);
                 // Continue with database update even if xray removal fails
             }
         }
     } else if !old_is_active && new_is_active {
         // Becoming active - add to xray server
-        tracing::info!("Inbound {} becoming active, adding to xray server {}", current_inbound.tag, endpoint);
         
         // Get template info for recreation
         let template = match template_repo.find_by_id(current_inbound.template_id).await {
@@ -332,11 +328,10 @@ pub async fn update_server_inbound(
         let (cert_pem, key_pem) = if let Some(cert_id) = certificate_id {
             match cert_repo.find_by_id(cert_id).await {
                 Ok(Some(cert)) => {
-                    tracing::info!("Using certificate {} for inbound {}", cert.domain, current_inbound.tag);
                     (Some(cert.certificate_pem()), Some(cert.private_key_pem()))
                 },
                 Ok(None) => {
-                    tracing::warn!("Certificate {} not found, creating inbound without TLS", cert_id);
+                    tracing::warn!("Certificate {} not found", cert_id);
                     (None, None)
                 },
                 Err(e) => {
@@ -345,7 +340,6 @@ pub async fn update_server_inbound(
                 }
             }
         } else {
-            tracing::info!("No certificate specified for inbound {}, creating without TLS", current_inbound.tag);
             (None, None)
         };
         
@@ -361,10 +355,10 @@ pub async fn update_server_inbound(
             key_pem.as_deref(),
         ).await {
             Ok(_) => {
-                tracing::info!("Successfully added inbound {} to xray server", current_inbound.tag);
+                tracing::info!("Activated inbound '{}' on {}", current_inbound.tag, endpoint);
             },
             Err(e) => {
-                tracing::error!("Failed to add inbound {} to xray server: {}", current_inbound.tag, e);
+                tracing::error!("Failed to activate inbound '{}': {}", current_inbound.tag, e);
                 // Continue with database update even if xray creation fails
             }
         }
@@ -428,10 +422,10 @@ pub async fn delete_server_inbound(
     let endpoint = server.get_grpc_endpoint();
     match app_state.xray_service.remove_inbound(server_id, &endpoint, &inbound.tag).await {
         Ok(_) => {
-            tracing::info!("Successfully removed inbound {} from xray server {}", inbound.tag, endpoint);
+            tracing::info!("Removed inbound '{}' from {}", inbound.tag, endpoint);
         },
         Err(e) => {
-            tracing::error!("Failed to remove inbound from xray server {}: {}", endpoint, e);
+            tracing::error!("Failed to remove inbound '{}' from {}: {}", inbound.tag, endpoint, e);
             // Continue with database deletion even if xray removal fails
         }
     }
@@ -450,16 +444,18 @@ pub async fn delete_server_inbound(
     }
 }
 
-/// Add user to server inbound (database only - sync will apply changes)
+/// Give user access to server inbound (database only - sync will apply changes)
 pub async fn add_user_to_inbound(
     State(app_state): State<AppState>,
     Path((server_id, inbound_id)): Path<(Uuid, Uuid)>,
     JsonExtractor(user_data): JsonExtractor<serde_json::Value>,
 ) -> Result<StatusCode, StatusCode> {
     use crate::database::entities::inbound_users::CreateInboundUserDto;
+    use crate::database::entities::user::CreateUserDto;
     
     let server_repo = ServerRepository::new(app_state.db.connection().clone());
     let inbound_repo = ServerInboundRepository::new(app_state.db.connection().clone());
+    let user_repo = UserRepository::new(app_state.db.connection().clone());
     
     // Get server and inbound to validate they exist
     let _server = match server_repo.find_by_id(server_id).await {
@@ -479,54 +475,75 @@ pub async fn add_user_to_inbound(
         return Err(StatusCode::BAD_REQUEST);
     }
     
-    // Extract user data with better error handling
-    tracing::debug!("Received user_data: {}", serde_json::to_string_pretty(&user_data).unwrap_or_else(|_| "invalid json".to_string()));
+    // Extract user data
     
-    let username = user_data["username"].as_str()
-        .or_else(|| user_data["email"].as_str()) // Try email as fallback
-        .or_else(|| user_data["name"].as_str())  // Try name as fallback
+    let user_name = user_data["name"].as_str()
+        .or_else(|| user_data["username"].as_str())
+        .or_else(|| user_data["email"].as_str())
         .map(|s| s.to_string())
         .unwrap_or_else(|| {
-            // Generate username if not provided
             format!("user_{}", Uuid::new_v4().to_string()[..8].to_string())
         });
     
     let level = user_data["level"].as_u64().unwrap_or(0) as i32;
+    let user_id = user_data["user_id"].as_str().and_then(|s| Uuid::parse_str(s).ok());
     
-    tracing::info!("Creating user with username: '{}' and level: {}", username, level);
+    // Get or create user
+    let user = if let Some(uid) = user_id {
+        // Use existing user
+        match user_repo.find_by_id(uid).await {
+            Ok(Some(user)) => user,
+            Ok(None) => return Err(StatusCode::NOT_FOUND), // User not found
+            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        }
+    } else {
+        // Create new user
+        let create_user_dto = CreateUserDto {
+            name: user_name.clone(),
+            comment: user_data["comment"].as_str().map(|s| s.to_string()),
+            telegram_id: user_data["telegram_id"].as_i64(),
+        };
+        
+        match user_repo.create(create_user_dto).await {
+            Ok(user) => user,
+            Err(e) => {
+                tracing::error!("Failed to create user '{}': {}", user_name, e);
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
+    };
     
     // Create inbound user repository
     let inbound_users_repo = InboundUsersRepository::new(app_state.db.connection().clone());
     
-    // Check if username already exists on this inbound
-    if inbound_users_repo.username_exists_on_inbound(&username, inbound_id).await.unwrap_or(false) {
-        tracing::error!("Username '{}' already exists on inbound {}", username, inbound_id);
+    // Check if user already has access to this inbound
+    if inbound_users_repo.user_has_access_to_inbound(user.id, inbound_id).await.unwrap_or(false) {
+        tracing::warn!("User '{}' already has access to inbound", user.name);
         return Err(StatusCode::CONFLICT);
     }
     
-    // Create inbound user DTO
+    // Create inbound access for user
     let inbound_user_dto = CreateInboundUserDto {
+        user_id: user.id,
         server_inbound_id: inbound_id,
-        username: username.clone(),
         level: Some(level),
     };
     
-    // Create user in database
+    // Grant access in database
     match inbound_users_repo.create(inbound_user_dto).await {
-        Ok(created_user) => {
-            tracing::info!("Inbound user created: username={} email={} server={} inbound={}", 
-                username, created_user.email, server_id, inbound_id);
+        Ok(created_access) => {
+            tracing::info!("Granted user '{}' access to inbound (xray_id={})", 
+                user.name, created_access.xray_user_id);
             
             // Send sync event for immediate synchronization
             crate::services::events::send_sync_event(
                 crate::services::events::SyncEvent::UserAccessChanged(server_id)
             );
             
-            tracing::info!("User will be synced to xray server immediately via event");
             Ok(StatusCode::CREATED)
         },
         Err(e) => {
-            tracing::error!("Failed to create inbound user: {}", e);
+            tracing::error!("Failed to grant user '{}' access: {}", user.name, e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -571,11 +588,11 @@ pub async fn remove_user_from_inbound(
     // Remove user from xray server
     match app_state.xray_service.remove_user(server_id, &format!("{}:{}", server.hostname, server.grpc_port), &inbound_tag, &email).await {
         Ok(_) => {
-            tracing::info!("Successfully removed user {} from server {} inbound {}", email, server_id, inbound_id);
+            tracing::info!("Removed user '{}' from inbound", email);
             Ok(StatusCode::NO_CONTENT)
         },
         Err(e) => {
-            tracing::error!("Failed to remove user {} from server {} inbound {}: {}", email, server_id, inbound_id, e);
+            tracing::error!("Failed to remove user '{}' from inbound: {}", email, e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }

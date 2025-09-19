@@ -18,7 +18,6 @@ async fn main() -> Result<()> {
     // Initialize logging early with basic configuration
     init_logging(&args.log_level.as_deref().unwrap_or("info"))?;
 
-    tracing::info!("Starting Xray Admin Panel v{}", env!("CARGO_PKG_VERSION"));
 
     // Handle special flags
     if args.print_default_config {
@@ -29,7 +28,6 @@ async fn main() -> Result<()> {
     // Load configuration
     let config = match AppConfig::load() {
         Ok(config) => {
-            tracing::info!("Configuration loaded successfully");
             config
         }
         Err(e) => {
@@ -37,14 +35,12 @@ async fn main() -> Result<()> {
             if args.validate_config {
                 std::process::exit(1);
             }
-            tracing::warn!("Using default configuration");
             AppConfig::default()
         }
     };
 
     // Validate configuration if requested
     if args.validate_config {
-        tracing::info!("Configuration validation passed");
         return Ok(());
     }
 
@@ -58,10 +54,8 @@ async fn main() -> Result<()> {
 
 
     // Initialize database connection
-    tracing::info!("Initializing database connection...");
     let db = match DatabaseManager::new(&config.database).await {
         Ok(db) => {
-            tracing::info!("Database initialized successfully");
             db
         }
         Err(e) => {
@@ -72,19 +66,13 @@ async fn main() -> Result<()> {
 
     // Perform database health check
     match db.health_check().await {
-        Ok(true) => tracing::info!("Database health check passed"),
         Ok(false) => tracing::warn!("Database health check failed"),
         Err(e) => tracing::error!("Database health check error: {}", e),
-    }
-
-    // Get schema version
-    if let Ok(Some(version)) = db.get_schema_version().await {
-        tracing::info!("Database schema version: {}", version);
+        _ => {}
     }
 
     // Initialize event bus first
     let event_receiver = crate::services::events::init_event_bus();
-    tracing::info!("Event bus initialized");
 
     // Initialize xray service
     let xray_service = XrayService::new();
@@ -92,24 +80,20 @@ async fn main() -> Result<()> {
     // Initialize and start task scheduler with dependencies
     let mut task_scheduler = TaskScheduler::new().await?;
     task_scheduler.start(db.clone(), xray_service).await?;
-    tracing::info!("Task scheduler started with xray sync");
 
     // Start event-driven sync handler with the receiver
     TaskScheduler::start_event_handler(db.clone(), event_receiver).await;
-    tracing::info!("Event-driven sync handler started");
 
     // Start web server with task scheduler
-    tracing::info!("Starting web server on {}:{}", config.web.host, config.web.port);
     
     tokio::select! {
         result = web::start_server(db, config.web.clone()) => {
             match result {
-                Ok(_) => tracing::info!("Web server stopped gracefully"),
                 Err(e) => tracing::error!("Web server error: {}", e),
+                _ => {}
             }
         }
         _ = tokio::signal::ctrl_c() => {
-            tracing::info!("Shutdown signal received, stopping services...");
             if let Err(e) = task_scheduler.shutdown().await {
                 tracing::error!("Error shutting down task scheduler: {}", e);
             }

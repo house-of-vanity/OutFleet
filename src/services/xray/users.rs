@@ -24,15 +24,10 @@ impl<'a> UserClient<'a> {
 
     /// Add user to inbound (simple version that works)
     pub async fn add_user(&self, inbound_tag: &str, user: &Value) -> Result<()> {
-        tracing::info!("Adding user to inbound '{}' on Xray server at {}", inbound_tag, self.endpoint);
-        tracing::debug!("User config: {}", serde_json::to_string_pretty(user)?);
-        
         let email = user["email"].as_str().unwrap_or("").to_string();
         let user_id = user["id"].as_str().unwrap_or("").to_string();
         let level = user["level"].as_u64().unwrap_or(0) as u32;
         let protocol = user["protocol"].as_str().unwrap_or("vless");
-        
-        tracing::info!("Parsed user data: email={}, id={}, level={}, protocol={}", email, user_id, level, protocol);
         
         if email.is_empty() || user_id.is_empty() {
             return Err(anyhow!("User email and id are required"));
@@ -99,13 +94,11 @@ impl<'a> UserClient<'a> {
             operation: Some(typed_message),
         });
         
-        tracing::info!("Sending AlterInboundRequest to add user '{}' to inbound '{}'", email, inbound_tag);
         
         let mut handler_client = self.client.handler();
         match handler_client.alter_inbound(request).await {
             Ok(response) => {
                 let _response_inner = response.into_inner();
-                tracing::info!("Successfully added user '{}' to inbound '{}'", email, inbound_tag);
                 Ok(())
             }
             Err(e) => {
@@ -118,7 +111,6 @@ impl<'a> UserClient<'a> {
 
     /// Remove user from inbound
     pub async fn remove_user(&self, inbound_tag: &str, email: &str) -> Result<()> {
-        tracing::info!("Removing user '{}' from inbound '{}' on Xray server at {}", email, inbound_tag, self.endpoint);
         
         // Build the RemoveUserOperation
         let remove_user_op = RemoveUserOperation {
@@ -138,7 +130,6 @@ impl<'a> UserClient<'a> {
         let mut handler_client = self.client.handler();
         match handler_client.alter_inbound(request).await {
             Ok(_) => {
-                tracing::info!("Successfully removed user '{}' from inbound '{}'", email, inbound_tag);
                 Ok(())
             }
             Err(e) => {

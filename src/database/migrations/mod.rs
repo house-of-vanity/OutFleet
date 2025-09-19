@@ -7,6 +7,7 @@ mod m20241201_000004_create_servers_table;
 mod m20241201_000005_create_server_inbounds_table;
 mod m20241201_000006_create_user_access_table;
 mod m20241201_000007_create_inbound_users_table;
+mod m20250919_000001_update_inbound_users_schema;
 
 pub struct Migrator;
 
@@ -21,6 +22,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20241201_000005_create_server_inbounds_table::Migration),
             Box::new(m20241201_000006_create_user_access_table::Migration),
             Box::new(m20241201_000007_create_inbound_users_table::Migration),
+            Box::new(m20250919_000001_update_inbound_users_schema::Migration),
         ]
     }
 }

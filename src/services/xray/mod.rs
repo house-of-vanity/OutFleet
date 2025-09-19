@@ -64,7 +64,6 @@ impl XrayService {
             "streamSettings": stream_settings
         });
         
-        tracing::info!("Creating inbound with config: {}", inbound_config);
         self.add_inbound(_server_id, endpoint, &inbound_config).await
     }
 
@@ -90,7 +89,6 @@ impl XrayService {
             "streamSettings": stream_settings
         });
         
-        tracing::info!("Creating inbound with TLS certificate and config: {}", inbound_config);
         self.add_inbound_with_certificate(_server_id, endpoint, &inbound_config, cert_pem, key_pem).await
     }
 
@@ -120,8 +118,6 @@ impl XrayService {
 
     /// Add user to inbound by recreating the inbound with updated user list
     pub async fn add_user(&self, _server_id: Uuid, endpoint: &str, inbound_tag: &str, user: &Value) -> Result<()> {
-        tracing::info!("XrayService::add_user called for server {} endpoint {} inbound_tag {}", _server_id, endpoint, inbound_tag);
-        tracing::warn!("Dynamic user addition via AlterInboundRequest doesn't work reliably - need to implement inbound recreation");
         
         // TODO: Implement inbound recreation approach:
         // 1. Get current inbound configuration from database
@@ -147,7 +143,6 @@ impl XrayService {
         cert_pem: Option<&str>,
         key_pem: Option<&str>,
     ) -> Result<()> {
-        tracing::info!("Creating inbound '{}' with {} users", tag, users.len());
         
         // Build inbound configuration with users
         let mut inbound_config = serde_json::json!({
@@ -181,7 +176,6 @@ impl XrayService {
             inbound_config["settings"] = settings;
         }
         
-        tracing::info!("Creating inbound with users: {}", serde_json::to_string_pretty(&inbound_config)?);
         
         // Use the new method with users support
         self.add_inbound_with_users_and_certificate(_server_id, endpoint, &inbound_config, users, cert_pem, key_pem).await
