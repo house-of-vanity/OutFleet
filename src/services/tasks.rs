@@ -365,43 +365,8 @@ async fn sync_server_inbounds(
     endpoint: &str,
     desired_inbounds: &HashMap<String, DesiredInbound>,
 ) -> Result<()> {
-    
-    // Create or update inbounds
-    // Since xray has no API to list inbounds, we always recreate them
-    for (tag, desired) in desired_inbounds {
-        
-        // Always try to remove inbound first (ignore errors if it doesn't exist)
-        let _ = xray_service.remove_inbound(server_id, endpoint, tag).await;
-        
-        // Create inbound with users
-        let users_json: Vec<Value> = desired.users.iter().map(|user| {
-            serde_json::json!({
-                "id": user.id,
-                "email": user.email,
-                "level": user.level
-            })
-        }).collect();
-        
-        match xray_service.create_inbound_with_users(
-            server_id,
-            endpoint,
-            &desired.tag,
-            desired.port,
-            &desired.protocol,
-            desired.settings.clone(),
-            desired.stream_settings.clone(),
-            &users_json,
-            desired.cert_pem.as_deref(),
-            desired.key_pem.as_deref(),
-        ).await {
-            Err(e) => {
-                error!("Failed to create inbound {}: {}", tag, e);
-            }
-            _ => {}
-        }
-    }
-    
-    Ok(())
+    // Use optimized batch sync with single client
+    xray_service.sync_server_inbounds_optimized(server_id, endpoint, desired_inbounds).await
 }
 
 /// Sync a single server by ID (for event-driven sync)
@@ -440,21 +405,21 @@ async fn sync_single_server_by_id(
 
 /// Represents desired inbound configuration from database
 #[derive(Debug, Clone)]
-struct DesiredInbound {
-    tag: String,
-    port: i32,
-    protocol: String,
-    settings: Value,
-    stream_settings: Value,
-    users: Vec<XrayUser>,
-    cert_pem: Option<String>,
-    key_pem: Option<String>,
+pub struct DesiredInbound {
+    pub tag: String,
+    pub port: i32,
+    pub protocol: String,
+    pub settings: Value,
+    pub stream_settings: Value,
+    pub users: Vec<XrayUser>,
+    pub cert_pem: Option<String>,
+    pub key_pem: Option<String>,
 }
 
 /// Represents xray user configuration
 #[derive(Debug, Clone)]
-struct XrayUser {
-    id: String,
-    email: String,
-    level: i32,
+pub struct XrayUser {
+    pub id: String,
+    pub email: String,
+    pub level: i32,
 }

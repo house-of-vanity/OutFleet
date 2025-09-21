@@ -54,7 +54,8 @@ hyper = { version = "1.0", features = ["full"] }
 xray-core = "0.2.1"  # gRPC client for Xray
 tonic = "0.12"       # gRPC client/server framework
 prost = "0.13"       # Protocol Buffers implementation
-rcgen = "0.12"       # For self-signed certificates
+rcgen = { version = "0.12", features = ["pem"] }       # For self-signed certificates
+time = "0.3"         # For certificate date/time handling
 base64 = "0.21"      # For PEM to DER conversion
 
 [dev-dependencies]
