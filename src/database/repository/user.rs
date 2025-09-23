@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QueryOrder, PaginatorTrait};
+use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QueryOrder, PaginatorTrait, QuerySelect};
 use uuid::Uuid;
 
 use crate::database::entities::user::{Entity as User, Column, Model, ActiveModel, CreateUserDto, UpdateUserDto};
@@ -44,13 +44,42 @@ impl UserRepository {
         Ok(user)
     }
 
-    /// Search users by name
+    /// Search users by name (with pagination for backward compatibility)
     pub async fn search_by_name(&self, query: &str, page: u64, per_page: u64) -> Result<Vec<Model>> {
         let users = User::find()
             .filter(Column::Name.contains(query))
             .order_by_desc(Column::CreatedAt)
             .paginate(&self.db, per_page)
             .fetch_page(page.saturating_sub(1))
+            .await?;
+
+        Ok(users)
+    }
+
+    /// Universal search - searches by name, telegram_id, or user_id
+    pub async fn search(&self, query: &str) -> Result<Vec<Model>> {
+        use sea_orm::Condition;
+        
+        let mut condition = Condition::any();
+        
+        // Search by name (case-insensitive partial match)
+        condition = condition.add(Column::Name.contains(query));
+        
+        // Try to parse as telegram_id (i64)
+        if let Ok(telegram_id) = query.parse::<i64>() {
+            condition = condition.add(Column::TelegramId.eq(telegram_id));
+        }
+        
+        // Try to parse as UUID (user_id)
+        if let Ok(user_id) = Uuid::parse_str(query) {
+            condition = condition.add(Column::Id.eq(user_id));
+        }
+        
+        let users = User::find()
+            .filter(condition)
+            .order_by_desc(Column::CreatedAt)
+            .limit(100) // Reasonable limit to prevent huge results
+            .all(&self.db)
             .await?;
 
         Ok(users)

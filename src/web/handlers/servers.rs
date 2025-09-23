@@ -108,6 +108,7 @@ pub async fn test_server_connection(
             let update_dto = server::UpdateServerDto {
                 name: None,
                 hostname: None,
+                grpc_hostname: None,
                 grpc_port: None,
                 api_credentials: None,
                 default_certificate_id: None,
@@ -126,6 +127,7 @@ pub async fn test_server_connection(
             let update_dto = server::UpdateServerDto {
                 name: None,
                 hostname: None,
+                grpc_hostname: None,
                 grpc_port: None,
                 api_credentials: None,
                 default_certificate_id: None,
@@ -586,7 +588,7 @@ pub async fn remove_user_from_inbound(
     let inbound_tag = &inbound.tag;
     
     // Remove user from xray server
-    match app_state.xray_service.remove_user(server_id, &format!("{}:{}", server.hostname, server.grpc_port), &inbound_tag, &email).await {
+    match app_state.xray_service.remove_user(server_id, &server.get_grpc_endpoint(), &inbound_tag, &email).await {
         Ok(_) => {
             tracing::info!("Removed user '{}' from inbound", email);
             Ok(StatusCode::NO_CONTENT)

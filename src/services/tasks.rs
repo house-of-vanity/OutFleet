@@ -215,7 +215,7 @@ async fn sync_xray_state(db: DatabaseManager, xray_service: XrayService) -> Resu
     
     for server in servers {
         
-        let endpoint = format!("{}:{}", server.hostname, server.grpc_port);
+        let endpoint = server.get_grpc_endpoint();
         
         // Test connection first
         match xray_service.test_connection(server.id, &endpoint).await {
@@ -394,7 +394,7 @@ async fn sync_single_server_by_id(
     let desired_inbounds = get_desired_inbounds_from_db(db, &server, &inbound_repo, &template_repo).await?;
     
     // Build endpoint
-    let endpoint = format!("{}:{}", server.hostname, server.grpc_port);
+    let endpoint = server.get_grpc_endpoint();
     
     // Sync server
     sync_server_inbounds(xray_service, server_id, &endpoint, &desired_inbounds).await?;

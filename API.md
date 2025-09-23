@@ -1,11 +1,27 @@
-# User Management API
+# OutFleet Xray Admin API
 
-Base URL: `http://localhost:8080/api`
+Base URL: `http://localhost:8080`
 
-## Endpoints
+## Overview
+Complete API documentation for OutFleet - a web admin panel for managing xray-core VPN proxy servers.
+
+## Base Endpoints
 
 ### Health Check
-- `GET /` - Service health check
+- `GET /health` - Service health check
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "service": "xray-admin", 
+  "version": "0.1.0"
+}
+```
+
+## API Endpoints
+
+All API endpoints are prefixed with `/api`.
 
 ### Users
 
@@ -13,7 +29,26 @@ Base URL: `http://localhost:8080/api`
 - `GET /users?page=1&per_page=20` - Get paginated list of users
 
 #### Search Users
-- `GET /users/search?q=john&page=1&per_page=20` - Search users by name
+- `GET /users/search?q=john` - Universal search for users
+  
+**Search capabilities:**
+- By name (partial match, case-insensitive): `?q=john`
+- By telegram_id: `?q=123456789`
+- By user UUID: `?q=550e8400-e29b-41d4-a716-446655440000`
+
+**Response:** Array of user objects (limited to 100 results)
+```json
+[
+  {
+    "id": "uuid",
+    "name": "string",
+    "comment": "string|null",
+    "telegram_id": "number|null",
+    "created_at": "timestamp",
+    "updated_at": "timestamp"
+  }
+]
+```
 
 #### Get User
 - `GET /users/{id}` - Get user by ID
@@ -41,6 +76,259 @@ Base URL: `http://localhost:8080/api`
 #### Delete User
 - `DELETE /users/{id}` - Delete user by ID
 
+#### Get User Access
+- `GET /users/{id}/access` - Get user access to inbounds
+
+**Response:**
+```json
+[
+  {
+    "id": "uuid",
+    "user_id": "uuid",
+    "server_inbound_id": "uuid", 
+    "xray_user_id": "string",
+    "level": 0,
+    "is_active": true
+  }
+]
+```
+
+### Servers
+
+#### List Servers
+- `GET /servers` - Get all servers
+
+**Response:**
+```json
+[
+  {
+    "id": "uuid",
+    "name": "string",
+    "hostname": "string",
+    "grpc_hostname": "string", 
+    "grpc_port": 2053,
+    "status": "online|offline|error|unknown",
+    "default_certificate_id": "uuid|null",
+    "created_at": "timestamp",
+    "updated_at": "timestamp",
+    "has_credentials": true
+  }
+]
+```
+
+#### Get Server
+- `GET /servers/{id}` - Get server by ID
+
+#### Create Server
+- `POST /servers` - Create new server
+
+**Request:**
+```json
+{
+  "name": "Server Name",
+  "hostname": "server.example.com",
+  "grpc_hostname": "192.168.1.100", // optional, defaults to hostname
+  "grpc_port": 2053, // optional, defaults to 2053
+  "api_credentials": "optional credentials",
+  "default_certificate_id": "uuid" // optional
+}
+```
+
+#### Update Server
+- `PUT /servers/{id}` - Update server
+
+**Request:** (all fields optional)
+```json
+{
+  "name": "New Server Name",
+  "hostname": "new.server.com",
+  "grpc_hostname": "192.168.1.200",
+  "grpc_port": 2054,
+  "api_credentials": "new credentials", 
+  "status": "online",
+  "default_certificate_id": "uuid"
+}
+```
+
+#### Delete Server
+- `DELETE /servers/{id}` - Delete server
+
+#### Test Server Connection
+- `POST /servers/{id}/test` - Test connection to server
+
+**Response:**
+```json
+{
+  "connected": true,
+  "endpoint": "192.168.1.100:2053"
+}
+```
+
+#### Get Server Statistics
+- `GET /servers/{id}/stats` - Get server statistics
+
+### Server Inbounds
+
+#### List Server Inbounds
+- `GET /servers/{server_id}/inbounds` - Get all inbounds for a server
+
+**Response:**
+```json
+[
+  {
+    "id": "uuid",
+    "server_id": "uuid", 
+    "template_id": "uuid",
+    "template_name": "string",
+    "tag": "string",
+    "port_override": 8080,
+    "certificate_id": "uuid|null",
+    "variable_values": {},
+    "is_active": true,
+    "created_at": "timestamp",
+    "updated_at": "timestamp"
+  }
+]
+```
+
+#### Get Server Inbound
+- `GET /servers/{server_id}/inbounds/{inbound_id}` - Get specific inbound
+
+#### Create Server Inbound
+- `POST /servers/{server_id}/inbounds` - Create new inbound for server
+
+**Request:**
+```json
+{
+  "template_id": "uuid",
+  "port": 8080,
+  "certificate_id": "uuid", // optional
+  "is_active": true
+}
+```
+
+#### Update Server Inbound
+- `PUT /servers/{server_id}/inbounds/{inbound_id}` - Update inbound
+
+**Request:** (all fields optional)
+```json
+{
+  "tag": "new-tag",
+  "port_override": 8081,
+  "certificate_id": "uuid",
+  "variable_values": {"domain": "example.com"},
+  "is_active": false
+}
+```
+
+#### Delete Server Inbound
+- `DELETE /servers/{server_id}/inbounds/{inbound_id}` - Delete inbound
+
+### User-Inbound Management
+
+#### Add User to Inbound
+- `POST /servers/{server_id}/inbounds/{inbound_id}/users` - Grant user access to inbound
+
+**Request:**
+```json
+{
+  "user_id": "uuid", // optional, will create new user if not provided
+  "name": "username",
+  "comment": "User description", // optional
+  "telegram_id": 123456789, // optional
+  "level": 0 // optional, defaults to 0
+}
+```
+
+#### Remove User from Inbound
+- `DELETE /servers/{server_id}/inbounds/{inbound_id}/users/{email}` - Remove user access
+
+### Certificates
+
+#### List Certificates
+- `GET /certificates` - Get all certificates
+
+#### Get Certificate
+- `GET /certificates/{id}` - Get certificate by ID
+
+#### Create Certificate
+- `POST /certificates` - Create new certificate
+
+**Request:**
+```json
+{
+  "name": "Certificate Name",
+  "cert_type": "self_signed|letsencrypt",
+  "domain": "example.com", 
+  "auto_renew": true,
+  "certificate_pem": "-----BEGIN CERTIFICATE-----...",
+  "private_key": "-----BEGIN PRIVATE KEY-----..."
+}
+```
+
+#### Update Certificate
+- `PUT /certificates/{id}` - Update certificate
+
+**Request:** (all fields optional)
+```json
+{
+  "name": "New Certificate Name",
+  "auto_renew": false
+}
+```
+
+#### Delete Certificate
+- `DELETE /certificates/{id}` - Delete certificate
+
+#### Get Certificate Details
+- `GET /certificates/{id}/details` - Get detailed certificate information
+
+#### Get Expiring Certificates
+- `GET /certificates/expiring` - Get certificates that are expiring soon
+
+### Templates
+
+#### List Templates
+- `GET /templates` - Get all inbound templates
+
+#### Get Template
+- `GET /templates/{id}` - Get template by ID
+
+#### Create Template
+- `POST /templates` - Create new inbound template
+
+**Request:**
+```json
+{
+  "name": "Template Name",
+  "protocol": "vmess|vless|trojan|shadowsocks",
+  "default_port": 8080,
+  "requires_tls": true,
+  "config_template": "JSON template string"
+}
+```
+
+#### Update Template
+- `PUT /templates/{id}` - Update template
+
+**Request:** (all fields optional)
+```json
+{
+  "name": "New Template Name",
+  "description": "Template description", 
+  "default_port": 8081,
+  "base_settings": {},
+  "stream_settings": {},
+  "requires_tls": false,
+  "requires_domain": true,
+  "variables": [],
+  "is_active": true
+}
+```
+
+#### Delete Template
+- `DELETE /templates/{id}` - Delete template
+
 ## Response Format
 
 ### User Object
@@ -65,9 +353,101 @@ Base URL: `http://localhost:8080/api`
 }
 ```
 
+### Server Object
+```json
+{
+  "id": "uuid",
+  "name": "string", 
+  "hostname": "string",
+  "grpc_hostname": "string",
+  "grpc_port": 2053,
+  "status": "online|offline|error|unknown",
+  "default_certificate_id": "uuid|null",
+  "created_at": "timestamp",
+  "updated_at": "timestamp", 
+  "has_credentials": true
+}
+```
+
+### Server Inbound Object
+```json
+{
+  "id": "uuid",
+  "server_id": "uuid",
+  "template_id": "uuid", 
+  "template_name": "string",
+  "tag": "string",
+  "port_override": 8080,
+  "certificate_id": "uuid|null",
+  "variable_values": {},
+  "is_active": true,
+  "created_at": "timestamp",
+  "updated_at": "timestamp"
+}
+```
+
+### Certificate Object
+```json
+{
+  "id": "uuid",
+  "name": "string",
+  "cert_type": "self_signed|letsencrypt", 
+  "domain": "string",
+  "auto_renew": true,
+  "expires_at": "timestamp|null",
+  "created_at": "timestamp",
+  "updated_at": "timestamp"
+}
+```
+
+### Template Object  
+```json
+{
+  "id": "uuid",
+  "name": "string",
+  "description": "string|null",
+  "protocol": "vmess|vless|trojan|shadowsocks",
+  "default_port": 8080,
+  "base_settings": {},
+  "stream_settings": {},
+  "requires_tls": true,
+  "requires_domain": false,
+  "variables": [],
+  "is_active": true,
+  "created_at": "timestamp",
+  "updated_at": "timestamp"
+}
+```
+
+### Inbound User Object
+```json
+{
+  "id": "uuid",
+  "user_id": "uuid",
+  "server_inbound_id": "uuid",
+  "xray_user_id": "string",
+  "password": "string|null",
+  "level": 0,
+  "is_active": true,
+  "created_at": "timestamp", 
+  "updated_at": "timestamp"
+}
+```
+
 ## Status Codes
 - `200` - Success
-- `201` - Created
+- `201` - Created  
+- `204` - No Content (successful deletion)
+- `400` - Bad Request (invalid data)
 - `404` - Not Found
-- `409` - Conflict (duplicate telegram_id)
+- `409` - Conflict (duplicate data, e.g. telegram_id)
 - `500` - Internal Server Error
+
+## Error Response Format
+```json
+{
+  "error": "Error message description",
+  "code": "ERROR_CODE",
+  "details": "Additional error details"
+}
+```

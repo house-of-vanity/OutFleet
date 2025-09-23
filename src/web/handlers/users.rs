@@ -23,8 +23,6 @@ pub struct PaginationQuery {
 #[derive(Debug, Deserialize)]
 pub struct SearchQuery {
     pub q: Option<String>,
-    #[serde(flatten)]
-    pub pagination: PaginationQuery,
 }
 
 #[derive(Debug, Serialize)]
@@ -86,34 +84,24 @@ pub async fn get_users(
     Ok(Json(response))
 }
 
-/// Search users by name
+/// Search users by name, telegram_id or user_id
 pub async fn search_users(
     State(app_state): State<AppState>,
     Query(query): Query<SearchQuery>,
-) -> Result<Json<UsersResponse>, StatusCode> {
+) -> Result<Json<Vec<UserResponse>>, StatusCode> {
     let repo = UserRepository::new(app_state.db.connection().clone());
     
     let users = if let Some(search_query) = query.q {
-        repo.search_by_name(&search_query, query.pagination.page, query.pagination.per_page)
+        // Search by name, telegram_id, or UUID
+        repo.search(&search_query)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     } else {
-        repo.get_all(query.pagination.page, query.pagination.per_page)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    };
-    
-    let total = repo.count()
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let response = UsersResponse {
-        users: users.into_iter().map(UserResponse::from).collect(),
-        total,
-        page: query.pagination.page,
-        per_page: query.pagination.per_page,
+        // If no query, return empty array
+        Vec::new()
     };
 
+    let response: Vec<UserResponse> = users.into_iter().map(UserResponse::from).collect();
     Ok(Json(response))
 }
 
@@ -203,4 +191,33 @@ pub async fn delete_user(
     } else {
         Err(StatusCode::NOT_FOUND)
     }
+}
+
+/// Get user access (inbound associations)
+pub async fn get_user_access(
+    State(app_state): State<AppState>,
+    Path(user_id): Path<Uuid>,
+) -> Result<Json<Vec<serde_json::Value>>, StatusCode> {
+    use crate::database::repository::InboundUsersRepository;
+    
+    let inbound_users_repo = InboundUsersRepository::new(app_state.db.connection().clone());
+    
+    let access_list = inbound_users_repo
+        .find_by_user_id(user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    let response: Vec<serde_json::Value> = access_list
+        .into_iter()
+        .map(|access| serde_json::json!({
+            "id": access.id,
+            "user_id": access.user_id,
+            "server_inbound_id": access.server_inbound_id,
+            "xray_user_id": access.xray_user_id,
+            "level": access.level,
+            "is_active": access.is_active,
+        }))
+        .collect();
+    
+    Ok(Json(response))
 }

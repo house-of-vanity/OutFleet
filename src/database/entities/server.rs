@@ -12,6 +12,8 @@ pub struct Model {
     
     pub hostname: String,
     
+    pub grpc_hostname: String,
+    
     pub grpc_port: i32,
     
     #[serde(skip_serializing)]
@@ -117,6 +119,7 @@ impl From<String> for ServerStatus {
 pub struct CreateServerDto {
     pub name: String,
     pub hostname: String,
+    pub grpc_hostname: Option<String>, // Optional, defaults to hostname if not provided
     pub grpc_port: Option<i32>,
     pub api_credentials: Option<String>,
     pub default_certificate_id: Option<Uuid>,
@@ -126,6 +129,7 @@ pub struct CreateServerDto {
 pub struct UpdateServerDto {
     pub name: Option<String>,
     pub hostname: Option<String>,
+    pub grpc_hostname: Option<String>,
     pub grpc_port: Option<i32>,
     pub api_credentials: Option<String>,
     pub status: Option<String>,
@@ -137,6 +141,7 @@ pub struct ServerResponse {
     pub id: Uuid,
     pub name: String,
     pub hostname: String,
+    pub grpc_hostname: String,
     pub grpc_port: i32,
     pub status: String,
     pub default_certificate_id: Option<Uuid>,
@@ -148,8 +153,9 @@ pub struct ServerResponse {
 impl From<CreateServerDto> for ActiveModel {
     fn from(dto: CreateServerDto) -> Self {
         Self {
-            name: Set(dto.name),
-            hostname: Set(dto.hostname),
+            name: Set(dto.name.clone()),
+            hostname: Set(dto.hostname.clone()),
+            grpc_hostname: Set(dto.grpc_hostname.unwrap_or(dto.hostname)), // Default to hostname if not provided
             grpc_port: Set(dto.grpc_port.unwrap_or(2053)),
             api_credentials: Set(dto.api_credentials),
             status: Set("unknown".to_string()),
@@ -165,6 +171,7 @@ impl From<Model> for ServerResponse {
             id: server.id,
             name: server.name,
             hostname: server.hostname,
+            grpc_hostname: server.grpc_hostname,
             grpc_port: server.grpc_port,
             status: server.status,
             default_certificate_id: server.default_certificate_id,
@@ -185,6 +192,9 @@ impl Model {
         if let Some(hostname) = dto.hostname {
             active_model.hostname = Set(hostname);
         }
+        if let Some(grpc_hostname) = dto.grpc_hostname {
+            active_model.grpc_hostname = Set(grpc_hostname);
+        }
         if let Some(grpc_port) = dto.grpc_port {
             active_model.grpc_port = Set(grpc_port);
         }
@@ -202,7 +212,16 @@ impl Model {
     }
 
     pub fn get_grpc_endpoint(&self) -> String {
-        format!("{}:{}", self.hostname, self.grpc_port)
+        let hostname = if self.grpc_hostname.is_empty() {
+            tracing::debug!("Using public hostname '{}' for gRPC (grpc_hostname is empty)", self.hostname);
+            &self.hostname
+        } else {
+            tracing::debug!("Using dedicated gRPC hostname '{}' (different from public hostname '{}')", self.grpc_hostname, self.hostname);
+            &self.grpc_hostname
+        };
+        let endpoint = format!("{}:{}", hostname, self.grpc_port);
+        tracing::info!("gRPC endpoint for server '{}': {}", self.name, endpoint);
+        endpoint
     }
 
     #[allow(dead_code)]

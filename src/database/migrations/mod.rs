@@ -8,6 +8,7 @@ mod m20241201_000005_create_server_inbounds_table;
 mod m20241201_000006_create_user_access_table;
 mod m20241201_000007_create_inbound_users_table;
 mod m20250919_000001_update_inbound_users_schema;
+mod m20250922_000001_add_grpc_hostname_to_servers;
 
 pub struct Migrator;
 
@@ -23,6 +24,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20241201_000006_create_user_access_table::Migration),
             Box::new(m20241201_000007_create_inbound_users_table::Migration),
             Box::new(m20250919_000001_update_inbound_users_schema::Migration),
+            Box::new(m20250922_000001_add_grpc_hostname_to_servers::Migration),
         ]
     }
 }

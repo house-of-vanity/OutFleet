@@ -296,6 +296,85 @@
             display: block;
         }
         
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+        }
+        
+        .modal-body {
+            margin-bottom: 20px;
+        }
+        
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        
+        .server-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .server-section h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .inbound-item {
+            margin: 5px 0;
+        }
+        
+        .inbound-item label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        
+        .inbound-item input[type="checkbox"] {
+            cursor: pointer;
+        }
+        
+        .required {
+            color: #dc3545;
+        }
+        
         .form-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -594,8 +673,14 @@
                             <input type="text" id="serverName" class="form-input" placeholder="Enter server name">
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="serverHostname">Hostname *</label>
+                            <label class="form-label" for="serverHostname">Public Hostname *</label>
                             <input type="text" id="serverHostname" class="form-input" placeholder="server.example.com">
+                            <small class="form-help">Hostname that clients will connect to</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="serverGrpcHostname">gRPC Hostname</label>
+                            <input type="text" id="serverGrpcHostname" class="form-input" placeholder="192.168.1.100 or leave empty to use public hostname">
+                            <small class="form-help">Internal address for gRPC API (optional, defaults to public hostname)</small>
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="serverPort">gRPC Port</label>
@@ -654,6 +739,7 @@
                 <div class="page-header">
                     <h1 class="page-title">Users</h1>
                     <p class="page-subtitle">Manage user accounts and access</p>
+                    <button class="btn btn-primary" onclick="showCreateUserModal()">+ Create User</button>
                 </div>
                 
                 <div class="card">
@@ -775,8 +861,8 @@
                         <thead>
                             <tr>
                                 <th>Name</th>
-                                <th>Hostname</th>
-                                <th>Port</th>
+                                <th>Public Hostname</th>
+                                <th>gRPC Address</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
@@ -786,10 +872,11 @@
                                 <tr>
                                     <td><strong>${escapeHtml(server.name)}</strong></td>
                                     <td>${escapeHtml(server.hostname)}</td>
-                                    <td>${server.grpc_port}</td>
+                                    <td>${escapeHtml(server.grpc_hostname)}:${server.grpc_port}</td>
                                     <td><span class="status-badge status-${server.status}">${server.status}</span></td>
                                     <td>
                                         <div class="actions">
+                                            <button class="btn btn-small btn-primary" onclick="editServer('${server.id}')">Edit</button>
                                             <button class="btn btn-small btn-success" onclick="testConnection('${server.id}')">Test</button>
                                             <button class="btn btn-small btn-danger" onclick="deleteServer('${server.id}', '${escapeHtml(server.name)}')">Delete</button>
                                         </div>
@@ -958,6 +1045,7 @@
             
             const name = document.getElementById('serverName').value.trim();
             const hostname = document.getElementById('serverHostname').value.trim();
+            const grpc_hostname = document.getElementById('serverGrpcHostname').value.trim();
             const grpc_port = document.getElementById('serverPort').value;
             const api_credentials = document.getElementById('serverCredentials').value.trim();
             
@@ -967,6 +1055,7 @@
             }
             
             const serverData = { name, hostname };
+            if (grpc_hostname) serverData.grpc_hostname = grpc_hostname;
             if (grpc_port) serverData.grpc_port = parseInt(grpc_port);
             if (api_credentials) serverData.api_credentials = api_credentials;
             
@@ -1002,6 +1091,113 @@
                 }
             } catch (error) {
                 showAlert('Error testing connection: ' + error.message, 'error');
+            }
+        }
+        
+        async function editServer(serverId) {
+            try {
+                // Fetch server data
+                const response = await fetch(`${API_BASE}/servers/${serverId}`);
+                if (!response.ok) throw new Error('Failed to fetch server');
+                
+                const server = await response.json();
+                
+                // Create edit modal
+                const modalContent = `
+                    <div class="modal-overlay" onclick="closeEditServerModal()">
+                        <div class="modal-content" onclick="event.stopPropagation()">
+                            <div class="modal-header">
+                                <h2>Edit Server: ${escapeHtml(server.name)}</h2>
+                                <button class="btn btn-small" onclick="closeEditServerModal()">Close</button>
+                            </div>
+                            <div class="modal-body">
+                                <form id="editServerForm">
+                                    <input type="hidden" id="editServerId" value="${server.id}">
+                                    <div class="form-group">
+                                        <label class="form-label" for="editServerName">Server Name *</label>
+                                        <input type="text" id="editServerName" class="form-input" value="${escapeHtml(server.name)}" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="editServerHostname">Public Hostname *</label>
+                                        <input type="text" id="editServerHostname" class="form-input" value="${escapeHtml(server.hostname)}" required>
+                                        <small class="form-help">Hostname that clients will connect to</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="editServerGrpcHostname">gRPC Hostname</label>
+                                        <input type="text" id="editServerGrpcHostname" class="form-input" value="${escapeHtml(server.grpc_hostname || '')}" placeholder="Leave empty to use public hostname">
+                                        <small class="form-help">Internal address for gRPC API (optional)</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="editServerPort">gRPC Port</label>
+                                        <input type="number" id="editServerPort" class="form-input" value="${server.grpc_port}">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="editServerCredentials">API Credentials</label>
+                                        <input type="text" id="editServerCredentials" class="form-input" placeholder="${server.has_credentials ? 'Leave empty to keep existing credentials' : 'Optional credentials'}">
+                                    </div>
+                                    <div class="modal-actions">
+                                        <button type="submit" class="btn btn-primary">Update Server</button>
+                                        <button type="button" class="btn btn-secondary" onclick="closeEditServerModal()">Cancel</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.insertAdjacentHTML('beforeend', modalContent);
+                
+                // Handle form submission
+                document.getElementById('editServerForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await updateServer();
+                });
+                
+            } catch (error) {
+                showAlert('Error loading server: ' + error.message, 'error');
+            }
+        }
+        
+        function closeEditServerModal() {
+            const modal = document.querySelector('.modal-overlay');
+            if (modal) {
+                modal.remove();
+            }
+        }
+        
+        async function updateServer() {
+            const serverId = document.getElementById('editServerId').value;
+            const name = document.getElementById('editServerName').value.trim();
+            const hostname = document.getElementById('editServerHostname').value.trim();
+            const grpc_hostname = document.getElementById('editServerGrpcHostname').value.trim();
+            const grpc_port = document.getElementById('editServerPort').value;
+            const api_credentials = document.getElementById('editServerCredentials').value.trim();
+            
+            if (!name || !hostname) {
+                showAlert('Name and hostname are required', 'error');
+                return;
+            }
+            
+            const serverData = { name, hostname };
+            if (grpc_hostname) serverData.grpc_hostname = grpc_hostname;
+            if (grpc_port) serverData.grpc_port = parseInt(grpc_port);
+            if (api_credentials) serverData.api_credentials = api_credentials;
+            
+            try {
+                const response = await fetch(`${API_BASE}/servers/${serverId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(serverData)
+                });
+                
+                if (!response.ok) throw new Error('Failed to update server');
+                
+                showAlert('Server updated successfully', 'success');
+                closeEditServerModal();
+                loadServers();
+                
+            } catch (error) {
+                showAlert('Error updating server: ' + error.message, 'error');
             }
         }
         
@@ -1043,6 +1239,10 @@
         // User Access Management
         async function editUserAccess(userId, userName) {
             try {
+                // First, load existing user access
+                const userAccessResponse = await fetch(`${API_BASE}/users/${userId}/access`);
+                const existingAccess = await userAccessResponse.ok ? await userAccessResponse.json() : [];
+                
                 // Load servers and their inbounds
                 const serversResponse = await fetch(`${API_BASE}/servers`);
                 const servers = await serversResponse.json();
@@ -1057,12 +1257,14 @@
                             <div class="modal-body">
                                 <form id="userAccessForm">
                                     <input type="hidden" id="editUserId" value="${userId}">
+                                    <input type="hidden" id="editUserName" value="${escapeHtml(userName)}">
                 `;
                 
                 for (const server of servers) {
                     modalContent += `
                         <div class="server-section">
-                            <h3>${escapeHtml(server.name)} (${escapeHtml(server.hostname)}:${server.grpc_port})</h3>
+                            <h3>${escapeHtml(server.name)} (${escapeHtml(server.hostname)})</h3>
+                            <p><small>gRPC: ${escapeHtml(server.grpc_hostname)}:${server.grpc_port}</small></p>
                     `;
                     
                     try {
@@ -1071,6 +1273,11 @@
                         
                         if (inbounds.length > 0) {
                             for (const inbound of inbounds) {
+                                // Check if user already has access to this inbound
+                                const hasAccess = existingAccess.some(a => 
+                                    a.server_inbound_id === inbound.id
+                                );
+                                
                                 modalContent += `
                                     <div class="inbound-item">
                                         <label>
@@ -1079,8 +1286,10 @@
                                                    data-server-id="${server.id}"
                                                    data-inbound-id="${inbound.id}"
                                                    data-server-name="${escapeHtml(server.name)}"
-                                                   data-inbound-port="${inbound.port_override || 'default'}">
-                                            ${escapeHtml(inbound.template_name || 'Unknown Template')}
+                                                   data-inbound-port="${inbound.port_override || 'default'}"
+                                                   ${hasAccess ? 'checked' : ''}>
+                                            ${escapeHtml(inbound.template_name || 'Unknown Template')} 
+                                            ${hasAccess ? '<span class="status-badge status-online">Active</span>' : ''}
                                         </label>
                                     </div>
                                 `;
@@ -1096,20 +1305,6 @@
                 }
                 
                 modalContent += `
-                                    <div class="user-details">
-                                        <label>Email for Xray:
-                                            <input type="email" id="xrayEmail" placeholder="user@example.com" required>
-                                        </label>
-                                        <label>User ID (UUID for VLESS/VMess, password for Trojan):
-                                            <div class="input-group">
-                                                <input type="text" id="xrayUserId" placeholder="Generated UUID" required>
-                                                <button type="button" class="refresh-btn" onclick="generateUUID()" title="Generate new UUID">⟳</button>
-                                            </div>
-                                        </label>
-                                        <label>Level (0-255):
-                                            <input type="number" id="xrayLevel" min="0" max="255" value="0">
-                                        </label>
-                                    </div>
                                     <div class="modal-actions">
                                         <button type="submit" class="btn btn-primary">Save Access</button>
                                         <button type="button" class="btn btn-secondary" onclick="closeUserAccessModal()">Cancel</button>
@@ -1121,9 +1316,6 @@
                 `;
                 
                 document.body.insertAdjacentHTML('beforeend', modalContent);
-                
-                // Generate initial UUID
-                generateUUID();
                 
                 // Handle form submission
                 document.getElementById('userAccessForm').addEventListener('submit', saveUserAccess);
@@ -1140,6 +1332,85 @@
             }
         }
         
+        // Show create user modal
+        function showCreateUserModal() {
+            const modalContent = `
+                <div class="modal-overlay" onclick="closeCreateUserModal()">
+                    <div class="modal-content" onclick="event.stopPropagation()">
+                        <div class="modal-header">
+                            <h2>Create New User</h2>
+                            <button class="btn btn-small" onclick="closeCreateUserModal()">Close</button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="createUserForm">
+                                <div class="form-grid">
+                                    <label>
+                                        Name: <span class="required">*</span>
+                                        <input type="text" name="name" required placeholder="User name">
+                                    </label>
+                                    <label>
+                                        Comment:
+                                        <input type="text" name="comment" placeholder="Optional comment">
+                                    </label>
+                                    <label>
+                                        Telegram ID:
+                                        <input type="number" name="telegram_id" placeholder="Optional Telegram ID">
+                                    </label>
+                                </div>
+                                <div class="modal-actions">
+                                    <button type="submit" class="btn btn-primary">Create User</button>
+                                    <button type="button" class="btn btn-secondary" onclick="closeCreateUserModal()">Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalContent);
+            
+            document.getElementById('createUserForm').addEventListener('submit', createUser);
+        }
+        
+        function closeCreateUserModal() {
+            const modal = document.querySelector('.modal-overlay');
+            if (modal) {
+                modal.remove();
+            }
+        }
+        
+        async function createUser(event) {
+            event.preventDefault();
+            
+            const formData = new FormData(event.target);
+            const userData = {
+                name: formData.get('name'),
+                comment: formData.get('comment') || null,
+                telegram_id: formData.get('telegram_id') ? parseInt(formData.get('telegram_id')) : null
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/users`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(userData)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to create user');
+                }
+                
+                showAlert('User created successfully', 'success');
+                closeCreateUserModal();
+                loadUsers(); // Reload users table
+            } catch (error) {
+                showAlert('Error creating user: ' + error.message, 'error');
+            }
+        }
+        
         function generateUUID() {
             const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
                 const r = Math.random() * 16 | 0;
@@ -1153,43 +1424,58 @@
             event.preventDefault();
             
             const userId = document.getElementById('editUserId').value;
-            const email = document.getElementById('xrayEmail').value;
-            const xrayUserId = document.getElementById('xrayUserId').value;
-            const level = parseInt(document.getElementById('xrayLevel').value) || 0;
+            const userName = document.getElementById('editUserName').value;
             
-            const checkedAccess = document.querySelectorAll('input[name="access"]:checked');
-            
-            if (checkedAccess.length === 0) {
-                showAlert('Please select at least one server/inbound', 'error');
-                return;
-            }
-            
-            if (!email || !xrayUserId) {
-                showAlert('Please fill in all required fields', 'error');
-                return;
-            }
+            const allCheckboxes = document.querySelectorAll('input[name="access"]');
             
             try {
-                for (const checkbox of checkedAccess) {
+                // Get current user access
+                const currentAccessResponse = await fetch(`${API_BASE}/users/${userId}/access`);
+                const currentAccess = await currentAccessResponse.ok ? await currentAccessResponse.json() : [];
+                
+                // Process each checkbox
+                for (const checkbox of allCheckboxes) {
                     const serverId = checkbox.dataset.serverId;
                     const inboundId = checkbox.dataset.inboundId;
                     
-                    const userData = {
-                        email: email,
-                        id: xrayUserId,
-                        level: level
-                    };
+                    const currentlyHasAccess = currentAccess.some(a => 
+                        a.server_inbound_id === inboundId
+                    );
                     
-                    const response = await fetch(`${API_BASE}/servers/${serverId}/inbounds/${inboundId}/users`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(userData)
-                    });
+                    if (checkbox.checked && !currentlyHasAccess) {
+                        // Grant access - pass user_id to use existing user
+                        const grantData = {
+                            user_id: userId,
+                            name: userName,
+                            level: 0
+                        };
+                        
+                        const response = await fetch(`${API_BASE}/servers/${serverId}/inbounds/${inboundId}/users`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(grantData)
+                        });
                     
-                    if (!response.ok) {
-                        throw new Error(`Failed to add user to ${checkbox.dataset.serverName} inbound ${checkbox.dataset.inboundPort}`);
+                        if (!response.ok && response.status !== 409) { // 409 = already exists
+                            throw new Error(`Failed to grant access`);
+                        }
+                    } else if (!checkbox.checked && currentlyHasAccess) {
+                        // Revoke access
+                        const accessRecord = currentAccess.find(a => 
+                            a.server_inbound_id === inboundId
+                        );
+                        
+                        if (accessRecord) {
+                            const response = await fetch(`${API_BASE}/servers/${serverId}/inbounds/${inboundId}/users/${accessRecord.id}`, {
+                                method: 'DELETE'
+                            });
+                            
+                            if (!response.ok) {
+                                throw new Error(`Failed to revoke access`);
+                            }
+                        }
                     }
                 }
                 

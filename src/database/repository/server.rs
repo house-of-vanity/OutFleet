@@ -74,6 +74,6 @@ impl ServerRepository {
         let server = self.find_by_id(id).await?
             .ok_or_else(|| anyhow::anyhow!("Server not found"))?;
         
-        Ok(format!("{}:{}", server.hostname, server.grpc_port))
+        Ok(server.get_grpc_endpoint())
     }
 }
