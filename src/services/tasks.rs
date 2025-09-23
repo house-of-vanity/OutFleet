@@ -1,6 +1,6 @@
 use anyhow::Result;
 use tokio_cron_scheduler::{JobScheduler, Job};
-use tracing::{info, error, warn};
+use tracing::{info, error, warn, debug};
 use crate::database::DatabaseManager;
 use crate::database::repository::{ServerRepository, ServerInboundRepository, InboundTemplateRepository, InboundUsersRepository, CertificateRepository, UserRepository};
 use crate::database::entities::inbound_users;
@@ -161,6 +161,80 @@ impl TaskScheduler {
         
         self.scheduler.add(sync_job).await?;
         
+        // Add certificate renewal task that runs once a day at 2 AM
+        let db_clone_cert = db.clone();
+        let task_status_cert = self.task_status.clone();
+        
+        // Initialize certificate renewal task status
+        {
+            let mut status = self.task_status.write().unwrap();
+            status.insert("cert_renewal".to_string(), TaskStatus {
+                name: "Certificate Renewal".to_string(),
+                description: "Renews Let's Encrypt certificates that expire within 15 days".to_string(),
+                schedule: "0 0 2 * * * (daily at 2 AM)".to_string(),
+                status: TaskState::Idle,
+                last_run: None,
+                next_run: Some(Utc::now() + chrono::Duration::days(1)),
+                total_runs: 0,
+                success_count: 0,
+                error_count: 0,
+                last_error: None,
+                last_duration_ms: None,
+            });
+        }
+        
+        let cert_renewal_job = Job::new_async("0 0 2 * * *", move |_uuid, _l| {
+            let db = db_clone_cert.clone();
+            let task_status = task_status_cert.clone();
+            
+            Box::pin(async move {
+                let start_time = Utc::now();
+                
+                // Update task status to running
+                {
+                    let mut status = task_status.write().unwrap();
+                    if let Some(task) = status.get_mut("cert_renewal") {
+                        task.status = TaskState::Running;
+                        task.last_run = Some(Utc::now());
+                        task.total_runs += 1;
+                    }
+                }
+                
+                match check_and_renew_certificates(&db).await {
+                    Ok(_) => {
+                        let duration = (Utc::now() - start_time).num_milliseconds() as u64;
+                        let mut status = task_status.write().unwrap();
+                        if let Some(task) = status.get_mut("cert_renewal") {
+                            task.status = TaskState::Success;
+                            task.success_count += 1;
+                            task.last_duration_ms = Some(duration);
+                            task.last_error = None;
+                        }
+                    },
+                    Err(e) => {
+                        let duration = (Utc::now() - start_time).num_milliseconds() as u64;
+                        let mut status = task_status.write().unwrap();
+                        if let Some(task) = status.get_mut("cert_renewal") {
+                            task.status = TaskState::Error;
+                            task.error_count += 1;
+                            task.last_duration_ms = Some(duration);
+                            task.last_error = Some(e.to_string());
+                        }
+                        error!("Certificate renewal task failed: {}", e);
+                    }
+                }
+            })
+        })?;
+        
+        self.scheduler.add(cert_renewal_job).await?;
+        
+        // Also run certificate check on startup
+        info!("Running initial certificate renewal check...");
+        tokio::spawn(async move {
+            if let Err(e) = check_and_renew_certificates(&db).await {
+                error!("Initial certificate renewal check failed: {}", e);
+            }
+        });
         
         self.scheduler.start().await?;
         Ok(())
@@ -285,15 +359,20 @@ async fn get_desired_inbounds_from_db(
         let port = inbound.port_override.unwrap_or(template.default_port);
         
         // Get certificate if specified
-        let (cert_pem, key_pem) = if let Some(_cert_id) = inbound.certificate_id {
+        let (cert_pem, key_pem) = if let Some(cert_id) = inbound.certificate_id {
             match load_certificate_from_db(db, inbound.certificate_id).await {
-                Ok((cert, key)) => (cert, key),
+                Ok((cert, key)) => {
+                    info!("Loaded certificate {} for inbound {}, has_cert={}, has_key={}", 
+                        cert_id, inbound.tag, cert.is_some(), key.is_some());
+                    (cert, key)
+                },
                 Err(e) => {
-                    warn!("Failed to load certificate for inbound {}: {}", inbound.tag, e);
+                    warn!("Failed to load certificate {} for inbound {}: {}", cert_id, inbound.tag, e);
                     (None, None)
                 }
             }
         } else {
+            debug!("No certificate configured for inbound {}", inbound.tag);
             (None, None)
         };
         
@@ -422,4 +501,129 @@ pub struct XrayUser {
     pub id: String,
     pub email: String,
     pub level: i32,
+}
+
+/// Check and renew certificates that expire within 15 days
+async fn check_and_renew_certificates(db: &DatabaseManager) -> Result<()> {
+    use crate::services::certificates::CertificateService;
+    use crate::database::repository::DnsProviderRepository;
+    
+    info!("Starting certificate renewal check...");
+    
+    let cert_repo = CertificateRepository::new(db.connection().clone());
+    let dns_repo = DnsProviderRepository::new(db.connection().clone());
+    let cert_service = CertificateService::with_db(db.connection().clone());
+    
+    // Get all certificates
+    let certificates = cert_repo.find_all().await?;
+    let mut renewed_count = 0;
+    let mut checked_count = 0;
+    
+    for cert in certificates {
+        // Only check Let's Encrypt certificates with auto_renew enabled
+        if cert.cert_type != "letsencrypt" || !cert.auto_renew {
+            continue;
+        }
+        
+        checked_count += 1;
+        
+        // Check if certificate expires within 15 days
+        if cert.expires_soon(15) {
+            info!(
+                "Certificate '{}' (ID: {}) expires at {} - renewing...", 
+                cert.name, cert.id, cert.expires_at
+            );
+            
+            // Find the DNS provider used for this certificate
+            // For now, we'll use the first active Cloudflare provider
+            // In production, you might want to store the provider ID with the certificate
+            let providers = dns_repo.find_active_by_type("cloudflare").await?;
+            
+            if providers.is_empty() {
+                error!(
+                    "Cannot renew certificate '{}': No active Cloudflare DNS provider found", 
+                    cert.name
+                );
+                continue;
+            }
+            
+            let dns_provider = &providers[0];
+            
+            // Need to get the ACME email - for now using a default
+            // In production, this should be stored with the certificate
+            let acme_email = "admin@example.com"; // TODO: Store this with certificate
+            
+            // Attempt to renew the certificate
+            match cert_service.generate_letsencrypt_certificate(
+                &cert.domain,
+                dns_provider.id,
+                acme_email,
+                false, // Use production Let's Encrypt
+            ).await {
+                Ok((new_cert_pem, new_key_pem)) => {
+                    // Update the certificate in database
+                    match cert_repo.update_certificate_data(
+                        cert.id, 
+                        &new_cert_pem, 
+                        &new_key_pem,
+                        chrono::Utc::now() + chrono::Duration::days(90), // Let's Encrypt certs are valid for 90 days
+                    ).await {
+                        Ok(_) => {
+                            info!("Successfully renewed certificate '{}'", cert.name);
+                            renewed_count += 1;
+                            
+                            // Trigger sync for all servers using this certificate
+                            // This will be done via the event system
+                            if let Err(e) = trigger_cert_renewal_sync(db, cert.id).await {
+                                error!("Failed to trigger sync after certificate renewal: {}", e);
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to save renewed certificate '{}' to database: {}", cert.name, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to renew certificate '{}': {:?}", cert.name, e);
+                }
+            }
+        } else {
+            debug!(
+                "Certificate '{}' expires at {} - no renewal needed yet", 
+                cert.name, cert.expires_at
+            );
+        }
+    }
+    
+    info!(
+        "Certificate renewal check completed: checked {}, renewed {}", 
+        checked_count, renewed_count
+    );
+    
+    Ok(())
+}
+
+/// Trigger sync for all servers that use a specific certificate
+async fn trigger_cert_renewal_sync(db: &DatabaseManager, cert_id: Uuid) -> Result<()> {
+    use crate::services::events::send_sync_event;
+    use crate::services::events::SyncEvent;
+    
+    let inbound_repo = ServerInboundRepository::new(db.connection().clone());
+    
+    // Find all server inbounds that use this certificate
+    let inbounds = inbound_repo.find_by_certificate_id(cert_id).await?;
+    
+    // Collect unique server IDs
+    let mut server_ids = std::collections::HashSet::new();
+    for inbound in inbounds {
+        server_ids.insert(inbound.server_id);
+    }
+    
+    // Trigger sync for each server
+    for server_id in server_ids {
+        info!("Triggering sync for server {} after certificate renewal", server_id);
+        send_sync_event(SyncEvent::InboundChanged(server_id));
+    }
+    
+    Ok(())
 }

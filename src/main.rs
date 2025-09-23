@@ -12,6 +12,11 @@ use services::{TaskScheduler, XrayService};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize default crypto provider for rustls
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     // Parse command line arguments first
     let args = parse_args();
 

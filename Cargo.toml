@@ -58,5 +58,12 @@ rcgen = { version = "0.12", features = ["pem"] }       # For self-signed certifi
 time = "0.3"         # For certificate date/time handling
 base64 = "0.21"      # For PEM to DER conversion
 
+# ACME/Let's Encrypt support
+instant-acme = "0.8"     # ACME client for Let's Encrypt
+reqwest = { version = "0.11", features = ["json", "rustls-tls"] }  # HTTP client for Cloudflare API
+rustls = { version = "0.23", features = ["aws-lc-rs"] }  # TLS library with aws-lc-rs crypto provider
+ring = "0.17"            # Crypto for ACME
+pem = "3.0"              # PEM format support
+
 [dev-dependencies]
 tempfile = "3.0"

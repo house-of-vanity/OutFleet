@@ -4,6 +4,7 @@ use axum::{
     response::Json,
     Json as JsonExtractor,
 };
+use serde_json::json;
 use uuid::Uuid;
 use crate::{
     database::{
@@ -64,7 +65,7 @@ pub async fn get_certificate_details(
 pub async fn create_certificate(
     State(app_state): State<AppState>,
     JsonExtractor(cert_data): JsonExtractor<certificate::CreateCertificateDto>,
-) -> Result<Json<certificate::CertificateResponse>, StatusCode> {
+) -> Result<Json<certificate::CertificateResponse>, (StatusCode, Json<serde_json::Value>)> {
     tracing::info!("Creating certificate: {:?}", cert_data);
     let repo = CertificateRepository::new(app_state.db.connection().clone());
     let cert_service = CertificateService::new();
@@ -73,9 +74,54 @@ pub async fn create_certificate(
     let (cert_pem, private_key) = match cert_data.cert_type.as_str() {
         "self_signed" => {
             cert_service.generate_self_signed(&cert_data.domain).await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .map_err(|e| {
+                    tracing::error!("Failed to generate self-signed certificate: {:?}", e);
+                    (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
+                        "error": "Failed to generate self-signed certificate",
+                        "details": format!("{:?}", e)
+                    })))
+                })?
         }
-        _ => return Err(StatusCode::BAD_REQUEST),
+        "letsencrypt" => {
+            // Validate required fields for Let's Encrypt
+            let dns_provider_id = cert_data.dns_provider_id
+                .ok_or((StatusCode::BAD_REQUEST, Json(json!({
+                    "error": "DNS provider ID is required for Let's Encrypt certificates"
+                }))))?;
+            let acme_email = cert_data.acme_email
+                .as_ref()
+                .ok_or((StatusCode::BAD_REQUEST, Json(json!({
+                    "error": "ACME email is required for Let's Encrypt certificates"
+                }))))?;
+            
+            let cert_service = CertificateService::with_db(app_state.db.connection().clone());
+            cert_service.generate_letsencrypt_certificate(
+                &cert_data.domain,
+                dns_provider_id,
+                acme_email,
+                false // production by default
+            ).await
+                .map_err(|e| {
+                    tracing::error!("Failed to generate Let's Encrypt certificate: {:?}", e);
+                    // Return a more detailed error response
+                    (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
+                        "error": "Failed to generate Let's Encrypt certificate",
+                        "details": format!("{:?}", e)
+                    })))
+                })?
+        }
+        "imported" => {
+            // For imported certificates, use provided PEM data
+            if cert_data.certificate_pem.is_empty() || cert_data.private_key.is_empty() {
+                return Err((StatusCode::BAD_REQUEST, Json(json!({
+                    "error": "Certificate PEM and private key are required for imported certificates"
+                }))));
+            }
+            (cert_data.certificate_pem.clone(), cert_data.private_key.clone())
+        }
+        _ => return Err((StatusCode::BAD_REQUEST, Json(json!({
+            "error": "Invalid certificate type. Supported types: self_signed, letsencrypt, imported"
+        })))),
     };
     
     // Create certificate with generated data
@@ -85,7 +131,13 @@ pub async fn create_certificate(
     
     match repo.create(create_dto).await {
         Ok(certificate) => Ok(Json(certificate.into())),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(e) => {
+            tracing::error!("Failed to save certificate to database: {:?}", e);
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
+                "error": "Failed to save certificate to database",
+                "details": format!("{:?}", e)
+            }))))
+        }
     }
 }
 

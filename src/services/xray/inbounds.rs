@@ -60,7 +60,12 @@ impl<'a> InboundClient<'a> {
         let tag = inbound["tag"].as_str().unwrap_or("").to_string();
         let port = inbound["port"].as_u64().unwrap_or(8080) as u32;
         let protocol = inbound["protocol"].as_str().unwrap_or("vless");
-        let user_count = users.map_or(0, |u| u.len());
+        let _user_count = users.map_or(0, |u| u.len());
+        
+        tracing::info!(
+            "Adding inbound '{}' with protocol={}, port={}, has_cert={}, has_key={}", 
+            tag, protocol, port, cert_pem.is_some(), key_pem.is_some()
+        );
         
         
         // Create receiver configuration (port binding) - use simple port number

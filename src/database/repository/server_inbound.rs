@@ -107,6 +107,13 @@ impl ServerInboundRepository {
             .await?)
     }
 
+    pub async fn find_by_certificate_id(&self, certificate_id: Uuid) -> Result<Vec<server_inbound::Model>> {
+        Ok(ServerInbound::find()
+            .filter(server_inbound::Column::CertificateId.eq(certificate_id))
+            .all(&self.db)
+            .await?)
+    }
+
     pub async fn find_active_by_server(&self, server_id: Uuid) -> Result<Vec<server_inbound::Model>> {
         Ok(ServerInbound::find()
             .filter(server_inbound::Column::ServerId.eq(server_id))

@@ -86,6 +86,7 @@ impl ActiveModelBehavior for ActiveModel {
 pub enum CertificateType {
     SelfSigned,
     Imported,
+    LetsEncrypt,
 }
 
 impl From<CertificateType> for String {
@@ -93,6 +94,7 @@ impl From<CertificateType> for String {
         match cert_type {
             CertificateType::SelfSigned => "self_signed".to_string(),
             CertificateType::Imported => "imported".to_string(),
+            CertificateType::LetsEncrypt => "letsencrypt".to_string(),
         }
     }
 }
@@ -102,6 +104,7 @@ impl From<String> for CertificateType {
         match s.as_str() {
             "self_signed" => CertificateType::SelfSigned,
             "imported" => CertificateType::Imported,
+            "letsencrypt" => CertificateType::LetsEncrypt,
             _ => CertificateType::SelfSigned,
         }
     }
@@ -117,6 +120,9 @@ pub struct CreateCertificateDto {
     pub certificate_pem: String,
     #[serde(default)]
     pub private_key: String,
+    // For Let's Encrypt certificates via DNS challenge
+    pub dns_provider_id: Option<Uuid>,
+    pub acme_email: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

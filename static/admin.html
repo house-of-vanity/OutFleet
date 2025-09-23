@@ -73,6 +73,13 @@
         
         .page-header {
             margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .page-header-content {
+            flex: 1;
         }
         
         .page-title {
@@ -585,6 +592,160 @@
             gap: 10px;
             justify-content: flex-end;
         }
+
+        /* Task Summary Cards */
+        .task-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .summary-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .summary-icon {
+            font-size: 32px;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f5f5f7;
+            border-radius: 12px;
+        }
+
+        .summary-content h3 {
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+            color: #1d1d1f;
+        }
+
+        .summary-content p {
+            margin: 0;
+            color: #6e6e73;
+            font-size: 14px;
+        }
+
+        /* Task Status Badges */
+        .task-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .task-status.running {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .task-status.success {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+
+        .task-status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .task-status.idle {
+            background: #f5f5f5;
+            color: #616161;
+        }
+
+        /* Task Actions */
+        .task-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .task-actions .btn {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* Task List Items */
+        .task-item {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid #f0f0f0;
+        }
+
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .task-info h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+            color: #1d1d1f;
+        }
+
+        .task-description {
+            color: #6e6e73;
+            font-size: 14px;
+            margin: 0 0 8px 0;
+            line-height: 1.4;
+        }
+
+        .task-schedule {
+            color: #8e8e93;
+            font-size: 13px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            margin: 0;
+        }
+
+        .task-status-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .task-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat .stat-value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin: 0 0 2px 0;
+        }
+
+        .stat .stat-label {
+            font-size: 12px;
+            color: #8e8e93;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0;
+        }
     </style>
 </head>
 <body>
@@ -606,6 +767,12 @@
                     </li>
                     <li class="nav-item">
                         <a href="#certificates" class="nav-link" onclick="showPage('certificates')">Certificates</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#dns-providers" class="nav-link" onclick="showPage('dns-providers')">DNS Providers</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#tasks" class="nav-link" onclick="showPage('tasks')">Tasks</a>
                     </li>
                     <li class="nav-item">
                         <a href="#users" class="nav-link" onclick="showPage('users')">Users</a>
@@ -722,8 +889,11 @@
             <!-- Certificates -->
             <section id="certificates" class="page-section">
                 <div class="page-header">
-                    <h1 class="page-title">SSL Certificates</h1>
-                    <p class="page-subtitle">Manage SSL/TLS certificates for your servers</p>
+                    <div class="page-header-content">
+                        <h1 class="page-title">SSL Certificates</h1>
+                        <p class="page-subtitle">Manage SSL/TLS certificates for your servers</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="showCreateCertificateModal()">+ Create Certificate</button>
                 </div>
                 
                 <div class="card">
@@ -733,12 +903,82 @@
                     <div id="certificatesTable" class="loading">Loading...</div>
                 </div>
             </section>
+
+            <!-- DNS Providers -->
+            <section id="dns-providers" class="page-section">
+                <div class="page-header">
+                    <div class="page-header-content">
+                        <h1 class="page-title">DNS Providers</h1>
+                        <p class="page-subtitle">Manage DNS provider credentials for Let's Encrypt certificates</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="showCreateDnsProviderModal()">+ Add DNS Provider</button>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">DNS Providers List</h2>
+                    </div>
+                    <div id="dnsProvidersTable" class="loading">Loading...</div>
+                </div>
+            </section>
+
+            <!-- Tasks -->
+            <section id="tasks" class="page-section">
+                <div class="page-header">
+                    <div class="page-header-content">
+                        <h1 class="page-title">Scheduled Tasks</h1>
+                        <p class="page-subtitle">Monitor and manage background tasks</p>
+                    </div>
+                    <button class="btn btn-secondary" onclick="refreshTasks()">🔄 Refresh</button>
+                </div>
+                
+                <!-- Task Summary Cards -->
+                <div class="task-summary-grid">
+                    <div class="summary-card">
+                        <div class="summary-icon">📋</div>
+                        <div class="summary-content">
+                            <h3 id="totalTasks">-</h3>
+                            <p>Total Tasks</p>
+                        </div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-icon">🏃</div>
+                        <div class="summary-content">
+                            <h3 id="runningTasks">-</h3>
+                            <p>Running</p>
+                        </div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-icon">✅</div>
+                        <div class="summary-content">
+                            <h3 id="successTasks">-</h3>
+                            <p>Successful</p>
+                        </div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-icon">❌</div>
+                        <div class="summary-content">
+                            <h3 id="errorTasks">-</h3>
+                            <p>Failed</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Tasks List</h2>
+                    </div>
+                    <div id="tasksTable" class="loading">Loading...</div>
+                </div>
+            </section>
             
             <!-- Users -->
             <section id="users" class="page-section">
                 <div class="page-header">
-                    <h1 class="page-title">Users</h1>
-                    <p class="page-subtitle">Manage user accounts and access</p>
+                    <div class="page-header-content">
+                        <h1 class="page-title">Users</h1>
+                        <p class="page-subtitle">Manage user accounts and access</p>
+                    </div>
                     <button class="btn btn-primary" onclick="showCreateUserModal()">+ Create User</button>
                 </div>
                 
@@ -809,6 +1049,12 @@
                     break;
                 case 'certificates':
                     loadCertificates();
+                    break;
+                case 'dns-providers':
+                    loadDnsProviders();
+                    break;
+                case 'tasks':
+                    loadTasks();
                     break;
                 case 'users':
                     loadUsers();
@@ -1591,6 +1837,435 @@
         function refreshTasks() {
             document.getElementById('tasksTable').innerHTML = '<div class="loading">Loading...</div>';
             loadTasks();
+        }
+
+        // DNS Providers
+        async function loadDnsProviders() {
+            try {
+                const response = await fetch(`${API_BASE}/dns-providers`);
+                const providers = await response.json();
+                
+                if (providers.length === 0) {
+                    document.getElementById('dnsProvidersTable').innerHTML = '<div class="empty-state"><h3>No DNS providers found</h3><p>Add DNS provider credentials to enable Let\'s Encrypt certificates</p></div>';
+                    return;
+                }
+                
+                const table = `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Provider Type</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${providers.map(provider => `
+                                <tr>
+                                    <td><strong>${escapeHtml(provider.name)}</strong></td>
+                                    <td>${provider.provider_type}</td>
+                                    <td><span class="status-badge ${provider.is_active ? 'status-online' : 'status-offline'}">${provider.is_active ? 'Active' : 'Inactive'}</span></td>
+                                    <td>${new Date(provider.created_at).toLocaleDateString()}</td>
+                                    <td>
+                                        <div class="actions">
+                                            <button class="btn btn-small btn-secondary" onclick="editDnsProvider('${provider.id}')">Edit</button>
+                                            <button class="btn btn-small btn-danger" onclick="deleteDnsProvider('${provider.id}', '${escapeHtml(provider.name)}')">Delete</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('dnsProvidersTable').innerHTML = table;
+            } catch (error) {
+                document.getElementById('dnsProvidersTable').innerHTML = '<div class="empty-state"><h3>Error loading DNS providers</h3><p>' + error.message + '</p></div>';
+            }
+        }
+
+        // Show create DNS provider modal
+        function showCreateDnsProviderModal() {
+            const modalContent = `
+                <div class="modal-overlay" onclick="closeCreateDnsProviderModal()">
+                    <div class="modal-content" onclick="event.stopPropagation()">
+                        <div class="modal-header">
+                            <h2>Add DNS Provider</h2>
+                            <button class="btn btn-small" onclick="closeCreateDnsProviderModal()">Close</button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="createDnsProviderForm">
+                                <div class="form-group">
+                                    <label class="form-label" for="dnsProviderName">Name *</label>
+                                    <input type="text" id="dnsProviderName" class="form-input" placeholder="Enter provider name" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="dnsProviderType">Provider Type *</label>
+                                    <select id="dnsProviderType" class="form-select" required>
+                                        <option value="">Select provider type</option>
+                                        <option value="cloudflare">Cloudflare</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="dnsProviderToken">API Token *</label>
+                                    <input type="password" id="dnsProviderToken" class="form-input" placeholder="Enter API token" required>
+                                    <small class="form-help">For Cloudflare: Create an API token with Zone:Read and Zone:DNS:Edit permissions</small>
+                                </div>
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" id="dnsProviderActive" checked>
+                                        Active
+                                    </label>
+                                </div>
+                                <div class="modal-actions">
+                                    <button type="submit" class="btn btn-primary">Add Provider</button>
+                                    <button type="button" class="btn btn-secondary" onclick="closeCreateDnsProviderModal()">Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalContent);
+            
+            document.getElementById('createDnsProviderForm').addEventListener('submit', createDnsProvider);
+        }
+
+        function closeCreateDnsProviderModal() {
+            const modal = document.querySelector('.modal-overlay');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        async function createDnsProvider(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById('dnsProviderName').value.trim();
+            const provider_type = document.getElementById('dnsProviderType').value;
+            const api_token = document.getElementById('dnsProviderToken').value.trim();
+            const is_active = document.getElementById('dnsProviderActive').checked;
+            
+            if (!name || !provider_type || !api_token) {
+                showAlert('All fields are required', 'error');
+                return;
+            }
+            
+            const providerData = { name, provider_type, api_token, is_active };
+            
+            try {
+                const response = await fetch(`${API_BASE}/dns-providers`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(providerData)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to create DNS provider');
+                }
+                
+                showAlert('DNS provider created successfully', 'success');
+                closeCreateDnsProviderModal();
+                loadDnsProviders();
+            } catch (error) {
+                showAlert('Error creating DNS provider: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteDnsProvider(providerId, providerName) {
+            if (!confirm(`Are you sure you want to delete DNS provider "${providerName}"?`)) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/dns-providers/${providerId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) throw new Error('Failed to delete DNS provider');
+                
+                showAlert('DNS provider deleted successfully', 'success');
+                loadDnsProviders();
+            } catch (error) {
+                showAlert('Error deleting DNS provider: ' + error.message, 'error');
+            }
+        }
+
+        // Show create certificate modal
+        function showCreateCertificateModal() {
+            const modalContent = `
+                <div class="modal-overlay" onclick="closeCreateCertificateModal()">
+                    <div class="modal-content" onclick="event.stopPropagation()">
+                        <div class="modal-header">
+                            <h2>Create Certificate</h2>
+                            <button class="btn btn-small" onclick="closeCreateCertificateModal()">Close</button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="createCertificateForm">
+                                <div class="form-group">
+                                    <label class="form-label" for="certName">Certificate Name *</label>
+                                    <input type="text" id="certName" class="form-input" placeholder="Enter certificate name" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="certDomain">Domain *</label>
+                                    <input type="text" id="certDomain" class="form-input" placeholder="example.com" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="certType">Certificate Type *</label>
+                                    <select id="certType" class="form-select" required onchange="toggleCertificateFields()">
+                                        <option value="">Select certificate type</option>
+                                        <option value="self_signed">Self-Signed</option>
+                                        <option value="letsencrypt">Let's Encrypt</option>
+                                        <option value="imported">Imported</option>
+                                    </select>
+                                </div>
+                                <div id="letsencryptFields" style="display: none;">
+                                    <div class="form-group">
+                                        <label class="form-label" for="dnsProvider">DNS Provider *</label>
+                                        <select id="dnsProvider" class="form-select">
+                                            <option value="">Loading...</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="acmeEmail">ACME Email *</label>
+                                        <input type="email" id="acmeEmail" class="form-input" placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <div id="importedFields" style="display: none;">
+                                    <div class="form-group">
+                                        <label class="form-label" for="certPem">Certificate PEM *</label>
+                                        <textarea id="certPem" class="form-input" rows="8" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="keyPem">Private Key PEM *</label>
+                                        <textarea id="keyPem" class="form-input" rows="8" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" id="autoRenew" checked>
+                                        Auto-renew certificate
+                                    </label>
+                                </div>
+                                <div class="modal-actions">
+                                    <button type="submit" class="btn btn-primary">Create Certificate</button>
+                                    <button type="button" class="btn btn-secondary" onclick="closeCreateCertificateModal()">Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalContent);
+            
+            document.getElementById('createCertificateForm').addEventListener('submit', createCertificate);
+            loadDnsProvidersForSelect();
+        }
+
+        function closeCreateCertificateModal() {
+            const modal = document.querySelector('.modal-overlay');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        function toggleCertificateFields() {
+            const certType = document.getElementById('certType').value;
+            const letsencryptFields = document.getElementById('letsencryptFields');
+            const importedFields = document.getElementById('importedFields');
+            
+            letsencryptFields.style.display = certType === 'letsencrypt' ? 'block' : 'none';
+            importedFields.style.display = certType === 'imported' ? 'block' : 'none';
+        }
+
+        async function loadDnsProvidersForSelect() {
+            try {
+                const response = await fetch(`${API_BASE}/dns-providers/cloudflare/active`);
+                const providers = await response.json();
+                
+                const select = document.getElementById('dnsProvider');
+                select.innerHTML = providers.length > 0 
+                    ? providers.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')
+                    : '<option value="">No active Cloudflare providers</option>';
+            } catch (error) {
+                const select = document.getElementById('dnsProvider');
+                select.innerHTML = '<option value="">Error loading providers</option>';
+            }
+        }
+
+        async function createCertificate(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById('certName').value.trim();
+            const domain = document.getElementById('certDomain').value.trim();
+            const cert_type = document.getElementById('certType').value;
+            const auto_renew = document.getElementById('autoRenew').checked;
+            
+            if (!name || !domain || !cert_type) {
+                showAlert('Name, domain, and certificate type are required', 'error');
+                return;
+            }
+            
+            const certData = { name, domain, cert_type, auto_renew, certificate_pem: '', private_key: '' };
+            
+            if (cert_type === 'letsencrypt') {
+                const dns_provider_id = document.getElementById('dnsProvider').value;
+                const acme_email = document.getElementById('acmeEmail').value.trim();
+                
+                if (!dns_provider_id || !acme_email) {
+                    showAlert('DNS provider and ACME email are required for Let\'s Encrypt certificates', 'error');
+                    return;
+                }
+                
+                certData.dns_provider_id = dns_provider_id;
+                certData.acme_email = acme_email;
+            } else if (cert_type === 'imported') {
+                const certificate_pem = document.getElementById('certPem').value.trim();
+                const private_key = document.getElementById('keyPem').value.trim();
+                
+                if (!certificate_pem || !private_key) {
+                    showAlert('Certificate and private key PEM are required for imported certificates', 'error');
+                    return;
+                }
+                
+                certData.certificate_pem = certificate_pem;
+                certData.private_key = private_key;
+            }
+            
+            try {
+                showAlert('Creating certificate...', 'success');
+                
+                const response = await fetch(`${API_BASE}/certificates`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(certData)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to create certificate');
+                }
+                
+                showAlert('Certificate created successfully', 'success');
+                closeCreateCertificateModal();
+                loadCertificates();
+            } catch (error) {
+                showAlert('Error creating certificate: ' + error.message, 'error');
+            }
+        }
+
+        // Tasks
+        async function loadTasks() {
+            try {
+                const response = await fetch(`${API_BASE}/tasks`);
+                const data = await response.json();
+                
+                // Update summary cards
+                document.getElementById('totalTasks').textContent = data.summary.total_tasks;
+                document.getElementById('runningTasks').textContent = data.summary.running_tasks;
+                document.getElementById('successTasks').textContent = data.summary.successful_tasks;
+                document.getElementById('errorTasks').textContent = data.summary.failed_tasks;
+                
+                if (Object.keys(data.tasks).length === 0) {
+                    document.getElementById('tasksTable').innerHTML = '<div class="empty-state"><h3>No tasks found</h3><p>No scheduled tasks are configured</p></div>';
+                    return;
+                }
+                
+                const tasksHtml = Object.entries(data.tasks).map(([taskId, task]) => {
+                    const statusClass = task.status.toLowerCase();
+                    const lastRun = task.last_run ? new Date(task.last_run).toLocaleString() : 'Never';
+                    const nextRun = task.next_run ? new Date(task.next_run).toLocaleString() : 'Not scheduled';
+                    const duration = task.last_duration_ms ? `${task.last_duration_ms}ms` : '-';
+                    const successRate = task.total_runs > 0 ? Math.round((task.success_count / task.total_runs) * 100) : 0;
+                    
+                    return `
+                        <div class="task-item">
+                            <div class="task-header">
+                                <div class="task-info">
+                                    <h3>${escapeHtml(task.name)}</h3>
+                                    <p class="task-description">${escapeHtml(task.description)}</p>
+                                    <div class="task-schedule">📅 ${escapeHtml(task.schedule)}</div>
+                                </div>
+                                <div class="task-status-container">
+                                    <span class="task-status ${statusClass}">${task.status}</span>
+                                    <div class="task-actions">
+                                        <button class="btn btn-primary btn-small" onclick="triggerTask('${taskId}')">▶️ Run Now</button>
+                                        <button class="btn btn-secondary btn-small" onclick="refreshTasks()">🔄 Refresh</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="task-stats">
+                                <div class="stat">
+                                    <label>Last Run:</label>
+                                    <span>${lastRun}</span>
+                                </div>
+                                <div class="stat">
+                                    <label>Next Run:</label>
+                                    <span>${nextRun}</span>
+                                </div>
+                                <div class="stat">
+                                    <label>Total Runs:</label>
+                                    <span>${task.total_runs}</span>
+                                </div>
+                                <div class="stat">
+                                    <label>Success Rate:</label>
+                                    <span>${successRate}% (${task.success_count}/${task.total_runs})</span>
+                                </div>
+                                <div class="stat">
+                                    <label>Last Duration:</label>
+                                    <span>${duration}</span>
+                                </div>
+                                ${task.last_error ? `
+                                <div class="stat error">
+                                    <label>Last Error:</label>
+                                    <span>${escapeHtml(task.last_error)}</span>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                document.getElementById('tasksTable').innerHTML = `
+                    <div class="tasks-list">
+                        ${tasksHtml}
+                    </div>
+                `;
+                
+            } catch (error) {
+                document.getElementById('tasksTable').innerHTML = '<div class="empty-state"><h3>Error loading tasks</h3><p>' + error.message + '</p></div>';
+            }
+        }
+
+        async function refreshTasks() {
+            loadTasks();
+        }
+
+        async function triggerTask(taskId) {
+            try {
+                const response = await fetch(`${API_BASE}/tasks/${taskId}/trigger`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to trigger task');
+                }
+                
+                const result = await response.json();
+                showAlert(result.message, 'success');
+                
+                // Refresh tasks after a short delay to show updated status
+                setTimeout(() => {
+                    loadTasks();
+                }, 1000);
+                
+            } catch (error) {
+                showAlert('Error triggering task: ' + error.message, 'error');
+            }
         }
 
         // Initialize

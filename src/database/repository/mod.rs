@@ -1,5 +1,6 @@
 pub mod user;
 pub mod certificate;
+pub mod dns_provider;
 pub mod inbound_template;
 pub mod server;
 pub mod server_inbound;
@@ -8,6 +9,7 @@ pub mod inbound_users;
 
 pub use user::UserRepository;
 pub use certificate::CertificateRepository;
+pub use dns_provider::DnsProviderRepository;
 pub use inbound_template::InboundTemplateRepository;
 pub use server::ServerRepository;
 pub use server_inbound::ServerInboundRepository;

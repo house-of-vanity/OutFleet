@@ -72,4 +72,26 @@ impl CertificateRepository {
             .all(&self.db)
             .await?)
     }
+
+    /// Update certificate data (cert and key) and expiration date
+    pub async fn update_certificate_data(
+        &self, 
+        id: Uuid, 
+        cert_pem: &str, 
+        key_pem: &str,
+        expires_at: chrono::DateTime<chrono::Utc>
+    ) -> Result<certificate::Model> {
+        let mut cert: certificate::ActiveModel = Certificate::find_by_id(id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Certificate not found"))?
+            .into();
+
+        cert.cert_data = Set(cert_pem.as_bytes().to_vec());
+        cert.key_data = Set(key_pem.as_bytes().to_vec());
+        cert.expires_at = Set(expires_at);
+        cert.updated_at = Set(chrono::Utc::now());
+
+        Ok(cert.update(&self.db).await?)
+    }
 }
