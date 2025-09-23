@@ -77,9 +77,12 @@ All API endpoints are prefixed with `/api`.
 - `DELETE /users/{id}` - Delete user by ID
 
 #### Get User Access
-- `GET /users/{id}/access` - Get user access to inbounds
+- `GET /users/{id}/access?include_uris=true` - Get user access to inbounds (optionally with client URIs)
 
-**Response:**
+**Query Parameters:**
+- `include_uris`: boolean (optional) - Include client configuration URIs in response
+
+**Response (without URIs):**
 ```json
 [
   {
@@ -91,6 +94,40 @@ All API endpoints are prefixed with `/api`.
     "is_active": true
   }
 ]
+```
+
+**Response (with URIs):**
+```json
+[
+  {
+    "id": "uuid",
+    "user_id": "uuid",
+    "server_inbound_id": "uuid", 
+    "xray_user_id": "string",
+    "level": 0,
+    "is_active": true,
+    "uri": "vless://uuid@hostname:port?parameters#alias",
+    "protocol": "vless",
+    "server_name": "Server Name",
+    "inbound_tag": "inbound-tag"
+  }
+]
+```
+
+#### Generate Client Configurations
+- `GET /users/{user_id}/configs` - Get all client configuration URIs for a user
+- `GET /users/{user_id}/access/{inbound_id}/config` - Get specific client configuration URI
+
+**Response:**
+```json
+{
+  "user_id": "uuid",
+  "server_name": "string",
+  "inbound_tag": "string", 
+  "protocol": "vmess|vless|trojan|shadowsocks",
+  "uri": "protocol://uri_string",
+  "qr_code": null
+}
 ```
 
 ### Servers
@@ -242,6 +279,23 @@ All API endpoints are prefixed with `/api`.
 
 #### Remove User from Inbound
 - `DELETE /servers/{server_id}/inbounds/{inbound_id}/users/{email}` - Remove user access
+
+#### Get Inbound Client Configurations  
+- `GET /servers/{server_id}/inbounds/{inbound_id}/configs` - Get all client configuration URIs for an inbound
+
+**Response:**
+```json
+[
+  {
+    "user_id": "uuid",
+    "server_name": "string",
+    "inbound_tag": "string",
+    "protocol": "vmess|vless|trojan|shadowsocks", 
+    "uri": "protocol://uri_string",
+    "qr_code": null
+  }
+]
+```
 
 ### Certificates
 

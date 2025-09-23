@@ -12,6 +12,8 @@ use crate::database::entities::user::{CreateUserDto, UpdateUserDto, Model as Use
 use crate::database::repository::UserRepository;
 use crate::web::AppState;
 
+use super::client_configs::IncludeUrisQuery;
+
 #[derive(Debug, Deserialize)]
 pub struct PaginationQuery {
     #[serde(default = "default_page")]
@@ -197,8 +199,10 @@ pub async fn delete_user(
 pub async fn get_user_access(
     State(app_state): State<AppState>,
     Path(user_id): Path<Uuid>,
+    Query(query): Query<IncludeUrisQuery>,
 ) -> Result<Json<Vec<serde_json::Value>>, StatusCode> {
     use crate::database::repository::InboundUsersRepository;
+    use crate::services::UriGeneratorService;
     
     let inbound_users_repo = InboundUsersRepository::new(app_state.db.connection().clone());
     
@@ -207,17 +211,51 @@ pub async fn get_user_access(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     
-    let response: Vec<serde_json::Value> = access_list
-        .into_iter()
-        .map(|access| serde_json::json!({
-            "id": access.id,
-            "user_id": access.user_id,
-            "server_inbound_id": access.server_inbound_id,
-            "xray_user_id": access.xray_user_id,
-            "level": access.level,
-            "is_active": access.is_active,
-        }))
-        .collect();
+    let mut response: Vec<serde_json::Value> = Vec::new();
+    
+    if query.include_uris {
+        let uri_service = UriGeneratorService::new();
+        
+        for access in access_list {
+            let mut access_json = serde_json::json!({
+                "id": access.id,
+                "user_id": access.user_id,
+                "server_inbound_id": access.server_inbound_id,
+                "xray_user_id": access.xray_user_id,
+                "level": access.level,
+                "is_active": access.is_active,
+            });
+            
+            // Try to get client config and generate URI
+            if access.is_active {
+                if let Ok(Some(config_data)) = inbound_users_repo
+                    .get_client_config_data(user_id, access.server_inbound_id)
+                    .await {
+                    
+                    if let Ok(client_config) = uri_service.generate_client_config(user_id, &config_data) {
+                        access_json["uri"] = serde_json::Value::String(client_config.uri);
+                        access_json["protocol"] = serde_json::Value::String(client_config.protocol);
+                        access_json["server_name"] = serde_json::Value::String(client_config.server_name);
+                        access_json["inbound_tag"] = serde_json::Value::String(client_config.inbound_tag);
+                    }
+                }
+            }
+            
+            response.push(access_json);
+        }
+    } else {
+        response = access_list
+            .into_iter()
+            .map(|access| serde_json::json!({
+                "id": access.id,
+                "user_id": access.user_id,
+                "server_inbound_id": access.server_inbound_id,
+                "xray_user_id": access.xray_user_id,
+                "level": access.level,
+                "is_active": access.is_active,
+            }))
+            .collect();
+    }
     
     Ok(Json(response))
 }

@@ -25,4 +25,6 @@ fn user_routes() -> Router<AppState> {
             .put(handlers::update_user)
             .delete(handlers::delete_user))
         .route("/:id/access", get(handlers::get_user_access))
+        .route("/:user_id/configs", get(handlers::get_user_configs))
+        .route("/:user_id/access/:inbound_id/config", get(handlers::get_user_inbound_config))
 }

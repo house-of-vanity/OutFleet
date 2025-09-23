@@ -21,6 +21,9 @@ pub fn server_routes() -> Router<AppState> {
         // User management for inbounds
         .route("/:server_id/inbounds/:inbound_id/users", post(handlers::add_user_to_inbound))
         .route("/:server_id/inbounds/:inbound_id/users/:email", axum::routing::delete(handlers::remove_user_from_inbound))
+        
+        // Client configurations for inbounds
+        .route("/:server_id/inbounds/:inbound_id/configs", get(handlers::get_inbound_configs))
 }
 
 pub fn certificate_routes() -> Router<AppState> {
