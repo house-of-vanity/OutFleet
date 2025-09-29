@@ -1,0 +1,17 @@
+[database]
+url = "postgres://postgres:postgres@postgres:5432/outfleet"
+
+[web]
+host = "0.0.0.0"
+port = 8081
+
+[telegram]
+enabled = false
+admin_chat_ids = []
+allowed_users = []
+
+[xray]
+config_path = "./templates"
+
+[log]
+level = "debug"

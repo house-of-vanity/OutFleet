@@ -1,0 +1,45 @@
+services:
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: outfleet-admin
+    ports:
+      - "8081:8081"
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/outfleet
+      - RUST_LOG=info
+      - XRAY_ADMIN__WEB__PORT=8081
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: outfleet
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  xray:
+    image: teddysun/xray:25.8.3
+    container_name: xray-server
+    ports:
+      - "10085:10085"
+    volumes:
+      - ./xray-config.json:/etc/xray/config.json
+    command: ["xray", "-c", "/etc/xray/config.json"]
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
