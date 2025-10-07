@@ -13,6 +13,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "axios": "^1.12.2",
+    "clsx": "^2.1.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router": "^7.9.3"
