@@ -1,8 +1,10 @@
 import { serversSlice } from './slice';
-import { getServers } from './api';
+import { createServer, getServers } from './api';
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { getServersState } from './selectors';
 import type { RootState } from '../../../store';
+import type { CreateServerDTO } from './dto';
+import { appNotificator } from '../../../utils/notification/app-notificator';
 
 const PREFFIX = 'servers'
 
@@ -28,3 +30,18 @@ export const fetchServers = createAsyncThunk(
     }
   },
 );
+
+export const createServerAction = createAsyncThunk(
+  `${PREFFIX}/createServer`,
+  async (params: CreateServerDTO, { dispatch }) => {
+    try{
+      await createServer(params)
+      dispatch(fetchServers())
+    } catch(e){
+      appNotificator.add({
+        message: e instanceof Error ? e.message : `Unknown error in ${PREFFIX}/createServer`,
+        type: 'error'
+      })
+    }
+  } 
+)

@@ -1,33 +1,32 @@
+import { useEffect } from 'react';
 import type { RouteObject } from 'react-router';
+import { AddServer } from '../../features/servers/components/add-server/add-server';
+import { fetchServers, getServersState } from '../../features';
+import { useAppDispatch, useAppSelector } from '../../common/hooks';
+import clsx from 'clsx';
+import { ServersList } from '../../features/servers/components/servers-list';
 
 export const Servers = () => {
+  const dispatch = useAppDispatch();
+  const { loading, servers } = useAppSelector(getServersState);
+
+  useEffect(() => {
+    dispatch(fetchServers());
+  }, [dispatch]);
+
   return (
     <div id="servers" className="tab-content active">
-      <div className="section">
-        <h2>Add Server</h2>
-        <form id="serverForm">
-          <div className="form-group">
-            <label>Name:</label>
-            <input type="text" id="serverName" required />
-          </div>
-          <div className="form-group">
-            <label>Hostname:</label>
-            <input type="text" id="serverHostname" required />
-          </div>
-          <div className="form-group">
-            <label>gRPC Port:</label>
-            <input type="number" id="serverPort" value="2053" />
-          </div>
-          <button type="submit" className="btn btn-primary">
-            Add Server
-          </button>
-        </form>
-      </div>
+      <AddServer />
 
       <div className="section">
         <h2>Servers List</h2>
-        <div id="serversList" className="loading">
-          Loading...
+        <div id="serversList" className={clsx({ loading: loading })}>
+          {loading && 'Loading...'}
+          {servers.length ? (
+            <ServersList servers={servers} />
+          ) : (
+            <p>No servers found</p>
+          )}
         </div>
       </div>
     </div>

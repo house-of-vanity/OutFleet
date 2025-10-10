@@ -5,3 +5,9 @@ export interface ServerDTO {
     grpc_port: number
     status: string
 }
+
+export interface CreateServerDTO {
+  name: string;
+  hostname: string;
+  grpc_port: number;
+}
