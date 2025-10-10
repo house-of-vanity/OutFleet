@@ -18,6 +18,7 @@ export const NavMenu = (props: NavMenuProps) => {
     <div className="tabs">
       {items.map(({ href, label }) => (
         <Link
+          key={label}
           className={clsx('tab', {
             active: href === pathname,
           })}
