@@ -1,5 +1,5 @@
 export interface ServerDTO {
-    id: number | string
+    id: string
     name: string
     hostname: string
     grpc_port: number
@@ -10,4 +10,9 @@ export interface CreateServerDTO {
   name: string;
   hostname: string;
   grpc_port: number;
+}
+
+export interface TestServerDTO {
+  connected: boolean,
+  endpoint: string
 }

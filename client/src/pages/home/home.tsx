@@ -7,26 +7,13 @@ export const Home = () => {
   return (
     <div>
       <div className="container">
-        <h1>Xray Admin Panel - Test Interface</h1>
+        <h1 className="text-3xl font-bold underline">Xray Admin Panel - Test Interface</h1>
 
         {/* <!-- Toast notifications container --> */}
         <div className="toast-container" id="toastContainer"></div>
 
         <NavMenu items={navItems} />
-
-        {/* <!-- Dashboard --> */}
-
         <Outlet />
-
-        {/* <!-- Servers --> */}
-
-        {/* <!-- Templates --> */}
-
-        {/* <!-- Certificates --> */}
-
-        {/* <!-- Server Inbounds --> */}
-
-        {/* <!-- Users --> */}
       </div>
 
       {/* <!-- Modal dialogs --> */}

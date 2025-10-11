@@ -1,7 +1,7 @@
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { createServerAction } from '../../duck';
 import { useAppDispatch } from '../../../../common/hooks';
-import type { CreateServerForm } from './types';
+import type { CreateServerForm } from '../../types';
 
 
 
