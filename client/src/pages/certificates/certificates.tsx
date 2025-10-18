@@ -1,45 +1,31 @@
 import type { RouteObject } from 'react-router';
+import { useAppDispatch, useAppSelector } from '../../common/hooks';
+import { useEffect } from 'react';
+import { fetchCertificates, getCertificatesState } from '../../features';
+import { CreateCertificate } from '../../features/certificates';
+import { CertificateList } from '../../features/certificates/components/certificate-list';
 
 export const Certificates = () => {
+  const dispatch = useAppDispatch()
+
+  const { loading, certificates } = useAppSelector(getCertificatesState)
+
+  useEffect(()=>{
+    dispatch(fetchCertificates())
+  }, [dispatch])
+
   return (
     <div id="certificates" className="tab-content active">
       <div className="section">
         <h2>Add Certificate</h2>
-        <form id="certificateForm">
-          <div className="form-group">
-            <label>Name:</label>
-            <input type="text" id="certName" required />
-          </div>
-          <div className="form-group">
-            <label>Domain:</label>
-            <input
-              type="text"
-              id="certDomain"
-              placeholder="example.com"
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>Certificate Type:</label>
-            <select id="certType" required>
-              <option value="self_signed">Self-Signed</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label>
-              <input type="checkbox" id="certAutoRenew" checked /> Auto Renew
-            </label>
-          </div>
-          <button type="submit" className="btn btn-primary">
-            Generate Certificate
-          </button>
-        </form>
+        <CreateCertificate/>
       </div>
 
       <div className="section">
         <h2>Certificates List</h2>
         <div id="certificatesList" className="loading">
-          Loading...
+          { loading && 'Loading...' }
+          { certificates.length ? <CertificateList certificates={certificates}/> : <p>No certificates found</p> }
         </div>
       </div>
     </div>

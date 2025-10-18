@@ -14,13 +14,13 @@ import { getTemplateById } from '../../duck/api';
 import { protocolOptions } from '../add-template/util';
 import { updateTemplate } from '../../duck';
 
-export interface ServerEditProps {
+export interface TemplateEditProps {
   templateId: string;
   isOpen: boolean;
   onOpenChange: () => void;
 }
 
-export const TemplateEdit: FC<ServerEditProps> = (props) => {
+export const TemplateEdit: FC<TemplateEditProps> = (props) => {
   const dispatch = useAppDispatch();
   const { templateId, isOpen, onOpenChange } = props;
   const { register, handleSubmit, reset } = useForm<EditTemplateForm>();
@@ -41,12 +41,10 @@ export const TemplateEdit: FC<ServerEditProps> = (props) => {
       default_port: parseInt(values.default_port),
     };
 
-    console.log({data})
-
     dispatch(
       updateTemplate({
         id: templateId,
-        server: data,
+        template: data,
       }),
     ).then(() => {
       onOpenChange();

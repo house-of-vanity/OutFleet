@@ -15,8 +15,8 @@ export const createTemplate = (params: CreateTemplateDTO) =>
 export const getTemplateById = (id: string) =>
   api.get<string, AxiosResponse<TemplateDTO>>(`/templates/${id}`);
 
-export const patchTemplate = (id: string, server: EditTemplateDTO) =>
-  api.put(`/templates/${id}`, server, {
+export const patchTemplate = (id: string, template: EditTemplateDTO) =>
+  api.put(`/templates/${id}`, template, {
     headers: { 'Content-Type': 'application/json' },
   });
 

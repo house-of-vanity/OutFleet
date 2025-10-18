@@ -56,12 +56,12 @@ export const updateTemplate = createAsyncThunk(
   async (
     params: {
       id: string;
-      server: EditTemplateDTO;
+      template: EditTemplateDTO;
     },
     { dispatch },
   ) => {
     try {
-      await patchTemplate(params.id, params.server);
+      await patchTemplate(params.id, params.template);
       dispatch(fetchTemplates());
       appNotificator.add({
         message: 'Template updated',
@@ -85,7 +85,7 @@ export const deleteTemplateAction = createAsyncThunk(
     try {
       await deleteTemplate(id);
       appNotificator.add({
-        message: 'Server deleted',
+        message: 'Template deleted',
         type: 'success',
       });
       dispatch(fetchTemplates());
