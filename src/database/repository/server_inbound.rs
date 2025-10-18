@@ -163,4 +163,16 @@ impl ServerInboundRepository {
 
         Ok(inbound.update(&self.db).await?)
     }
+
+    pub async fn find_by_user_id(&self, user_id: Uuid) -> Result<Vec<server_inbound::Model>> {
+        // This would need a join with user_access table
+        // For now, returning empty vec as placeholder
+        // TODO: Implement proper join query
+        Ok(vec![])
+    }
+
+    pub async fn count(&self) -> Result<u64> {
+        let count = ServerInbound::find().count(&self.db).await?;
+        Ok(count)
+    }
 }

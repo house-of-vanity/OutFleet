@@ -65,5 +65,8 @@ rustls = { version = "0.23", features = ["aws-lc-rs"] }  # TLS library with aws-
 ring = "0.17"            # Crypto for ACME
 pem = "3.0"              # PEM format support
 
+# Telegram bot support
+teloxide = { version = "0.13", features = ["macros"] }
+
 [dev-dependencies]
 tempfile = "3.0"

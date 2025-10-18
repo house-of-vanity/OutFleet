@@ -51,8 +51,8 @@ impl DatabaseManager {
     }
 
     /// Get database connection
-    pub fn connection(&self) -> &DatabaseConnection {
-        &self.connection
+    pub fn connection(&self) -> DatabaseConnection {
+        self.connection.clone()
     }
 
     /// Run database migrations

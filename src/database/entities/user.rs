@@ -18,6 +18,9 @@ pub struct Model {
     /// Optional Telegram user ID for bot integration
     pub telegram_id: Option<i64>,
     
+    /// Whether the user is a Telegram admin
+    pub is_telegram_admin: bool,
+    
     /// When the user was registered/created
     pub created_at: DateTimeUtc,
     
@@ -33,6 +36,7 @@ impl ActiveModelBehavior for ActiveModel {
     fn new() -> Self {
         Self {
             id: Set(Uuid::new_v4()),
+            is_telegram_admin: Set(false),
             created_at: Set(chrono::Utc::now()),
             updated_at: Set(chrono::Utc::now()),
             ..ActiveModelTrait::default()
@@ -65,6 +69,8 @@ pub struct CreateUserDto {
     pub name: String,
     pub comment: Option<String>,
     pub telegram_id: Option<i64>,
+    #[serde(default)]
+    pub is_telegram_admin: bool,
 }
 
 /// User update data transfer object
@@ -73,6 +79,7 @@ pub struct UpdateUserDto {
     pub name: Option<String>,
     pub comment: Option<String>,
     pub telegram_id: Option<i64>,
+    pub is_telegram_admin: Option<bool>,
 }
 
 impl From<CreateUserDto> for ActiveModel {
@@ -81,6 +88,7 @@ impl From<CreateUserDto> for ActiveModel {
             name: Set(dto.name),
             comment: Set(dto.comment),
             telegram_id: Set(dto.telegram_id),
+            is_telegram_admin: Set(dto.is_telegram_admin),
             ..Self::new()
         }
     }
@@ -102,6 +110,9 @@ impl Model {
         }
         if dto.telegram_id.is_some() {
             active_model.telegram_id = Set(dto.telegram_id);
+        }
+        if let Some(is_admin) = dto.is_telegram_admin {
+            active_model.is_telegram_admin = Set(is_admin);
         }
         
         active_model

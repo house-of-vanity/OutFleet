@@ -2,6 +2,7 @@ use anyhow::Result;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QueryOrder, PaginatorTrait, QuerySelect};
 use uuid::Uuid;
 
+use sea_orm::{Set, ActiveModelTrait};
 use crate::database::entities::user::{Entity as User, Column, Model, ActiveModel, CreateUserDto, UpdateUserDto};
 
 pub struct UserRepository {
@@ -124,6 +125,48 @@ impl UserRepository {
             .await?;
         Ok(count > 0)
     }
+
+    /// Get all Telegram admins
+    pub async fn get_telegram_admins(&self) -> Result<Vec<Model>> {
+        let admins = User::find()
+            .filter(Column::IsTelegramAdmin.eq(true))
+            .order_by_desc(Column::CreatedAt)
+            .all(&self.db)
+            .await?;
+        Ok(admins)
+    }
+
+    /// Set user as Telegram admin
+    pub async fn set_telegram_admin(&self, user_id: Uuid, is_admin: bool) -> Result<Option<Model>> {
+        if let Some(user) = self.get_by_id(user_id).await? {
+            let mut active_model: ActiveModel = user.into();
+            active_model.is_telegram_admin = Set(is_admin);
+            active_model.updated_at = Set(chrono::Utc::now());
+            
+            let updated = active_model.update(&self.db).await?;
+            Ok(Some(updated))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Check if user is Telegram admin
+    pub async fn is_telegram_admin(&self, user_id: Uuid) -> Result<bool> {
+        if let Some(user) = self.get_by_id(user_id).await? {
+            Ok(user.is_telegram_admin)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Check if telegram_id is admin
+    pub async fn is_telegram_id_admin(&self, telegram_id: i64) -> Result<bool> {
+        if let Some(user) = self.get_by_telegram_id(telegram_id).await? {
+            Ok(user.is_telegram_admin)
+        } else {
+            Ok(false)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -158,6 +201,7 @@ mod tests {
             name: "Test User".to_string(),
             comment: Some("Test comment".to_string()),
             telegram_id: Some(123456789),
+            is_telegram_admin: false,
         };
 
         let created_user = repo.create(create_dto).await.unwrap();

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod config;
@@ -8,7 +9,7 @@ mod web;
 
 use config::{AppConfig, args::parse_args};
 use database::DatabaseManager;
-use services::{TaskScheduler, XrayService};
+use services::{TaskScheduler, XrayService, TelegramService};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -89,10 +90,16 @@ async fn main() -> Result<()> {
     // Start event-driven sync handler with the receiver
     TaskScheduler::start_event_handler(db.clone(), event_receiver).await;
 
+    // Initialize Telegram service if needed
+    let telegram_service = Arc::new(TelegramService::new(db.clone()));
+    if let Err(e) = telegram_service.initialize().await {
+        tracing::warn!("Failed to initialize Telegram service: {}", e);
+    }
+
     // Start web server with task scheduler
     
     tokio::select! {
-        result = web::start_server(db, config.web.clone()) => {
+        result = web::start_server(db, config.web.clone(), Some(telegram_service.clone())) => {
             match result {
                 Err(e) => tracing::error!("Web server error: {}", e),
                 _ => {}

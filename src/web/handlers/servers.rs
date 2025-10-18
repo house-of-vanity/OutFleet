@@ -504,6 +504,7 @@ pub async fn add_user_to_inbound(
             name: user_name.clone(),
             comment: user_data["comment"].as_str().map(|s| s.to_string()),
             telegram_id: user_data["telegram_id"].as_i64(),
+            is_telegram_admin: false,
         };
         
         match user_repo.create(create_user_dto).await {

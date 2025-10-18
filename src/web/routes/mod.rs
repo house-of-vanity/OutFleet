@@ -16,6 +16,7 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/templates", servers::template_routes())
         .nest("/dns-providers", dns_provider_routes())
         .nest("/tasks", task_routes())
+        .nest("/telegram", telegram_routes())
 }
 
 /// User management routes
@@ -46,4 +47,21 @@ fn task_routes() -> Router<AppState> {
     Router::new()
         .route("/", get(handlers::get_tasks_status))
         .route("/:id/trigger", post(handlers::trigger_task))
+}
+
+/// Telegram bot management routes
+fn telegram_routes() -> Router<AppState> {
+    Router::new()
+        .route("/config", get(handlers::get_telegram_config)
+            .post(handlers::create_telegram_config))
+        .route("/config/:id", 
+            get(handlers::get_telegram_config)
+            .put(handlers::update_telegram_config)
+            .delete(handlers::delete_telegram_config))
+        .route("/status", get(handlers::get_telegram_status))
+        .route("/admins", get(handlers::get_telegram_admins))
+        .route("/admins/:user_id", 
+            post(handlers::add_telegram_admin)
+            .delete(handlers::remove_telegram_admin))
+        .route("/send", post(handlers::send_test_message))
 }

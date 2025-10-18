@@ -76,4 +76,13 @@ impl ServerRepository {
         
         Ok(server.get_grpc_endpoint())
     }
+
+    pub async fn get_all(&self) -> Result<Vec<server::Model>> {
+        Ok(Server::find().all(&self.db).await?)
+    }
+
+    pub async fn count(&self) -> Result<u64> {
+        let count = Server::find().count(&self.db).await?;
+        Ok(count)
+    }
 }

@@ -10,6 +10,8 @@ mod m20241201_000007_create_inbound_users_table;
 mod m20250919_000001_update_inbound_users_schema;
 mod m20250922_000001_add_grpc_hostname_to_servers;
 mod m20250923_000001_create_dns_providers_table;
+mod m20250929_000001_create_telegram_config_table;
+mod m20250929_000002_add_telegram_admin_to_users;
 
 pub struct Migrator;
 
@@ -27,6 +29,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20250919_000001_update_inbound_users_schema::Migration),
             Box::new(m20250922_000001_add_grpc_hostname_to_servers::Migration),
             Box::new(m20250923_000001_create_dns_providers_table::Migration),
+            Box::new(m20250929_000001_create_telegram_config_table::Migration),
+            Box::new(m20250929_000002_add_telegram_admin_to_users::Migration),
         ]
     }
 }

@@ -13,9 +13,10 @@ use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::info;
 
+use std::sync::Arc;
 use crate::config::WebConfig;
 use crate::database::DatabaseManager;
-use crate::services::XrayService;
+use crate::services::{XrayService, TelegramService};
 
 pub mod handlers;
 pub mod routes;
@@ -29,16 +30,18 @@ pub struct AppState {
     #[allow(dead_code)]
     pub config: WebConfig,
     pub xray_service: XrayService,
+    pub telegram_service: Option<Arc<TelegramService>>,
 }
 
 /// Start the web server
-pub async fn start_server(db: DatabaseManager, config: WebConfig) -> Result<()> {
+pub async fn start_server(db: DatabaseManager, config: WebConfig, telegram_service: Option<Arc<TelegramService>>) -> Result<()> {
     let xray_service = XrayService::new();
     
     let app_state = AppState {
         db,
         config: config.clone(),
         xray_service,
+        telegram_service,
     };
 
     // Serve static files

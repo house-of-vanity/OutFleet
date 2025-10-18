@@ -6,6 +6,7 @@ pub mod server;
 pub mod server_inbound;
 pub mod user_access;
 pub mod inbound_users;
+pub mod telegram_config;
 
 pub mod prelude {
     pub use super::user::Entity as User;
@@ -16,4 +17,5 @@ pub mod prelude {
     pub use super::server_inbound::Entity as ServerInbound;
     pub use super::user_access::Entity as UserAccess;
     pub use super::inbound_users::Entity as InboundUsers;
+    pub use super::telegram_config::Entity as TelegramConfig;
 }

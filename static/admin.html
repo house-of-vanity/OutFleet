@@ -746,6 +746,166 @@
             letter-spacing: 0.5px;
             margin: 0;
         }
+
+        /* Telegram Bot Styles */
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .status-dot.status-active {
+            background: #34c759;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.status-inactive {
+            background: #8e8e93;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(52, 199, 89, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(52, 199, 89, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(52, 199, 89, 0);
+            }
+        }
+
+        .status-text {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .form-input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .form-input-group .form-input {
+            flex: 1;
+        }
+
+        .form-input-group .button {
+            padding: 8px 12px;
+        }
+
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            padding: 8px 0;
+        }
+
+        .form-checkbox input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin: 0;
+        }
+
+        .admin-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .admin-item:last-child {
+            border-bottom: none;
+        }
+
+        .admin-info {
+            flex: 1;
+        }
+
+        .admin-name {
+            font-weight: 500;
+            color: #1d1d1f;
+            margin: 0 0 4px 0;
+        }
+
+        .admin-telegram-id {
+            font-size: 12px;
+            color: #6e6e73;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+        }
+
+        .user-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .user-item:last-child {
+            border-bottom: none;
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            font-weight: 500;
+            color: #1d1d1f;
+            margin: 0 0 4px 0;
+        }
+
+        .user-telegram-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #6e6e73;
+        }
+
+        .telegram-connected {
+            color: #34c759;
+        }
+
+        .telegram-not-connected {
+            color: #8e8e93;
+        }
+
+        .bot-info {
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin: 12px 0;
+        }
+
+        .bot-info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .bot-info-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .bot-info-label {
+            font-weight: 500;
+            color: #6e6e73;
+        }
+
+        .bot-info-value {
+            color: #1d1d1f;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+        }
     </style>
 </head>
 <body>
@@ -778,7 +938,7 @@
                         <a href="#users" class="nav-link" onclick="showPage('users')">Users</a>
                     </li>
                     <li class="nav-item">
-                        <a href="#tasks" class="nav-link" onclick="showPage('tasks')">Tasks</a>
+                        <a href="#telegram" class="nav-link" onclick="showPage('telegram')">Telegram Bot</a>
                     </li>
                 </ul>
             </nav>
@@ -1005,6 +1165,132 @@
                         </button>
                     </div>
                     <div id="tasksTable" class="loading">Loading...</div>
+                </div>
+            </section>
+
+            <section id="telegram" class="page-section">
+                <div class="page-header">
+                    <h1 class="page-title">Telegram Bot</h1>
+                    <p class="page-subtitle">Configure and manage Telegram bot integration</p>
+                </div>
+
+                <!-- Bot Status Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Bot Status</h2>
+                        <div id="botStatusIndicator" class="status-indicator">
+                            <span class="status-dot status-inactive"></span>
+                            <span class="status-text">Inactive</span>
+                        </div>
+                    </div>
+                    <div id="botStatusInfo" class="loading">Loading...</div>
+                </div>
+
+                <!-- Bot Configuration Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Configuration</h2>
+                        <div class="card-actions">
+                            <button id="saveConfigBtn" class="button button-primary" onclick="saveTelegramConfig()" disabled>
+                                <span class="icon">💾</span>
+                                Save Configuration
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <form id="telegramConfigForm" class="form">
+                            <div class="form-group">
+                                <label for="botToken" class="form-label">Bot Token</label>
+                                <div class="form-input-group">
+                                    <input type="password" id="botToken" class="form-input" placeholder="Enter bot token from @BotFather">
+                                    <button type="button" class="button button-outline" onclick="toggleTokenVisibility()">
+                                        <span class="icon">👁</span>
+                                    </button>
+                                </div>
+                                <div class="form-help">
+                                    Get your bot token from @BotFather on Telegram
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-checkbox">
+                                    <input type="checkbox" id="botActive" onchange="onBotActiveChange()">
+                                    <span class="checkmark"></span>
+                                    Enable Bot
+                                </label>
+                                <div class="form-help">
+                                    When enabled, bot will start polling for messages
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Admins Management Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Bot Administrators</h2>
+                        <button class="button button-outline" onclick="refreshAdmins()">
+                            <span class="icon">🔄</span>
+                            Refresh
+                        </button>
+                    </div>
+                    <div id="adminsTable" class="loading">Loading...</div>
+                </div>
+
+                <!-- Admin Management Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Admin Management</h2>
+                        <div class="form-input-group">
+                            <input type="text" id="userSearchInput" class="form-input" placeholder="Search users by name, ID, or Telegram ID" style="min-width: 300px;">
+                            <button class="button button-outline" onclick="searchUsers()">
+                                <span class="icon">🔍</span>
+                                Search
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">Search for users and manage admin privileges. Only users connected to Telegram can be promoted to admin.</p>
+                        <div id="userSearchResults"></div>
+                    </div>
+                </div>
+
+                <!-- Users List Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">All Users</h2>
+                        <button class="button button-outline" onclick="refreshTelegramUsers()">
+                            <span class="icon">🔄</span>
+                            Refresh
+                        </button>
+                    </div>
+                    <div id="telegramUsersTable" class="loading">Loading...</div>
+                </div>
+
+                <!-- Test Message Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Send Test Message</h2>
+                    </div>
+                    <div class="card-body">
+                        <form id="testMessageForm" class="form">
+                            <div class="form-group">
+                                <label for="testChatId" class="form-label">Chat ID</label>
+                                <input type="number" id="testChatId" class="form-input" placeholder="Enter chat ID">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="testMessage" class="form-label">Message</label>
+                                <textarea id="testMessage" class="form-input" rows="3" placeholder="Enter test message"></textarea>
+                            </div>
+                            
+                            <button type="submit" class="button button-primary">
+                                <span class="icon">📤</span>
+                                Send Message
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </section>
         </main>
@@ -2267,6 +2553,428 @@
                 showAlert('Error triggering task: ' + error.message, 'error');
             }
         }
+
+        // Telegram Bot Functions
+        let currentTelegramConfig = null;
+
+        async function loadTelegram() {
+            await loadBotStatus();
+            await loadTelegramConfig();
+            await loadAdmins();
+            await loadTelegramUsers();
+        }
+
+        async function loadBotStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/telegram/status`);
+                if (response.ok) {
+                    const status = await response.json();
+                    updateBotStatusUI(status);
+                } else {
+                    updateBotStatusUI({ is_running: false, bot_info: null });
+                }
+            } catch (error) {
+                console.error('Error loading bot status:', error);
+                updateBotStatusUI({ is_running: false, bot_info: null });
+            }
+        }
+
+        function updateBotStatusUI(status) {
+            const indicator = document.getElementById('botStatusIndicator');
+            const statusInfo = document.getElementById('botStatusInfo');
+            
+            const dot = indicator.querySelector('.status-dot');
+            const text = indicator.querySelector('.status-text');
+            
+            if (status.is_running) {
+                dot.className = 'status-dot status-active';
+                text.textContent = 'Active';
+                
+                if (status.bot_info) {
+                    statusInfo.innerHTML = `
+                        <div class="bot-info">
+                            <div class="bot-info-item">
+                                <span class="bot-info-label">Username:</span>
+                                <span class="bot-info-value">@${status.bot_info.username}</span>
+                            </div>
+                            <div class="bot-info-item">
+                                <span class="bot-info-label">Name:</span>
+                                <span class="bot-info-value">${status.bot_info.first_name}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                dot.className = 'status-dot status-inactive';
+                text.textContent = 'Inactive';
+                statusInfo.innerHTML = '<p class="empty-state-text">Bot is not running</p>';
+            }
+        }
+
+        async function loadTelegramConfig() {
+            try {
+                const response = await fetch(`${API_BASE}/telegram/config`);
+                if (response.ok) {
+                    currentTelegramConfig = await response.json();
+                    updateConfigForm(currentTelegramConfig);
+                } else if (response.status === 404) {
+                    currentTelegramConfig = null;
+                    updateConfigForm(null);
+                }
+            } catch (error) {
+                console.error('Error loading config:', error);
+                currentTelegramConfig = null;
+                updateConfigForm(null);
+            }
+        }
+
+        function updateConfigForm(config) {
+            const botTokenInput = document.getElementById('botToken');
+            const botActiveCheckbox = document.getElementById('botActive');
+            const saveBtn = document.getElementById('saveConfigBtn');
+            
+            if (config) {
+                botTokenInput.value = '••••••••••••••••'; // Masked token
+                botActiveCheckbox.checked = config.is_active;
+            } else {
+                botTokenInput.value = '';
+                botActiveCheckbox.checked = false;
+            }
+            
+            saveBtn.disabled = false;
+        }
+
+        function toggleTokenVisibility() {
+            const tokenInput = document.getElementById('botToken');
+            const button = event.target.closest('button');
+            
+            if (tokenInput.type === 'password') {
+                tokenInput.type = 'text';
+                button.innerHTML = '<span class="icon">🙈</span>';
+            } else {
+                tokenInput.type = 'password';
+                button.innerHTML = '<span class="icon">👁</span>';
+            }
+        }
+
+        function onBotActiveChange() {
+            const checkbox = document.getElementById('botActive');
+            const tokenInput = document.getElementById('botToken');
+            
+            if (checkbox.checked && !tokenInput.value) {
+                showAlert('Please enter a bot token first', 'warning');
+                checkbox.checked = false;
+            }
+        }
+
+        async function saveTelegramConfig() {
+            const botToken = document.getElementById('botToken').value;
+            const isActive = document.getElementById('botActive').checked;
+            const saveBtn = document.getElementById('saveConfigBtn');
+            
+            if (!botToken || botToken === '••••••••••••••••') {
+                showAlert('Please enter a valid bot token', 'error');
+                return;
+            }
+            
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+            
+            try {
+                const method = currentTelegramConfig ? 'PUT' : 'POST';
+                const url = currentTelegramConfig ? 
+                    `${API_BASE}/telegram/config/${currentTelegramConfig.id}` : 
+                    `${API_BASE}/telegram/config`;
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        bot_token: botToken,
+                        is_active: isActive
+                    })
+                });
+                
+                if (response.ok) {
+                    showAlert('Configuration saved successfully', 'success');
+                    await loadTelegramConfig();
+                    await loadBotStatus();
+                } else {
+                    const error = await response.text();
+                    showAlert('Error saving configuration: ' + error, 'error');
+                }
+            } catch (error) {
+                showAlert('Error saving configuration: ' + error.message, 'error');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<span class="icon">💾</span> Save Configuration';
+            }
+        }
+
+        async function loadAdmins() {
+            try {
+                const response = await fetch(`${API_BASE}/telegram/admins`);
+                if (response.ok) {
+                    const admins = await response.json();
+                    renderAdmins(admins);
+                }
+            } catch (error) {
+                document.getElementById('adminsTable').innerHTML = '<div class="empty-state"><h3>Error loading admins</h3></div>';
+            }
+        }
+
+        function renderAdmins(admins) {
+            const container = document.getElementById('adminsTable');
+            
+            if (admins.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No administrators</h3><p>Add administrators to manage the bot</p></div>';
+                return;
+            }
+            
+            const adminsHtml = admins.map(admin => `
+                <div class="admin-item">
+                    <div class="admin-info">
+                        <h4 class="admin-name">${admin.name}</h4>
+                        <div class="admin-telegram-id">${admin.telegram_id ? `ID: ${admin.telegram_id}` : 'No Telegram ID'}</div>
+                    </div>
+                    <div class="admin-actions">
+                        <button class="button button-outline button-small" onclick="removeAdmin('${admin.user_id}')">
+                            <span class="icon">❌</span>
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+            
+            container.innerHTML = `<div class="admins-list">${adminsHtml}</div>`;
+        }
+
+        async function loadTelegramUsers() {
+            try {
+                const response = await fetch(`${API_BASE}/users`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const users = data.users || data; // Handle both paginated and direct array responses
+                    renderTelegramUsers(users);
+                } else {
+                    const errorText = await response.text();
+                    console.error('Error response:', response.status, errorText);
+                    document.getElementById('telegramUsersTable').innerHTML = 
+                        `<div class="empty-state"><h3>Error loading users</h3><p>Status: ${response.status}</p><p>${errorText}</p></div>`;
+                }
+            } catch (error) {
+                console.error('Network error:', error);
+                document.getElementById('telegramUsersTable').innerHTML = 
+                    `<div class="empty-state"><h3>Error loading users</h3><p>Network error: ${error.message}</p></div>`;
+            }
+        }
+
+        function renderTelegramUsers(users) {
+            const container = document.getElementById('telegramUsersTable');
+            
+            if (users.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No users</h3></div>';
+                return;
+            }
+            
+            const usersHtml = users.map(user => `
+                <div class="user-item">
+                    <div class="user-info">
+                        <h4 class="user-name">${user.name}</h4>
+                        <div class="user-telegram-status">
+                            ${user.telegram_id ? 
+                                `<span class="telegram-connected">📱 Connected (ID: ${user.telegram_id})</span>` : 
+                                '<span class="telegram-not-connected">📱 Not connected</span>'
+                            }
+                            ${user.is_telegram_admin ? '<span class="admin-badge">👑 Admin</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="user-actions">
+                        ${user.telegram_id && !user.is_telegram_admin ? 
+                            `<button class="button button-primary button-small" onclick="makeAdmin('${user.id}')">
+                                <span class="icon">👑</span>
+                                Make Admin
+                            </button>` : ''
+                        }
+                    </div>
+                </div>
+            `).join('');
+            
+            container.innerHTML = `<div class="users-list">${usersHtml}</div>`;
+        }
+
+        async function makeAdmin(userId) {
+            try {
+                const response = await fetch(`${API_BASE}/telegram/admins/${userId}`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    showAlert('User promoted to admin', 'success');
+                    await loadAdmins();
+                    await loadTelegramUsers();
+                } else {
+                    showAlert('Error promoting user to admin', 'error');
+                }
+            } catch (error) {
+                showAlert('Error promoting user: ' + error.message, 'error');
+            }
+        }
+
+        async function removeAdmin(userId) {
+            if (!confirm('Are you sure you want to remove admin privileges?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/telegram/admins/${userId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    showAlert('Admin privileges removed', 'success');
+                    await loadAdmins();
+                    await loadTelegramUsers();
+                } else {
+                    showAlert('Error removing admin privileges', 'error');
+                }
+            } catch (error) {
+                showAlert('Error removing admin: ' + error.message, 'error');
+            }
+        }
+
+        async function refreshAdmins() {
+            await loadAdmins();
+        }
+
+        async function refreshTelegramUsers() {
+            await loadTelegramUsers();
+        }
+
+        async function searchUsers() {
+            const query = document.getElementById('userSearchInput').value.trim();
+            if (!query) {
+                document.getElementById('userSearchResults').innerHTML = '<p class="text-muted">Enter a search term to find users</p>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/users/search?q=${encodeURIComponent(query)}`);
+                if (response.ok) {
+                    const users = await response.json();
+                    renderSearchResults(users);
+                } else {
+                    document.getElementById('userSearchResults').innerHTML = '<div class="empty-state"><h3>Error searching users</h3></div>';
+                }
+            } catch (error) {
+                document.getElementById('userSearchResults').innerHTML = '<div class="empty-state"><h3>Search failed</h3></div>';
+            }
+        }
+
+        function renderSearchResults(users) {
+            const container = document.getElementById('userSearchResults');
+            
+            if (users.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No users found</h3><p>Try a different search term</p></div>';
+                return;
+            }
+
+            const usersHtml = users.map(user => `
+                <div class="user-item" style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+                    <div class="user-info">
+                        <h4 class="user-name">${user.name}</h4>
+                        <div class="user-details" style="margin-top: 8px;">
+                            <p style="margin: 4px 0; font-size: 14px; color: #6b7280;">ID: ${user.id}</p>
+                            ${user.telegram_id ? 
+                                `<p style="margin: 4px 0; font-size: 14px; color: #6b7280;">📱 Telegram ID: ${user.telegram_id}</p>` : 
+                                '<p style="margin: 4px 0; font-size: 14px; color: #ef4444;">📱 Not connected to Telegram</p>'
+                            }
+                            ${user.is_telegram_admin ? 
+                                '<p style="margin: 4px 0; font-size: 14px; color: #059669;">👑 Current Admin</p>' : 
+                                '<p style="margin: 4px 0; font-size: 14px; color: #6b7280;">Regular User</p>'
+                            }
+                            ${user.comment ? `<p style="margin: 4px 0; font-size: 14px; color: #6b7280;">Comment: ${user.comment}</p>` : ''}
+                        </div>
+                    </div>
+                    <div class="user-actions" style="margin-top: 12px;">
+                        ${user.telegram_id && !user.is_telegram_admin ? 
+                            `<button class="button button-primary" onclick="makeAdmin('${user.id}')" style="margin-right: 8px;">
+                                <span class="icon">👑</span>
+                                Make Admin
+                            </button>` : ''
+                        }
+                        ${user.telegram_id && user.is_telegram_admin ? 
+                            `<button class="button button-danger" onclick="removeAdmin('${user.id}')">
+                                <span class="icon">👑</span>
+                                Remove Admin
+                            </button>` : ''
+                        }
+                        ${!user.telegram_id ? 
+                            '<span style="color: #6b7280; font-size: 14px;">User must connect to Telegram first</span>' : ''
+                        }
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = usersHtml;
+        }
+
+        // Add Enter key support for search
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('userSearchInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchUsers();
+                }
+            });
+        });
+
+        // Test message form handler
+        document.getElementById('testMessageForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const chatId = document.getElementById('testChatId').value;
+            const message = document.getElementById('testMessage').value;
+            
+            if (!chatId || !message) {
+                showAlert('Please fill all fields', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/telegram/send`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        chat_id: parseInt(chatId),
+                        text: message
+                    })
+                });
+                
+                if (response.ok) {
+                    showAlert('Message sent successfully', 'success');
+                    document.getElementById('testMessage').value = '';
+                } else {
+                    const error = await response.text();
+                    showAlert('Error sending message: ' + error, 'error');
+                }
+            } catch (error) {
+                showAlert('Error sending message: ' + error.message, 'error');
+            }
+        });
+
+        // Update loadPageData function to include telegram
+        const originalLoadPageData = window.loadPageData;
+        window.loadPageData = function(page) {
+            if (page === 'telegram') {
+                loadTelegram();
+            } else if (originalLoadPageData) {
+                originalLoadPageData(page);
+            }
+        };
 
         // Initialize
         loadPageData('dashboard');
