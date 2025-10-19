@@ -93,21 +93,50 @@ impl TaskScheduler {
             });
         }
         
-        // Run initial sync on startup
-        let start_time = Utc::now();
-        self.update_task_status("xray_sync", TaskState::Running, None);
+        // Run initial sync in background to avoid blocking startup
+        let db_initial = db.clone();
+        let xray_service_initial = xray_service.clone();
+        let task_status_initial = self.task_status.clone();
         
-        match sync_xray_state(db.clone(), xray_service.clone()).await {
-            Ok(_) => {
-                let duration = (Utc::now() - start_time).num_milliseconds() as u64;
-                self.update_task_status("xray_sync", TaskState::Success, Some(duration));
-            },
-            Err(e) => {
-                let duration = (Utc::now() - start_time).num_milliseconds() as u64;
-                self.update_task_status_with_error("xray_sync", e.to_string(), Some(duration));
-                error!("Initial xray sync failed: {}", e);
+        tokio::spawn(async move {
+            info!("Starting initial xray sync in background...");
+            let start_time = Utc::now();
+            
+            // Update status to running
+            {
+                let mut status = task_status_initial.write().unwrap();
+                if let Some(task) = status.get_mut("xray_sync") {
+                    task.status = TaskState::Running;
+                    task.last_run = Some(start_time);
+                    task.total_runs += 1;
+                }
             }
-        }
+            
+            match sync_xray_state(db_initial, xray_service_initial).await {
+                Ok(_) => {
+                    let duration = (Utc::now() - start_time).num_milliseconds() as u64;
+                    let mut status = task_status_initial.write().unwrap();
+                    if let Some(task) = status.get_mut("xray_sync") {
+                        task.status = TaskState::Success;
+                        task.success_count += 1;
+                        task.last_duration_ms = Some(duration);
+                        task.last_error = None;
+                    }
+                    info!("Initial xray sync completed successfully in {}ms", duration);
+                },
+                Err(e) => {
+                    let duration = (Utc::now() - start_time).num_milliseconds() as u64;
+                    let mut status = task_status_initial.write().unwrap();
+                    if let Some(task) = status.get_mut("xray_sync") {
+                        task.status = TaskState::Error;
+                        task.error_count += 1;
+                        task.last_duration_ms = Some(duration);
+                        task.last_error = Some(e.to_string());
+                    }
+                    error!("Initial xray sync failed: {}", e);
+                }
+            }
+        });
         
         // Add synchronization task that runs every minute
         let db_clone = db.clone();

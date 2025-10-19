@@ -2,7 +2,7 @@ use teloxide::{Bot, prelude::*};
 use tokio::sync::oneshot;
 
 use crate::database::DatabaseManager;
-use super::handlers;
+use super::handlers::{self, Command};
 
 /// Run the bot polling loop
 pub async fn run_polling(
@@ -12,14 +12,21 @@ pub async fn run_polling(
 ) {
     tracing::info!("Starting Telegram bot polling...");
 
-    let handler = Update::filter_message()
+    let handler = dptree::entry()
         .branch(
-            dptree::entry()
-                .filter_command::<handlers::Command>()
-                .endpoint(handlers::handle_command)
+            Update::filter_message()
+                .branch(
+                    dptree::entry()
+                        .filter_command::<Command>()
+                        .endpoint(handlers::handle_command)
+                )
+                .branch(
+                    dptree::endpoint(handlers::handle_message)
+                )
         )
         .branch(
-            dptree::endpoint(handlers::handle_message)
+            Update::filter_callback_query()
+                .endpoint(handlers::handle_callback_query)
         );
 
     let mut dispatcher = Dispatcher::builder(bot.clone(), handler)

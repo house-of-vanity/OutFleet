@@ -195,6 +195,7 @@ impl InboundUsersRepository {
                 variable_values: server_inbound_entity.variable_values,
                 server_name: server_entity.name,
                 inbound_tag: server_inbound_entity.tag,
+                template_name: template_entity.name,
             };
             
             Ok(Some(config))

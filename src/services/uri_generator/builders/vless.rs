@@ -113,7 +113,7 @@ impl UriBuilder for VlessUriBuilder {
         
         // Build the URI
         let query_string = utils::build_query_string(&params);
-        let alias = utils::generate_alias(&config.user_name, &config.server_name, &config.inbound_tag);
+        let alias = utils::generate_alias(&config.server_name, &config.template_name);
         
         let uri = if query_string.is_empty() {
             format!(

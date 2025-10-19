@@ -7,6 +7,7 @@ pub mod server_inbound;
 pub mod user_access;
 pub mod inbound_users;
 pub mod telegram_config;
+pub mod user_request;
 
 pub use user::UserRepository;
 pub use certificate::CertificateRepository;
@@ -17,3 +18,4 @@ pub use server_inbound::ServerInboundRepository;
 pub use user_access::UserAccessRepository;
 pub use inbound_users::InboundUsersRepository;
 pub use telegram_config::TelegramConfigRepository;
+pub use user_request::UserRequestRepository;

@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{get, post, put, delete},
 };
 
 use crate::web::{AppState, handlers};
@@ -17,6 +17,7 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/dns-providers", dns_provider_routes())
         .nest("/tasks", task_routes())
         .nest("/telegram", telegram_routes())
+        .nest("/user-requests", user_request_routes())
 }
 
 /// User management routes
@@ -64,4 +65,13 @@ fn telegram_routes() -> Router<AppState> {
             post(handlers::add_telegram_admin)
             .delete(handlers::remove_telegram_admin))
         .route("/send", post(handlers::send_test_message))
+}
+
+/// User request management routes
+fn user_request_routes() -> Router<AppState> {
+    Router::new()
+        .route("/", get(handlers::get_requests))
+        .route("/:id", get(handlers::get_request).delete(handlers::delete_request))
+        .route("/:id/approve", post(handlers::approve_request))
+        .route("/:id/decline", post(handlers::decline_request))
 }

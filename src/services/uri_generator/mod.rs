@@ -37,6 +37,7 @@ pub struct ClientConfigData {
     // Metadata
     pub server_name: String,
     pub inbound_tag: String,
+    pub template_name: String,
 }
 
 /// Generated client configuration
@@ -45,6 +46,7 @@ pub struct ClientConfig {
     pub user_id: Uuid,
     pub server_name: String,
     pub inbound_tag: String,
+    pub template_name: String,
     pub protocol: String,
     pub uri: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -92,6 +94,7 @@ impl UriGeneratorService {
             user_id,
             server_name: config.server_name.clone(),
             inbound_tag: config.inbound_tag.clone(),
+            template_name: config.template_name.clone(),
             protocol: config.protocol.clone(),
             uri,
             qr_code: None, // TODO: Implement QR code generation if needed

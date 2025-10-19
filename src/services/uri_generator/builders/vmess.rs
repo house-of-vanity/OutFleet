@@ -34,7 +34,7 @@ impl VmessUriBuilder {
             "net": transport_type,
             "path": "",
             "port": config.port,
-            "ps": utils::generate_alias(&config.user_name, &config.server_name, &config.inbound_tag),
+            "ps": utils::generate_alias(&config.server_name, &config.template_name),
             "scy": "auto",
             "tls": if security == "none" { "none" } else { &security },
             "type": "none",
@@ -196,7 +196,7 @@ impl VmessUriBuilder {
         
         // Build the URI
         let query_string = utils::build_query_string(&params);
-        let alias = utils::generate_alias(&config.user_name, &config.server_name, &config.inbound_tag);
+        let alias = utils::generate_alias(&config.server_name, &config.template_name);
         
         let uri = if query_string.is_empty() {
             format!(

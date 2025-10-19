@@ -56,7 +56,7 @@ impl UriBuilder for ShadowsocksUriBuilder {
         let encoded_credentials = general_purpose::STANDARD.encode(credentials.as_bytes());
         
         // Generate alias for the URI
-        let alias = utils::generate_alias(&config.user_name, &config.server_name, &config.inbound_tag);
+        let alias = utils::generate_alias(&config.server_name, &config.template_name);
         
         // Build simple SIP002 URI (no plugin parameters for standard Shadowsocks)
         let uri = format!(

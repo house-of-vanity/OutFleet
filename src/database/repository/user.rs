@@ -126,15 +126,6 @@ impl UserRepository {
         Ok(count > 0)
     }
 
-    /// Get all Telegram admins
-    pub async fn get_telegram_admins(&self) -> Result<Vec<Model>> {
-        let admins = User::find()
-            .filter(Column::IsTelegramAdmin.eq(true))
-            .order_by_desc(Column::CreatedAt)
-            .all(&self.db)
-            .await?;
-        Ok(admins)
-    }
 
     /// Set user as Telegram admin
     pub async fn set_telegram_admin(&self, user_id: Uuid, is_admin: bool) -> Result<Option<Model>> {
@@ -166,6 +157,16 @@ impl UserRepository {
         } else {
             Ok(false)
         }
+    }
+
+    /// Get all Telegram admins
+    pub async fn get_telegram_admins(&self) -> Result<Vec<Model>> {
+        let admins = User::find()
+            .filter(Column::IsTelegramAdmin.eq(true))
+            .filter(Column::TelegramId.is_not_null())
+            .all(&self.db)
+            .await?;
+        Ok(admins)
     }
 }
 

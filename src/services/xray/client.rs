@@ -2,6 +2,7 @@ use anyhow::{Result, anyhow};
 use serde_json::Value;
 use xray_core::Client;
 use std::sync::Arc;
+use tokio::time::{timeout, Duration};
 
 // Import submodules from the same directory
 use super::stats::StatsClient;
@@ -17,17 +18,25 @@ pub struct XrayClient {
 
 #[allow(dead_code)]
 impl XrayClient {
-    /// Connect to Xray gRPC server
+    /// Connect to Xray gRPC server with timeout
     pub async fn connect(endpoint: &str) -> Result<Self> {
-        let client = Client::from_url(endpoint).await
-            .map_err(|e| anyhow!("Failed to connect to Xray at {}: {}", endpoint, e))?;
-
-        // Don't clone - we'll use &self.client when calling methods
-
-        Ok(Self {
-            endpoint: endpoint.to_string(),
-            client: Arc::new(client),
-        })
+        // Apply a 5-second timeout to the connection attempt
+        let connect_future = Client::from_url(endpoint);
+        
+        match timeout(Duration::from_secs(5), connect_future).await {
+            Ok(Ok(client)) => {
+                Ok(Self {
+                    endpoint: endpoint.to_string(),
+                    client: Arc::new(client),
+                })
+            },
+            Ok(Err(e)) => {
+                Err(anyhow!("Failed to connect to Xray at {}: {}", endpoint, e))
+            },
+            Err(_) => {
+                Err(anyhow!("Connection to Xray at {} timed out after 5 seconds", endpoint))
+            }
+        }
     }
 
     /// Get server statistics

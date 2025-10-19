@@ -11,6 +11,7 @@ use crate::database::entities::telegram_config::Model as TelegramConfig;
 pub mod bot;
 pub mod handlers;
 pub mod error;
+pub mod localization;
 
 pub use error::TelegramError;
 

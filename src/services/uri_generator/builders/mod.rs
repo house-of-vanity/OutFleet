@@ -119,7 +119,7 @@ pub mod utils {
     }
     
     /// Determine alias for the URI
-    pub fn generate_alias(user_name: &str, server_name: &str, inbound_tag: &str) -> String {
-        format!("{}@{}-{}", user_name, server_name, inbound_tag)
+    pub fn generate_alias(server_name: &str, template_name: &str) -> String {
+        format!("{} - {}", server_name, template_name)
     }
 }

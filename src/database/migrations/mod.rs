@@ -12,6 +12,9 @@ mod m20250922_000001_add_grpc_hostname_to_servers;
 mod m20250923_000001_create_dns_providers_table;
 mod m20250929_000001_create_telegram_config_table;
 mod m20250929_000002_add_telegram_admin_to_users;
+mod m20251018_000001_create_user_requests_table;
+mod m20251018_000002_remove_unique_telegram_id;
+mod m20251018_000003_add_language_to_user_requests;
 
 pub struct Migrator;
 
@@ -31,6 +34,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20250923_000001_create_dns_providers_table::Migration),
             Box::new(m20250929_000001_create_telegram_config_table::Migration),
             Box::new(m20250929_000002_add_telegram_admin_to_users::Migration),
+            Box::new(m20251018_000001_create_user_requests_table::Migration),
+            Box::new(m20251018_000002_remove_unique_telegram_id::Migration),
+            Box::new(m20251018_000003_add_language_to_user_requests::Migration),
         ]
     }
 }

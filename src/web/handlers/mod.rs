@@ -6,6 +6,7 @@ pub mod client_configs;
 pub mod dns_providers;
 pub mod tasks;
 pub mod telegram;
+pub mod user_requests;
 
 pub use users::*;
 pub use servers::*;
@@ -15,3 +16,4 @@ pub use client_configs::*;
 pub use dns_providers::*;
 pub use tasks::*;
 pub use telegram::*;
+pub use user_requests::*;

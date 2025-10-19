@@ -4,8 +4,8 @@ use uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::{Duration, Instant};
-use tracing::error;
+use tokio::time::{Duration, Instant, timeout};
+use tracing::{error, warn};
 
 pub mod client;
 pub mod config;
@@ -78,15 +78,24 @@ impl XrayService {
     }
 
 
-    /// Test connection to Xray server
+    /// Test connection to Xray server with timeout
     pub async fn test_connection(&self, _server_id: Uuid, endpoint: &str) -> Result<bool> {
-        match self.get_or_create_client(endpoint).await {
-            Ok(_client) => {
-                // Instead of getting stats (which might fail), just test connection
-                // If we successfully created the client, connection is working
+        // Apply a 3-second timeout to the entire test operation
+        match timeout(Duration::from_secs(3), self.get_or_create_client(endpoint)).await {
+            Ok(Ok(_client)) => {
+                // Connection successful
                 Ok(true)
             },
-            Err(_) => Ok(false),
+            Ok(Err(e)) => {
+                // Connection failed with error
+                warn!("Failed to connect to Xray at {}: {}", endpoint, e);
+                Ok(false)
+            },
+            Err(_) => {
+                // Operation timed out
+                warn!("Connection test to Xray at {} timed out", endpoint);
+                Ok(false)
+            }
         }
     }
 
