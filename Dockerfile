@@ -1,6 +1,20 @@
 # Build stage
 FROM rust:latest as builder
 
+# Build arguments
+ARG GIT_COMMIT="development"
+ARG GIT_COMMIT_SHORT="dev"
+ARG BUILD_DATE="unknown"
+ARG BRANCH_NAME="unknown"
+ARG CARGO_VERSION="0.1.0"
+
+# Environment variables from build args
+ENV GIT_COMMIT=${GIT_COMMIT}
+ENV GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}
+ENV BUILD_DATE=${BUILD_DATE}
+ENV BRANCH_NAME=${BRANCH_NAME}
+ENV CARGO_VERSION=${CARGO_VERSION}
+
 WORKDIR /app
 
 # Install system dependencies
@@ -22,6 +36,20 @@ RUN cargo build --release
 
 # Runtime stage
 FROM ubuntu:24.04
+
+# Build arguments (needed for runtime stage)
+ARG GIT_COMMIT="development"
+ARG GIT_COMMIT_SHORT="dev"
+ARG BUILD_DATE="unknown"
+ARG BRANCH_NAME="unknown"
+ARG CARGO_VERSION="0.1.0"
+
+# Environment variables from build args
+ENV GIT_COMMIT=${GIT_COMMIT}
+ENV GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}
+ENV BUILD_DATE=${BUILD_DATE}
+ENV BRANCH_NAME=${BRANCH_NAME}
+ENV CARGO_VERSION=${CARGO_VERSION}
 
 WORKDIR /app
 

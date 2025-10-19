@@ -29,11 +29,16 @@ Complete API documentation for OutFleet - a web admin panel for managing xray-co
 
 **Response:**
 - **Content-Type:** `text/plain; charset=utf-8`
-- **Success (200):** Plain text with configuration URIs, one per line
+- **Success (200):** Base64 encoded string containing configuration URIs (one per line when decoded)
 - **Not Found (404):** User doesn't exist
-- **No Content:** Returns comment if no configurations available
+- **No Content:** Returns base64 encoded comment if no configurations available
 
 **Example Response:**
+```
+dm1lc3M6Ly9leUoySWpvaU1pSXNJbkJ6SWpvaVUyVnlkbVZ5TVNJc0ltRmtaQ0k2SWpFeU55NHdMakF1TVM0eElpd2ljRzl5ZENJNklqUTBNeUlzSWxsa0lqb2lNVEl6TkRVMk56Z3RNVEl6TkMwMU5qYzRMVGxoWW1NdE1USXpORFUyTnpnNVlXSmpJaXdpWVdsa0lqb2lNQ0lzSW5Oamj0SWpvaVlYVjBieUlzSW01bGRDSTZJblJqY0NJc0luUjVjR1VpT2lKdWIyNWxJaXdpYUc5emRDSTZJaUlzSW5CaGRHZ2lPaUlpTEhKMGJITWlPaUowYkhNaUxGTnVhU0k2SWlKOQ0Kdmxlc3M6Ly91dWlkQGhvc3RuYW1lOnBvcnQ/ZW5jcnlwdGlvbj1ub25lJnNlY3VyaXR5PXRscyZ0eXBlPXRjcCZoZWFkZXJUeXBlPW5vbmUjU2VydmVyTmFtZQ0Kc3M6Ly9ZV1Z6TFRJMk5TMW5ZMjFBY0dGemMzZHZjbVE2TVRJNExqQXVNQzR5T2pnd09EQT0jU2VydmVyMg0K
+```
+
+**Decoded Example:**
 ```
 vmess://eyJ2IjoiMiIsInBzIjoiU2VydmVyMSIsImFkZCI6IjEyNy4wLjAuMSIsInBvcnQiOiI0NDMiLCJpZCI6IjEyMzQ1Njc4LTEyMzQtNTY3OC05YWJjLTEyMzQ1Njc4OWFiYyIsImFpZCI6IjAiLCJzY3kiOiJhdXRvIiwibmV0IjoidGNwIiwidHlwZSI6Im5vbmUiLCJob3N0IjoiIiwicGF0aCI6IiIsInRscyI6InRscyIsInNuaSI6IiJ9
 vless://uuid@hostname:port?encryption=none&security=tls&type=tcp&headerType=none#ServerName

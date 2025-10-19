@@ -3,6 +3,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use base64::{Engine, engine::general_purpose};
 use uuid::Uuid;
 
 use crate::{
@@ -35,11 +36,12 @@ pub async fn get_user_subscription(
     };
     
     if user_inbounds.is_empty() {
-        let response = "# No configurations available\n".to_string();
+        let response_text = "# No configurations available\n".to_string();
+        let response_base64 = general_purpose::STANDARD.encode(response_text);
         return Ok((
             StatusCode::OK,
             [("content-type", "text/plain; charset=utf-8")],
-            response,
+            response_base64,
         ).into_response());
     }
     
@@ -73,20 +75,24 @@ pub async fn get_user_subscription(
     }
     
     if config_lines.is_empty() {
-        let response = "# No valid configurations available\n".to_string();
+        let response_text = "# No valid configurations available\n".to_string();
+        let response_base64 = general_purpose::STANDARD.encode(response_text);
         return Ok((
             StatusCode::OK,
             [("content-type", "text/plain; charset=utf-8")],
-            response,
+            response_base64,
         ).into_response());
     }
     
     // Join all URIs with newlines
-    let response = config_lines.join("\n") + "\n";
+    let response_text = config_lines.join("\n") + "\n";
+    
+    // Encode the entire response in base64
+    let response_base64 = general_purpose::STANDARD.encode(response_text);
     
     Ok((
         StatusCode::OK,
         [("content-type", "text/plain; charset=utf-8")],
-        response,
+        response_base64,
     ).into_response())
 }
