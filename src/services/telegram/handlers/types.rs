@@ -24,6 +24,7 @@ pub enum Command {
 pub enum CallbackData {
     RequestAccess,
     MyConfigs,
+    SubscriptionLink,
     Support,
     AdminRequests,
     ApproveRequest(String), // request_id
@@ -43,6 +44,7 @@ impl CallbackData {
         match data {
             "request_access" => Some(CallbackData::RequestAccess),
             "my_configs" => Some(CallbackData::MyConfigs),
+            "subscription_link" => Some(CallbackData::SubscriptionLink),
             "support" => Some(CallbackData::Support),
             "admin_requests" => Some(CallbackData::AdminRequests),
             "back" => Some(CallbackData::Back),
@@ -57,12 +59,12 @@ impl CallbackData {
                     Some(CallbackData::ViewRequest(id.to_string()))
                 } else if let Some(server_name) = data.strip_prefix("server_configs:") {
                     Some(CallbackData::ShowServerConfigs(server_name.to_string()))
-                } else if let Some(id) = data.strip_prefix("s:") {
-                    restore_uuid(id).map(CallbackData::SelectServerAccess)
+                } else if let Some(short_id) = data.strip_prefix("s:") {
+                    get_full_request_id(short_id).map(CallbackData::SelectServerAccess)
                 } else if let Some(rest) = data.strip_prefix("t:") {
                     let parts: Vec<&str> = rest.split(':').collect();
                     if parts.len() == 2 {
-                        if let (Some(request_id), Some(server_id)) = (restore_uuid(parts[0]), restore_uuid(parts[1])) {
+                        if let (Some(request_id), Some(server_id)) = (get_full_request_id(parts[0]), get_full_server_id(parts[1])) {
                             Some(CallbackData::ToggleServer(request_id, server_id))
                         } else {
                             None
@@ -70,8 +72,8 @@ impl CallbackData {
                     } else {
                         None
                     }
-                } else if let Some(id) = data.strip_prefix("a:") {
-                    restore_uuid(id).map(CallbackData::ApplyServerAccess)
+                } else if let Some(short_id) = data.strip_prefix("a:") {
+                    get_full_request_id(short_id).map(CallbackData::ApplyServerAccess)
                 } else {
                     None
                 }
@@ -83,8 +85,84 @@ impl CallbackData {
 // Global storage for selected servers per request
 static SELECTED_SERVERS: OnceLock<Arc<Mutex<HashMap<String, Vec<String>>>>> = OnceLock::new();
 
+// Global storage for request ID mappings (short ID -> full UUID)
+static REQUEST_ID_MAP: OnceLock<Arc<Mutex<HashMap<String, String>>>> = OnceLock::new();
+static REQUEST_COUNTER: OnceLock<Arc<Mutex<u32>>> = OnceLock::new();
+
+// Global storage for server ID mappings (short ID -> full UUID)
+static SERVER_ID_MAP: OnceLock<Arc<Mutex<HashMap<String, String>>>> = OnceLock::new();
+static SERVER_COUNTER: OnceLock<Arc<Mutex<u32>>> = OnceLock::new();
+
 pub fn get_selected_servers() -> &'static Arc<Mutex<HashMap<String, Vec<String>>>> {
     SELECTED_SERVERS.get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+}
+
+pub fn get_request_id_map() -> &'static Arc<Mutex<HashMap<String, String>>> {
+    REQUEST_ID_MAP.get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+}
+
+pub fn get_request_counter() -> &'static Arc<Mutex<u32>> {
+    REQUEST_COUNTER.get_or_init(|| Arc::new(Mutex::new(0)))
+}
+
+pub fn get_server_id_map() -> &'static Arc<Mutex<HashMap<String, String>>> {
+    SERVER_ID_MAP.get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+}
+
+pub fn get_server_counter() -> &'static Arc<Mutex<u32>> {
+    SERVER_COUNTER.get_or_init(|| Arc::new(Mutex::new(0)))
+}
+
+/// Generate a short ID for a request UUID and store the mapping
+pub fn generate_short_request_id(request_uuid: &str) -> String {
+    let mut counter = get_request_counter().lock().unwrap();
+    let mut map = get_request_id_map().lock().unwrap();
+    
+    // Check if we already have a short ID for this UUID
+    for (short_id, uuid) in map.iter() {
+        if uuid == request_uuid {
+            return short_id.clone();
+        }
+    }
+    
+    // Generate new short ID
+    *counter += 1;
+    let short_id = format!("r{}", counter);
+    map.insert(short_id.clone(), request_uuid.to_string());
+    
+    short_id
+}
+
+/// Get full UUID from short ID
+pub fn get_full_request_id(short_id: &str) -> Option<String> {
+    let map = get_request_id_map().lock().unwrap();
+    map.get(short_id).cloned()
+}
+
+/// Generate a short ID for a server UUID and store the mapping
+pub fn generate_short_server_id(server_uuid: &str) -> String {
+    let mut counter = get_server_counter().lock().unwrap();
+    let mut map = get_server_id_map().lock().unwrap();
+    
+    // Check if we already have a short ID for this UUID
+    for (short_id, uuid) in map.iter() {
+        if uuid == server_uuid {
+            return short_id.clone();
+        }
+    }
+    
+    // Generate new short ID
+    *counter += 1;
+    let short_id = format!("s{}", counter);
+    map.insert(short_id.clone(), server_uuid.to_string());
+    
+    short_id
+}
+
+/// Get full server UUID from short ID
+pub fn get_full_server_id(short_id: &str) -> Option<String> {
+    let map = get_server_id_map().lock().unwrap();
+    map.get(short_id).cloned()
 }
 
 /// Helper function to get user language from Telegram user data
@@ -97,6 +175,7 @@ pub fn get_main_keyboard(is_admin: bool, lang: Language) -> InlineKeyboardMarkup
     let l10n = LocalizationService::new();
     
     let mut keyboard = vec![
+        vec![InlineKeyboardButton::callback("🔗 Subscription Link", "subscription_link")],
         vec![InlineKeyboardButton::callback(l10n.get(lang.clone(), "my_configs"), "my_configs")],
         vec![InlineKeyboardButton::callback(l10n.get(lang.clone(), "support"), "support")],
     ];

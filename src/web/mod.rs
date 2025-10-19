@@ -49,6 +49,7 @@ pub async fn start_server(db: DatabaseManager, config: WebConfig, telegram_servi
 
     let app = Router::new()
         .route("/health", get(health_check))
+        .route("/sub/:user_id", get(handlers::get_user_subscription))
         .nest("/api", api_routes())
         .nest_service("/", serve_dir)
         .layer(CorsLayer::permissive())

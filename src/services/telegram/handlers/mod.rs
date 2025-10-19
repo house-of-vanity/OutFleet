@@ -105,6 +105,9 @@ pub async fn handle_callback_query(
                 CallbackData::MyConfigs => {
                     handle_my_configs_edit(bot, &q, &db).await?;
                 }
+                CallbackData::SubscriptionLink => {
+                    handle_subscription_link(bot, &q, &db).await?;
+                }
                 CallbackData::Support => {
                     handle_support(bot, &q).await?;
                 }
@@ -124,13 +127,20 @@ pub async fn handle_callback_query(
                     handle_show_server_configs(bot, &q, &encoded_server_name, &db).await?;
                 }
                 CallbackData::SelectServerAccess(request_id) => {
-                    handle_select_server_access(bot, &q, &request_id, &db).await?;
+                    // The request_id is now the full UUID from the mapping
+                    let short_id = types::generate_short_request_id(&request_id);
+                    handle_select_server_access(bot, &q, &short_id, &db).await?;
                 }
                 CallbackData::ToggleServer(request_id, server_id) => {
-                    handle_toggle_server(bot, &q, &request_id, &server_id, &db).await?;
+                    // Both IDs are now full UUIDs from the mapping
+                    let short_request_id = types::generate_short_request_id(&request_id);
+                    let short_server_id = types::generate_short_server_id(&server_id);
+                    handle_toggle_server(bot, &q, &short_request_id, &short_server_id, &db).await?;
                 }
                 CallbackData::ApplyServerAccess(request_id) => {
-                    handle_apply_server_access(bot, &q, &request_id, &db).await?;
+                    // The request_id is now the full UUID from the mapping
+                    let short_id = types::generate_short_request_id(&request_id);
+                    handle_apply_server_access(bot, &q, &short_id, &db).await?;
                 }
                 CallbackData::Back => {
                     // Back to main menu - edit the existing message

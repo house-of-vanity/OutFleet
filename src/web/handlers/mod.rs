@@ -7,6 +7,7 @@ pub mod dns_providers;
 pub mod tasks;
 pub mod telegram;
 pub mod user_requests;
+pub mod subscription;
 
 pub use users::*;
 pub use servers::*;
@@ -17,3 +18,4 @@ pub use dns_providers::*;
 pub use tasks::*;
 pub use telegram::*;
 pub use user_requests::*;
+pub use subscription::*;

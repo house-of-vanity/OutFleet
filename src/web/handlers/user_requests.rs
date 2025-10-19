@@ -10,6 +10,7 @@ use crate::{
     database::entities::user_request::{CreateUserRequestDto, UpdateUserRequestDto, RequestStatus},
     database::repository::UserRequestRepository,
     web::AppState,
+    services::telegram::localization::{LocalizationService, Language},
 };
 
 #[derive(Debug, Deserialize)]
@@ -152,14 +153,51 @@ pub async fn approve_request(
     
     match user_repo.create(user_dto).await {
         Ok(new_user) => {
+            // Get the first admin user ID (for web approvals we don't have a specific admin)
+            // In a real application, this would come from the authenticated session
+            let admin_id = match user_repo.get_first_admin().await {
+                Ok(Some(admin)) => admin.id,
+                _ => {
+                    // Use a default ID if no admin found
+                    Uuid::new_v4()
+                }
+            };
+            
             // Approve the request
-            let approved = match request_repo.approve(id, dto.response_message, new_user.id).await {
+            let approved = match request_repo.approve(id, dto.response_message, admin_id).await {
                 Ok(Some(approved)) => approved,
                 Ok(None) => return Err(StatusCode::NOT_FOUND),
                 Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
             };
             
-            // TODO: Send Telegram notification to user
+            // Send main menu to the user instead of just notification
+            if let Some(telegram_service) = &state.telegram_service {
+                let user_lang = Language::from_telegram_code(Some(&request.get_language()));
+                let l10n = LocalizationService::new();
+                
+                // Check if user is admin (new users are not admins by default)
+                let is_admin = false;
+                
+                // Build main menu keyboard
+                let keyboard = if is_admin {
+                    vec![
+                        vec![teloxide::types::InlineKeyboardButton::callback(l10n.get(user_lang.clone(), "my_configs"), "my_configs")],
+                        vec![teloxide::types::InlineKeyboardButton::callback(l10n.get(user_lang.clone(), "support"), "support")],
+                        vec![teloxide::types::InlineKeyboardButton::callback(l10n.get(user_lang.clone(), "user_requests"), "admin_requests")],
+                    ]
+                } else {
+                    vec![
+                        vec![teloxide::types::InlineKeyboardButton::callback(l10n.get(user_lang.clone(), "my_configs"), "my_configs")],
+                        vec![teloxide::types::InlineKeyboardButton::callback(l10n.get(user_lang.clone(), "support"), "support")],
+                    ]
+                };
+                
+                let keyboard_markup = teloxide::types::InlineKeyboardMarkup::new(keyboard);
+                let message = l10n.format(user_lang, "welcome_back", &[("name", &new_user.name)]);
+                
+                // Send message with keyboard
+                let _ = telegram_service.send_message_with_keyboard(request.telegram_id, message, keyboard_markup).await;
+            }
             
             Ok(Json(UserRequestResponse::from(approved)))
         }
@@ -194,17 +232,32 @@ pub async fn decline_request(
         return Err(StatusCode::BAD_REQUEST);
     }
     
-    // Use a default user ID for declined requests (we can set it to the first admin user)
-    let dummy_user_id = Uuid::new_v4();
+    // Get the first admin user ID (for web declines we don't have a specific admin)
+    let user_repo = crate::database::repository::UserRepository::new(state.db.connection());
+    let admin_id = match user_repo.get_first_admin().await {
+        Ok(Some(admin)) => admin.id,
+        _ => {
+            // Use a default ID if no admin found
+            Uuid::new_v4()
+        }
+    };
     
     // Decline the request
-    let declined = match request_repo.decline(id, dto.response_message, dummy_user_id).await {
+    let declined = match request_repo.decline(id, dto.response_message, admin_id).await {
         Ok(Some(declined)) => declined,
         Ok(None) => return Err(StatusCode::NOT_FOUND),
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
     
-    // TODO: Send Telegram notification to user
+    // Send Telegram notification to user
+    if let Some(telegram_service) = &state.telegram_service {
+        let user_lang = Language::from_telegram_code(Some(&request.get_language()));
+        let l10n = LocalizationService::new();
+        let user_message = l10n.get(user_lang, "request_declined_notification");
+        
+        // Send notification (ignore errors - don't fail the request)
+        let _ = telegram_service.send_message(request.telegram_id, user_message).await;
+    }
     
     Ok(Json(UserRequestResponse::from(declined)))
 }

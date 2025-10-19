@@ -144,6 +144,21 @@ impl TelegramService {
             Err(anyhow::anyhow!("Bot is not running"))
         }
     }
+    
+    /// Send message to user with inline keyboard
+    pub async fn send_message_with_keyboard(&self, chat_id: i64, text: String, keyboard: teloxide::types::InlineKeyboardMarkup) -> Result<()> {
+        let bot_guard = self.bot.read().await;
+        
+        if let Some(bot) = bot_guard.as_ref() {
+            bot.send_message(ChatId(chat_id), text)
+                .parse_mode(teloxide::types::ParseMode::Html)
+                .reply_markup(keyboard)
+                .await?;
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Bot is not running"))
+        }
+    }
 
     /// Send message to all admins
     pub async fn broadcast_to_admins(&self, text: String) -> Result<()> {

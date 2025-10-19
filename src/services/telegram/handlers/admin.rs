@@ -5,7 +5,8 @@ use crate::database::DatabaseManager;
 use crate::database::repository::{UserRepository, UserRequestRepository};
 use crate::database::entities::user_request::RequestStatus;
 use super::super::localization::{LocalizationService, Language};
-use super::types::get_selected_servers;
+use super::types::{get_selected_servers, generate_short_request_id, get_full_request_id, generate_short_server_id, get_full_server_id};
+use super::user::handle_start;
 
 /// Handle admin requests edit (show list of recent requests)
 pub async fn handle_admin_requests_edit(
@@ -168,12 +169,14 @@ pub async fn handle_approve_request(
                 if let teloxide::types::MaybeInaccessibleMessage::Regular(msg) = message {
                     if let Some(text) = msg.text() {
                         let updated_text = format!("{}\n\n✅ <b>APPROVED</b> by {}\n\n📋 Select servers to grant access:", text, admin.name);
-                        let request_id_compact = request_id.to_string().replace("-", "");
-                        let callback_data = format!("s:{}", request_id_compact);
-                        tracing::info!("Callback data length: {} bytes, data: '{}'", callback_data.len(), callback_data);
+                        // Generate short ID for the request
+                        let short_request_id = generate_short_request_id(&request_id.to_string());
+                        let callback_data = format!("s:{}", short_request_id);
+                        tracing::info!("Generated callback data for server selection: '{}' (length: {})", callback_data, callback_data.len());
+                        
                         let server_selection_keyboard = InlineKeyboardMarkup::new(vec![
-                            vec![InlineKeyboardButton::callback("🖥️ Select Servers", callback_data)],
-                            vec![InlineKeyboardButton::callback("📋 All Requests", "back_to_requests")],
+                            vec![InlineKeyboardButton::callback("Select Servers", callback_data)],
+                            vec![InlineKeyboardButton::callback("All Requests", "back_to_requests")],
                         ]);
                         
                         let _ = bot.edit_message_text(msg.chat.id, msg.id, updated_text)
@@ -184,13 +187,32 @@ pub async fn handle_approve_request(
                 }
             }
             
-            // Notify the user using their saved language preference
+            // Send main menu to the user instead of just notification
             let user_lang = Language::from_telegram_code(Some(&request.get_language()));
-            let user_message = l10n.format(user_lang, "request_approved_notification", &[("user_id", &new_user.id.to_string())]);
+            let user_repo_for_user = UserRepository::new(db.connection());
+            let is_admin = false; // New users are not admins by default
             
-            bot.send_message(ChatId(request.telegram_id), user_message)
-                .parse_mode(teloxide::types::ParseMode::Html)
-                .await?;
+            // Create a fake user object for language detection
+            let fake_user = teloxide::types::User {
+                id: teloxide::types::UserId(request.telegram_id as u64),
+                is_bot: false,
+                first_name: request.telegram_first_name.clone().unwrap_or_default(),
+                last_name: request.telegram_last_name.clone(),
+                username: request.telegram_username.clone(),
+                language_code: Some(request.get_language()),
+                is_premium: false,
+                added_to_attachment_menu: false,
+            };
+            
+            // Send main menu using handle_start
+            handle_start(
+                bot.clone(), 
+                ChatId(request.telegram_id), 
+                request.telegram_id, 
+                &fake_user,
+                &user_repo_for_user,
+                db
+            ).await?;
             
             bot.answer_callback_query(q.id.clone())
                 .text(l10n.get(lang, "request_approved_admin"))
@@ -457,7 +479,7 @@ pub async fn handle_broadcast(
 pub async fn handle_select_server_access(
     bot: Bot,
     q: &CallbackQuery,
-    request_id: &str,
+    short_request_id: &str,
     db: &DatabaseManager,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let lang = Language::English; // Default admin language
@@ -481,17 +503,23 @@ pub async fn handle_select_server_access(
         return Ok(());
     }
 
+    // Get the full request ID from the short ID
+    let request_id = get_full_request_id(short_request_id)
+        .ok_or("Invalid request ID")?;
+    
+    tracing::info!("Handling server selection for request: {} (short: {})", request_id, short_request_id);
+    
     // Initialize selected servers for this request (empty initially)
     {
         let mut selected = get_selected_servers().lock().unwrap();
-        selected.insert(request_id.to_string(), Vec::new());
+        selected.insert(request_id.clone(), Vec::new());
     }
 
     // Build keyboard with server toggle buttons
     let mut keyboard_buttons = vec![];
     let selected_servers = {
         let selected = get_selected_servers().lock().unwrap();
-        selected.get(request_id).cloned().unwrap_or_default()
+        selected.get(&request_id).cloned().unwrap_or_default()
     };
 
     for server in &servers {
@@ -502,17 +530,18 @@ pub async fn handle_select_server_access(
             format!("⬜ {}", server.name)
         };
         
+        let short_server_id = generate_short_server_id(&server.id.to_string());
+        let callback_data = format!("t:{}:{}", short_request_id, short_server_id);
+        tracing::debug!("Toggle button callback: '{}' (length: {})", callback_data, callback_data.len());
+        
         keyboard_buttons.push(vec![
-            InlineKeyboardButton::callback(
-                button_text,
-                format!("t:{}:{}", request_id.to_string().replace("-", ""), server.id.to_string().replace("-", ""))
-            )
+            InlineKeyboardButton::callback(button_text, callback_data)
         ]);
     }
     
     // Add apply and back buttons
     keyboard_buttons.push(vec![
-        InlineKeyboardButton::callback("✅ Apply Selected", format!("a:{}", request_id.to_string().replace("-", ""))),
+        InlineKeyboardButton::callback("✅ Apply Selected", format!("a:{}", short_request_id)),
         InlineKeyboardButton::callback("🔙 Back", "back_to_requests"),
     ]);
 
@@ -536,8 +565,8 @@ pub async fn handle_select_server_access(
 pub async fn handle_toggle_server(
     bot: Bot,
     q: &CallbackQuery,
-    request_id: &str,
-    server_id: &str,
+    short_request_id: &str,
+    short_server_id: &str,
     db: &DatabaseManager,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let chat_id = q.message.as_ref().and_then(|m| {
@@ -547,15 +576,23 @@ pub async fn handle_toggle_server(
         }
     }).ok_or("No chat ID")?;
 
+    // Get the full IDs from the short IDs
+    let request_id = get_full_request_id(short_request_id)
+        .ok_or("Invalid request ID")?;
+    let server_id = get_full_server_id(short_server_id)
+        .ok_or("Invalid server ID")?;
+    
+    tracing::info!("Toggling server {} for request {}", server_id, request_id);
+    
     // Toggle server selection
     {
         let mut selected = get_selected_servers().lock().unwrap();
-        let server_list = selected.entry(request_id.to_string()).or_insert_with(Vec::new);
+        let server_list = selected.entry(request_id.clone()).or_insert_with(Vec::new);
         
-        if let Some(pos) = server_list.iter().position(|x| x == server_id) {
+        if let Some(pos) = server_list.iter().position(|x| x == &server_id) {
             server_list.remove(pos);
         } else {
-            server_list.push(server_id.to_string());
+            server_list.push(server_id.clone());
         }
     }
 
@@ -566,7 +603,7 @@ pub async fn handle_toggle_server(
     let mut keyboard_buttons = vec![];
     let selected_servers = {
         let selected = get_selected_servers().lock().unwrap();
-        selected.get(request_id).cloned().unwrap_or_default()
+        selected.get(&request_id).cloned().unwrap_or_default()
     };
 
     for server in &servers {
@@ -577,17 +614,17 @@ pub async fn handle_toggle_server(
             format!("⬜ {}", server.name)
         };
         
+        let short_server_id = generate_short_server_id(&server.id.to_string());
+        let callback_data = format!("t:{}:{}", short_request_id, short_server_id);
+        
         keyboard_buttons.push(vec![
-            InlineKeyboardButton::callback(
-                button_text,
-                format!("t:{}:{}", request_id.to_string().replace("-", ""), server.id.to_string().replace("-", ""))
-            )
+            InlineKeyboardButton::callback(button_text, callback_data)
         ]);
     }
     
     // Add apply and back buttons
     keyboard_buttons.push(vec![
-        InlineKeyboardButton::callback("✅ Apply Selected", format!("a:{}", request_id.to_string().replace("-", ""))),
+        InlineKeyboardButton::callback("✅ Apply Selected", format!("a:{}", short_request_id)),
         InlineKeyboardButton::callback("🔙 Back", "back_to_requests"),
     ]);
 
@@ -613,7 +650,7 @@ pub async fn handle_toggle_server(
 pub async fn handle_apply_server_access(
     bot: Bot,
     q: &CallbackQuery,
-    request_id: &str,
+    short_request_id: &str,
     db: &DatabaseManager,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let lang = Language::English; // Default admin language
@@ -625,10 +662,14 @@ pub async fn handle_apply_server_access(
         }
     }).ok_or("No chat ID")?;
 
+    // Get the full request ID from the short ID
+    let request_id = get_full_request_id(short_request_id)
+        .ok_or("Invalid request ID")?;
+    
     // Get selected servers
     let selected_server_ids = {
         let selected = get_selected_servers().lock().unwrap();
-        selected.get(request_id).cloned().unwrap_or_default()
+        selected.get(&request_id).cloned().unwrap_or_default()
     };
 
     if selected_server_ids.is_empty() {
@@ -645,7 +686,7 @@ pub async fn handle_apply_server_access(
     let inbound_users_repo = crate::database::repository::InboundUsersRepository::new(db.connection().clone());
 
     // Parse request ID and get request
-    let request_uuid = Uuid::parse_str(request_id).map_err(|_| "Invalid request ID")?;
+    let request_uuid = Uuid::parse_str(&request_id).map_err(|_| "Invalid request ID")?;
     let request = request_repo.find_by_id(request_uuid).await
         .unwrap_or(None)
         .ok_or("Request not found")?;
@@ -690,7 +731,7 @@ pub async fn handle_apply_server_access(
     // Clean up selected servers storage
     {
         let mut selected = get_selected_servers().lock().unwrap();
-        selected.remove(request_id);
+        selected.remove(&request_id);
     }
 
     // Update message with success

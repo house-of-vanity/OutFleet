@@ -168,6 +168,16 @@ impl UserRepository {
             .await?;
         Ok(admins)
     }
+    
+    /// Get the first admin user (for system operations)
+    pub async fn get_first_admin(&self) -> Result<Option<Model>> {
+        let admin = User::find()
+            .filter(Column::IsTelegramAdmin.eq(true))
+            .one(&self.db)
+            .await?;
+        
+        Ok(admin)
+    }
 }
 
 #[cfg(test)]

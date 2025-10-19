@@ -667,3 +667,68 @@ async fn notify_admins_new_request(
     
     Ok(())
 }
+
+/// Handle subscription link request
+pub async fn handle_subscription_link(
+    bot: Bot,
+    q: &CallbackQuery,
+    db: &DatabaseManager,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let from = q.from.clone();
+    let telegram_id = from.id.0 as i64;
+    let lang = get_user_language(&from);
+    let l10n = LocalizationService::new();
+
+    // Get user from database
+    let user_repo = UserRepository::new(db.connection());
+    if let Ok(Some(user)) = user_repo.get_by_telegram_id(telegram_id).await {
+        // Generate subscription URL
+        let base_url = std::env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+        let subscription_url = format!("{}/sub/{}", base_url, user.id);
+        
+        let message = match lang {
+            Language::Russian => {
+                format!(
+                    "🔗 <b>Ваша ссылка подписки</b>\n\n\
+                    Скопируйте эту ссылку и добавьте её в ваш VPN-клиент:\n\n\
+                    <code>{}</code>\n\n\
+                    💡 <i>Эта ссылка содержит все ваши конфигурации и автоматически обновляется при изменениях</i>",
+                    subscription_url
+                )
+            },
+            Language::English => {
+                format!(
+                    "🔗 <b>Your Subscription Link</b>\n\n\
+                    Copy this link and add it to your VPN client:\n\n\
+                    <code>{}</code>\n\n\
+                    💡 <i>This link contains all your configurations and updates automatically when changes are made</i>",
+                    subscription_url
+                )
+            }
+        };
+
+        let keyboard = InlineKeyboardMarkup::new(vec![
+            vec![InlineKeyboardButton::callback(l10n.get(lang, "back"), "back")],
+        ]);
+
+        // Edit the existing message
+        if let Some(msg) = &q.message {
+            if let teloxide::types::MaybeInaccessibleMessage::Regular(regular_msg) = msg {
+                let chat_id = regular_msg.chat.id;
+                bot.edit_message_text(chat_id, regular_msg.id, message)
+                    .parse_mode(teloxide::types::ParseMode::Html)
+                    .reply_markup(keyboard)
+                    .await?;
+            }
+        }
+    } else {
+        // User not found - this shouldn't happen for registered users
+        bot.answer_callback_query(q.id.clone())
+            .text("User not found")
+            .await?;
+        return Ok(());
+    }
+
+    bot.answer_callback_query(q.id.clone()).await?;
+    Ok(())
+}

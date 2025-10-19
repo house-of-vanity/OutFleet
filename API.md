@@ -19,6 +19,29 @@ Complete API documentation for OutFleet - a web admin panel for managing xray-co
 }
 ```
 
+### User Subscription
+- `GET /sub/{user_id}` - Get all user configuration links (subscription endpoint)
+
+**Description:** Returns all VPN configuration links for a specific user, one per line. This endpoint is designed for VPN clients that support subscription URLs for automatic configuration updates.
+
+**Path Parameters:**
+- `user_id` (UUID) - The user's unique identifier
+
+**Response:**
+- **Content-Type:** `text/plain; charset=utf-8`
+- **Success (200):** Plain text with configuration URIs, one per line
+- **Not Found (404):** User doesn't exist
+- **No Content:** Returns comment if no configurations available
+
+**Example Response:**
+```
+vmess://eyJ2IjoiMiIsInBzIjoiU2VydmVyMSIsImFkZCI6IjEyNy4wLjAuMSIsInBvcnQiOiI0NDMiLCJpZCI6IjEyMzQ1Njc4LTEyMzQtNTY3OC05YWJjLTEyMzQ1Njc4OWFiYyIsImFpZCI6IjAiLCJzY3kiOiJhdXRvIiwibmV0IjoidGNwIiwidHlwZSI6Im5vbmUiLCJob3N0IjoiIiwicGF0aCI6IiIsInRscyI6InRscyIsInNuaSI6IiJ9
+vless://uuid@hostname:port?encryption=none&security=tls&type=tcp&headerType=none#ServerName
+ss://YWVzLTI1Ni1nY21AcGFzc3dvcmQ6MTI3LjAuMC4xOjgwODA=#Server2
+```
+
+**Usage:** This endpoint is intended for VPN client applications that support subscription URLs. Users can add this URL to their VPN client to automatically receive all their configurations and get updates when configurations change.
+
 ## API Endpoints
 
 All API endpoints are prefixed with `/api`.
@@ -505,3 +528,147 @@ All API endpoints are prefixed with `/api`.
   "details": "Additional error details"
 }
 ```
+
+## Telegram Bot Integration
+
+OutFleet includes a Telegram bot for user management and configuration access.
+
+### User Management Endpoints
+
+#### List User Requests
+- `GET /api/user-requests` - Get all user access requests
+- `GET /api/user-requests?status=pending` - Get pending requests only
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "user_id": "uuid|null", 
+      "telegram_id": 123456789,
+      "telegram_username": "username",
+      "telegram_first_name": "John",
+      "telegram_last_name": "Doe",
+      "full_name": "John Doe",
+      "telegram_link": "@username",
+      "status": "pending|approved|declined",
+      "request_message": "Access request message",
+      "response_message": "Admin response",
+      "processed_by_user_id": "uuid|null",
+      "processed_at": "timestamp|null",
+      "created_at": "timestamp",
+      "updated_at": "timestamp"
+    }
+  ],
+  "total": 50,
+  "page": 1,
+  "per_page": 20
+}
+```
+
+#### Get User Request
+- `GET /api/user-requests/{id}` - Get specific user request
+
+#### Approve User Request
+- `POST /api/user-requests/{id}/approve` - Approve user access request
+
+**Request:**
+```json
+{
+  "response_message": "Welcome! Your access has been approved."
+}
+```
+
+**Response:** Updated user request object
+
+**Side Effects:**
+- Creates a new user account
+- Sends Telegram notification with main menu to the user
+
+#### Decline User Request  
+- `POST /api/user-requests/{id}/decline` - Decline user access request
+
+**Request:**
+```json
+{
+  "response_message": "Sorry, your request has been declined."
+}
+```
+
+**Response:** Updated user request object
+
+**Side Effects:**
+- Sends Telegram notification to the user
+
+#### Delete User Request
+- `DELETE /api/user-requests/{id}` - Delete user request
+
+### Telegram Bot Configuration
+
+#### Get Telegram Status
+- `GET /api/telegram/status` - Get bot status and configuration
+
+**Response:**
+```json
+{
+  "is_running": true,
+  "config": {
+    "id": "uuid",
+    "name": "Bot Name",
+    "bot_token": "masked",
+    "is_active": true,
+    "created_at": "timestamp",
+    "updated_at": "timestamp"
+  }
+}
+```
+
+#### Create/Update Telegram Config
+- `POST /api/telegram/config` - Create new bot configuration
+- `PUT /api/telegram/config/{id}` - Update bot configuration
+
+**Request:**
+```json
+{
+  "name": "OutFleet Bot",
+  "bot_token": "bot_token_from_botfather",
+  "is_active": true
+}
+```
+
+#### Telegram Admin Management
+- `GET /api/telegram/admins` - Get all Telegram admins
+- `POST /api/telegram/admins/{user_id}` - Add user as Telegram admin
+- `DELETE /api/telegram/admins/{user_id}` - Remove user from Telegram admins
+
+### Telegram Bot Features
+
+#### User Flow
+1. **Request Access**: Users send `/start` to the bot and request VPN access
+2. **Admin Approval**: Admins receive notifications and can approve/decline via Telegram or web interface
+3. **Configuration Access**: Approved users get access to:
+   - **🔗 Subscription Link**: Personal subscription URL (`/sub/{user_id}`)
+   - **⚙️ My Configs**: Individual configuration management  
+   - **💬 Support**: Contact support
+
+#### Admin Features
+- **📋 User Requests**: View and manage pending access requests
+- **📊 Statistics**: View system statistics
+- **📢 Broadcast**: Send messages to all users
+- **Approval Workflow**: Approve/decline requests with server selection
+
+#### Subscription Link Integration
+When users click "🔗 Subscription Link" in the Telegram bot, they receive:
+- Personal subscription URL: `{BASE_URL}/sub/{user_id}`
+- Instructions in their preferred language (Russian/English)
+- Automatic updates when configurations change
+
+**Environment Variables:**
+- `BASE_URL` - Base URL for subscription links (default: `http://localhost:8080`)
+
+### Bot Commands
+- `/start` - Start bot and show main menu
+- `/requests` - [Admin] View pending user requests  
+- `/stats` - [Admin] Show system statistics
+- `/broadcast <message>` - [Admin] Send message to all users
