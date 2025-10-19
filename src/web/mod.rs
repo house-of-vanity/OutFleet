@@ -14,7 +14,7 @@ use tower_http::services::ServeDir;
 use tracing::info;
 
 use std::sync::Arc;
-use crate::config::WebConfig;
+use crate::config::{WebConfig, AppConfig};
 use crate::database::DatabaseManager;
 use crate::services::{XrayService, TelegramService};
 
@@ -27,14 +27,13 @@ use routes::api_routes;
 #[derive(Clone)]
 pub struct AppState {
     pub db: DatabaseManager,
-    #[allow(dead_code)]
-    pub config: WebConfig,
+    pub config: AppConfig,
     pub xray_service: XrayService,
     pub telegram_service: Option<Arc<TelegramService>>,
 }
 
 /// Start the web server
-pub async fn start_server(db: DatabaseManager, config: WebConfig, telegram_service: Option<Arc<TelegramService>>) -> Result<()> {
+pub async fn start_server(db: DatabaseManager, config: AppConfig, telegram_service: Option<Arc<TelegramService>>) -> Result<()> {
     let xray_service = XrayService::new();
     
     let app_state = AppState {
@@ -55,7 +54,7 @@ pub async fn start_server(db: DatabaseManager, config: WebConfig, telegram_servi
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
-    let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
+    let addr: SocketAddr = format!("{}:{}", config.web.host, config.web.port).parse()?;
     info!("Starting web server on {}", addr);
 
     let listener = TcpListener::bind(&addr).await?;

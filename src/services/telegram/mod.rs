@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::database::DatabaseManager;
 use crate::database::repository::TelegramConfigRepository;
 use crate::database::entities::telegram_config::Model as TelegramConfig;
+use crate::config::AppConfig;
 
 pub mod bot;
 pub mod handlers;
@@ -18,6 +19,7 @@ pub use error::TelegramError;
 /// Main Telegram service that manages the bot lifecycle
 pub struct TelegramService {
     db: DatabaseManager,
+    app_config: AppConfig,
     bot: Arc<RwLock<Option<Bot>>>,
     config: Arc<RwLock<Option<TelegramConfig>>>,
     shutdown_signal: Arc<RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
@@ -25,9 +27,10 @@ pub struct TelegramService {
 
 impl TelegramService {
     /// Create a new Telegram service
-    pub fn new(db: DatabaseManager) -> Self {
+    pub fn new(db: DatabaseManager, app_config: AppConfig) -> Self {
         Self {
             db,
+            app_config,
             bot: Arc::new(RwLock::new(None)),
             config: Arc::new(RwLock::new(None)),
             shutdown_signal: Arc::new(RwLock::new(None)),
@@ -83,10 +86,11 @@ impl TelegramService {
         *self.shutdown_signal.write().await = Some(tx);
 
         let db = self.db.clone();
+        let app_config = self.app_config.clone();
         
         // Spawn polling task
         tokio::spawn(async move {
-            bot::run_polling(bot, db, rx).await;
+            bot::run_polling(bot, db, app_config, rx).await;
         });
 
         Ok(())

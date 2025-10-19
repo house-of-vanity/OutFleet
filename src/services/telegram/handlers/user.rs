@@ -673,6 +673,7 @@ pub async fn handle_subscription_link(
     bot: Bot,
     q: &CallbackQuery,
     db: &DatabaseManager,
+    app_config: &crate::config::AppConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let from = q.from.clone();
     let telegram_id = from.id.0 as i64;
@@ -683,8 +684,7 @@ pub async fn handle_subscription_link(
     let user_repo = UserRepository::new(db.connection());
     if let Ok(Some(user)) = user_repo.get_by_telegram_id(telegram_id).await {
         // Generate subscription URL
-        let base_url = std::env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
-        let subscription_url = format!("{}/sub/{}", base_url, user.id);
+        let subscription_url = format!("{}/sub/{}", app_config.web.base_url, user.id);
         
         let message = match lang {
             Language::Russian => {

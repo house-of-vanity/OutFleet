@@ -9,6 +9,7 @@ pub use types::*;
 
 use teloxide::{prelude::*, types::CallbackQuery};
 use crate::database::DatabaseManager;
+use crate::config::AppConfig;
 
 /// Handle bot commands
 pub async fn handle_command(
@@ -16,6 +17,7 @@ pub async fn handle_command(
     msg: Message,
     cmd: Command,
     db: DatabaseManager,
+    app_config: AppConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let chat_id = msg.chat.id;
     let from = &msg.from.ok_or("No user info")?;
@@ -78,6 +80,7 @@ pub async fn handle_message(
     bot: Bot,
     msg: Message,
     db: DatabaseManager,
+    _app_config: AppConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let chat_id = msg.chat.id;
     let from = msg.from.as_ref().ok_or("No user info")?;
@@ -95,6 +98,7 @@ pub async fn handle_callback_query(
     bot: Bot,
     q: CallbackQuery,
     db: DatabaseManager,
+    app_config: AppConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if let Some(data) = &q.data {
         if let Some(callback_data) = CallbackData::parse(data) {
@@ -106,7 +110,7 @@ pub async fn handle_callback_query(
                     handle_my_configs_edit(bot, &q, &db).await?;
                 }
                 CallbackData::SubscriptionLink => {
-                    handle_subscription_link(bot, &q, &db).await?;
+                    handle_subscription_link(bot, &q, &db, &app_config).await?;
                 }
                 CallbackData::Support => {
                     handle_support(bot, &q).await?;

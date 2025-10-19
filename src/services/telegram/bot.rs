@@ -2,12 +2,14 @@ use teloxide::{Bot, prelude::*};
 use tokio::sync::oneshot;
 
 use crate::database::DatabaseManager;
+use crate::config::AppConfig;
 use super::handlers::{self, Command};
 
 /// Run the bot polling loop
 pub async fn run_polling(
     bot: Bot,
     db: DatabaseManager,
+    app_config: AppConfig,
     mut shutdown_rx: oneshot::Receiver<()>,
 ) {
     tracing::info!("Starting Telegram bot polling...");
@@ -30,7 +32,7 @@ pub async fn run_polling(
         );
 
     let mut dispatcher = Dispatcher::builder(bot.clone(), handler)
-        .dependencies(dptree::deps![db])
+        .dependencies(dptree::deps![db, app_config])
         .enable_ctrlc_handler()
         .build();
 

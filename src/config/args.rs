@@ -26,6 +26,9 @@ pub struct Args {
     #[arg(long, default_value = "info")]
     pub log_level: Option<String>,
 
+    /// Base URL for the application (used in subscription links and Telegram messages)
+    #[arg(long, env = "BASE_URL")]
+    pub base_url: Option<String>,
 
     /// Validate configuration and exit
     #[arg(long)]

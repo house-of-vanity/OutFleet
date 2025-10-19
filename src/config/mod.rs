@@ -37,6 +37,10 @@ pub struct WebConfig {
     pub jwt_secret: String,
     #[validate(range(min = 3600))]
     pub jwt_expiry: u64,
+    /// Base URL for the application (used in subscription links and Telegram messages)
+    /// Example: "https://vpn.hexor.cy"
+    #[validate(url)]
+    pub base_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
@@ -84,6 +88,7 @@ impl Default for WebConfig {
             cors_origins: vec!["http://localhost:3000".to_string()],
             jwt_secret: "your-secret-key-change-in-production".to_string(),
             jwt_expiry: 86400, // 24 hours
+            base_url: "http://localhost:8080".to_string(),
         }
     }
 }
@@ -173,6 +178,9 @@ impl AppConfig {
         }
         if let Some(log_level) = &args.log_level {
             builder = builder.set_override("logging.level", log_level.as_str())?;
+        }
+        if let Some(base_url) = &args.base_url {
+            builder = builder.set_override("web.base_url", base_url.as_str())?;
         }
 
         let config: AppConfig = builder.build()?.try_deserialize()?;

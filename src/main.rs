@@ -91,7 +91,7 @@ async fn main() -> Result<()> {
     TaskScheduler::start_event_handler(db.clone(), event_receiver).await;
 
     // Initialize Telegram service if needed
-    let telegram_service = Arc::new(TelegramService::new(db.clone()));
+    let telegram_service = Arc::new(TelegramService::new(db.clone(), config.clone()));
     if let Err(e) = telegram_service.initialize().await {
         tracing::warn!("Failed to initialize Telegram service: {}", e);
     }
@@ -99,7 +99,7 @@ async fn main() -> Result<()> {
     // Start web server with task scheduler
     
     tokio::select! {
-        result = web::start_server(db, config.web.clone(), Some(telegram_service.clone())) => {
+        result = web::start_server(db, config.clone(), Some(telegram_service.clone())) => {
             match result {
                 Err(e) => tracing::error!("Web server error: {}", e),
                 _ => {}
