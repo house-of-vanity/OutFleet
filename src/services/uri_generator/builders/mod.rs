@@ -38,7 +38,6 @@ pub trait UriBuilder {
 
 /// Helper functions for URI building
 pub mod utils {
-    use crate::services::uri_generator::error::UriGeneratorError;
     use serde_json::Value;
     use std::collections::HashMap;
 

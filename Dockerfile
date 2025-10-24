@@ -1,5 +1,29 @@
+# Cargo dependencies stage
+FROM rust:1.75-slim as deps
+
+WORKDIR /app
+
+# Install system dependencies needed for building
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy only dependency specification files
+COPY Cargo.toml Cargo.lock ./
+
+# Create dummy source to build dependencies
+RUN mkdir -p src && \
+    echo "fn main() {}" > src/main.rs && \
+    echo "pub fn lib() {}" > src/lib.rs
+
+# Build dependencies - this layer will be cached unless Cargo.toml changes
+RUN cargo build --release && \
+    rm -rf src target/release/deps/xray_admin* target/release/xray-admin*
+
 # Build stage
-FROM rust:latest as builder
+FROM deps as builder
 
 # Build arguments
 ARG GIT_COMMIT="development"
@@ -15,27 +39,15 @@ ENV BUILD_DATE=${BUILD_DATE}
 ENV BRANCH_NAME=${BRANCH_NAME}
 ENV CARGO_VERSION=${CARGO_VERSION}
 
-WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    protobuf-compiler \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy dependency files
-COPY Cargo.toml Cargo.lock ./
-
-# Copy source code
+# Copy actual source code
 COPY src ./src
 COPY static ./static
 
-# Build the application
+# Build the application (dependencies are already compiled)
 RUN cargo build --release
 
-# Runtime stage
-FROM ubuntu:24.04
+# Runtime stage - minimal Debian image
+FROM debian:bookworm-slim as runtime
 
 # Build arguments (needed for runtime stage)
 ARG GIT_COMMIT="development"
@@ -53,11 +65,13 @@ ENV CARGO_VERSION=${CARGO_VERSION}
 
 WORKDIR /app
 
-# Install runtime dependencies
+# Install minimal runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
-    && rm -rf /var/lib/apt/lists/*
+    libprotobuf32 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Copy the binary from builder
 COPY --from=builder /app/target/release/xray-admin /app/xray-admin
@@ -67,6 +81,11 @@ COPY --from=builder /app/static ./static
 
 # Copy config file
 COPY config.docker.toml ./config.toml
+
+# Create non-root user for security
+RUN groupadd -r outfleet && useradd -r -g outfleet -s /bin/false outfleet
+RUN chown -R outfleet:outfleet /app
+USER outfleet
 
 EXPOSE 8081
 

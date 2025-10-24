@@ -13,13 +13,12 @@ use xray_core::{
 };
 
 pub struct UserClient<'a> {
-    endpoint: String,
     client: &'a Client,
 }
 
 impl<'a> UserClient<'a> {
-    pub fn new(endpoint: String, client: &'a Client) -> Self {
-        Self { endpoint, client }
+    pub fn new(_endpoint: String, client: &'a Client) -> Self {
+        Self { client }
     }
 
     /// Add user to inbound (simple version that works)

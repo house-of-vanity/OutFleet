@@ -14,7 +14,6 @@ pub mod error;
 pub mod handlers;
 pub mod localization;
 
-pub use error::TelegramError;
 
 /// Main Telegram service that manages the bot lifecycle
 pub struct TelegramService {

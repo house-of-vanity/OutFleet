@@ -36,7 +36,7 @@ pub struct TasksSummary {
 
 /// Get status of all scheduled tasks
 pub async fn get_tasks_status(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
 ) -> Result<Json<TasksStatusResponse>, StatusCode> {
     // Get task status from the scheduler
     // For now, we'll return a mock response since we need to expose the scheduler

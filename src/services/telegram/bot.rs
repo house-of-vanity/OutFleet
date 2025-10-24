@@ -10,7 +10,7 @@ pub async fn run_polling(
     bot: Bot,
     db: DatabaseManager,
     app_config: AppConfig,
-    mut shutdown_rx: oneshot::Receiver<()>,
+    shutdown_rx: oneshot::Receiver<()>,
 ) {
     tracing::info!("Starting Telegram bot polling...");
 

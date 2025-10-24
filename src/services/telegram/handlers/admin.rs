@@ -249,7 +249,7 @@ pub async fn handle_approve_request(
     };
 
     match user_repo.create(dto).await {
-        Ok(new_user) => {
+        Ok(_new_user) => {
             // Approve the request
             request_repo
                 .approve(
@@ -297,9 +297,9 @@ pub async fn handle_approve_request(
             }
 
             // Send main menu to the user instead of just notification
-            let user_lang = Language::from_telegram_code(Some(&request.get_language()));
+            let _user_lang = Language::from_telegram_code(Some(&request.get_language()));
             let user_repo_for_user = UserRepository::new(db.connection());
-            let is_admin = false; // New users are not admins by default
+            let _is_admin = false; // New users are not admins by default
 
             // Create a fake user object for language detection
             let fake_user = teloxide::types::User {
@@ -633,7 +633,7 @@ pub async fn handle_select_server_access(
     short_request_id: &str,
     db: &DatabaseManager,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let lang = Language::English; // Default admin language
+    let _lang = Language::English; // Default admin language
     let _l10n = LocalizationService::new();
     let chat_id = q
         .message
@@ -815,7 +815,7 @@ pub async fn handle_apply_server_access(
     short_request_id: &str,
     db: &DatabaseManager,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let lang = Language::English; // Default admin language
+    let _lang = Language::English; // Default admin language
     let _l10n = LocalizationService::new();
     let chat_id = q
         .message
@@ -1177,7 +1177,7 @@ pub async fn handle_user_details(
 
     // Build keyboard
     let short_user_id = generate_short_user_id(&user_id.to_string());
-    let mut keyboard_buttons = vec![
+    let keyboard_buttons = vec![
         vec![InlineKeyboardButton::callback(
             l10n.get(lang.clone(), "manage_access"),
             format!("user_manage:{}", short_user_id),

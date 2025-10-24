@@ -289,21 +289,3 @@ pub fn get_new_user_keyboard(lang: Language) -> InlineKeyboardMarkup {
     )]])
 }
 
-/// Restore UUID from compact format (without dashes)
-fn restore_uuid(compact: &str) -> Option<String> {
-    if compact.len() != 32 {
-        return None;
-    }
-
-    // Insert dashes at proper positions for UUID format
-    let uuid_str = format!(
-        "{}-{}-{}-{}-{}",
-        &compact[0..8],
-        &compact[8..12],
-        &compact[12..16],
-        &compact[16..20],
-        &compact[20..32]
-    );
-
-    Some(uuid_str)
-}

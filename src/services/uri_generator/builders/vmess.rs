@@ -1,6 +1,5 @@
 use base64::{engine::general_purpose, Engine as _};
 use serde_json::{json, Value};
-use std::collections::HashMap;
 
 use super::{utils, UriBuilder};
 use crate::services::uri_generator::{error::UriGeneratorError, ClientConfigData};
@@ -144,97 +143,6 @@ impl VmessUriBuilder {
         Ok(format!("vmess://{}", encoded))
     }
 
-    /// Build VMess URI in query parameter format (alternative)
-    fn build_query_param_uri(
-        &self,
-        config: &ClientConfigData,
-    ) -> Result<String, UriGeneratorError> {
-        // Apply variable substitution to stream settings
-        let stream_settings = if !config.variable_values.is_null() {
-            apply_variables(&config.stream_settings, &config.variable_values)?
-        } else {
-            config.stream_settings.clone()
-        };
-
-        let mut params = HashMap::new();
-
-        // VMess uses auto encryption
-        params.insert("encryption".to_string(), "auto".to_string());
-
-        // Determine security layer
-        let has_certificate = config.certificate_domain.is_some();
-        let security = utils::extract_security_type(&stream_settings, has_certificate);
-        if security != "none" {
-            params.insert("security".to_string(), security.clone());
-        }
-
-        // Transport type
-        let transport_type = utils::extract_transport_type(&stream_settings);
-        if transport_type != "tcp" {
-            params.insert("type".to_string(), transport_type.clone());
-        }
-
-        // Transport-specific parameters
-        match transport_type.as_str() {
-            "ws" => {
-                if let Some(path) = utils::extract_ws_path(&stream_settings) {
-                    params.insert("path".to_string(), path);
-                }
-                if let Some(host) = utils::extract_ws_host(&stream_settings) {
-                    params.insert("host".to_string(), host);
-                }
-            }
-            "grpc" => {
-                if let Some(service_name) = utils::extract_grpc_service_name(&stream_settings) {
-                    params.insert("serviceName".to_string(), service_name);
-                }
-                params.insert("mode".to_string(), "gun".to_string());
-            }
-            _ => {}
-        }
-
-        // TLS specific parameters
-        if security != "none" {
-            if let Some(sni) =
-                utils::extract_tls_sni(&stream_settings, config.certificate_domain.as_deref())
-            {
-                params.insert("sni".to_string(), sni);
-            }
-
-            if let Some(fp) = stream_settings
-                .get("tlsSettings")
-                .and_then(|tls| tls.get("fingerprint"))
-                .and_then(|fp| fp.as_str())
-            {
-                params.insert("fp".to_string(), fp.to_string());
-            }
-        }
-
-        // Build the URI
-        let query_string = utils::build_query_string(&params);
-        let alias = utils::generate_alias(&config.server_name, &config.template_name);
-
-        let uri = if query_string.is_empty() {
-            format!(
-                "vmess://{}@{}:{}#{}",
-                config.xray_user_id,
-                config.hostname,
-                config.port,
-                utils::url_encode(&alias)
-            )
-        } else {
-            format!(
-                "vmess://{}@{}:{}?{}#{}",
-                config.xray_user_id,
-                config.hostname,
-                config.port,
-                query_string,
-                utils::url_encode(&alias)
-            )
-        };
-
-        Ok(uri)
-    }
 }
 
 impl UriBuilder for VmessUriBuilder {

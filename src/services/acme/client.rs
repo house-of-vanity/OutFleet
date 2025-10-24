@@ -11,7 +11,6 @@ use crate::services::acme::{AcmeError, CloudflareClient};
 pub struct AcmeClient {
     cloudflare: CloudflareClient,
     account: Account,
-    directory_url: String,
 }
 
 impl AcmeClient {
@@ -43,7 +42,6 @@ impl AcmeClient {
         Ok(Self {
             cloudflare,
             account,
-            directory_url,
         })
     }
 
@@ -85,7 +83,7 @@ impl AcmeClient {
             }
 
             // Get challenge value and record ID first
-            let (challenge_value, record_id) = {
+            let (_challenge_value, record_id) = {
                 // Find DNS challenge
                 let mut challenge = authz
                     .challenge(ChallengeType::Dns01)

@@ -6,7 +6,6 @@ pub mod telegram;
 pub mod uri_generator;
 pub mod xray;
 
-pub use certificates::CertificateService;
 pub use tasks::TaskScheduler;
 pub use telegram::TelegramService;
 pub use uri_generator::UriGeneratorService;

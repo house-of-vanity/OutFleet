@@ -1,5 +1,4 @@
 use base64::{engine::general_purpose, Engine as _};
-use serde_json::Value;
 
 use super::{utils, UriBuilder};
 use crate::services::uri_generator::{error::UriGeneratorError, ClientConfigData};

@@ -9,7 +9,6 @@ use xray_core::{
     common::protocol::User,
     common::serial::TypedMessage,
     core::InboundHandlerConfig,
-    prost_types,
     proxy::shadowsocks::ServerConfig as ShadowsocksServerConfig,
     proxy::shadowsocks::{Account as ShadowsocksAccount, CipherType},
     proxy::trojan::Account as TrojanAccount,
@@ -24,23 +23,6 @@ use xray_core::{
     Client,
 };
 
-/// Convert PEM format to DER (x509) format
-fn pem_to_der(pem_data: &str) -> Result<Vec<u8>> {
-    // Remove PEM headers and whitespace, then decode base64
-    let base64_data: String = pem_data
-        .lines()
-        .filter(|line| !line.starts_with("-----") && !line.trim().is_empty())
-        .map(|line| line.trim())
-        .collect::<Vec<&str>>()
-        .join("");
-
-    tracing::debug!("PEM to DER conversion: {} bytes", base64_data.len());
-
-    use base64::{engine::general_purpose, Engine as _};
-    general_purpose::STANDARD
-        .decode(&base64_data)
-        .map_err(|e| anyhow!("Failed to decode base64 PEM data: {}", e))
-}
 
 pub struct InboundClient<'a> {
     endpoint: String,
@@ -364,7 +346,7 @@ impl<'a> InboundClient<'a> {
     /// Restart Xray with new configuration
     pub async fn restart_with_config(
         &self,
-        config: &crate::services::xray::XrayConfig,
+        _config: &crate::services::xray::XrayConfig,
     ) -> Result<()> {
         tracing::debug!(
             "Restarting Xray server at {} with new config",

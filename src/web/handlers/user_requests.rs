@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    database::entities::user_request::{CreateUserRequestDto, RequestStatus, UpdateUserRequestDto},
     database::repository::UserRequestRepository,
     services::telegram::localization::{Language, LocalizationService},
     web::AppState,

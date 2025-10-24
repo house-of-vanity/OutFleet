@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{timeout, Duration, Instant};
-use tracing::{error, warn};
+use tracing::warn;
 use uuid::Uuid;
 
 pub mod client;
@@ -307,7 +307,7 @@ impl XrayService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::Duration;
     use uuid::Uuid;
 
     #[tokio::test]
@@ -378,7 +378,7 @@ mod tests {
     fn test_cached_connection_expiration() {
         // Create a mock client for testing purposes
         // In real tests, we would use a mock framework
-        let now = Instant::now();
+        let _now = Instant::now();
 
         // Test the expiration logic directly without creating an actual client
         let short_ttl = Duration::from_nanos(1);

@@ -638,7 +638,7 @@ pub async fn remove_user_from_inbound(
 
     // Get inbound tag
     let template_repo = InboundTemplateRepository::new(app_state.db.connection().clone());
-    let template = match template_repo.find_by_id(inbound.template_id).await {
+    let _template = match template_repo.find_by_id(inbound.template_id).await {
         Ok(Some(template)) => template,
         Ok(None) => return Err(StatusCode::NOT_FOUND),
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),

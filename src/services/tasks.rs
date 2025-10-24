@@ -1,4 +1,3 @@
-use crate::database::entities::inbound_users;
 use crate::database::repository::{
     CertificateRepository, InboundTemplateRepository, InboundUsersRepository,
     ServerInboundRepository, ServerRepository, UserRepository,
@@ -8,7 +7,6 @@ use crate::services::events::SyncEvent;
 use crate::services::XrayService;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use sea_orm::{ColumnTrait, EntityTrait, JoinType, QueryFilter, RelationTrait};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;

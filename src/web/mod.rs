@@ -7,7 +7,7 @@ use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::info;
 
-use crate::config::{AppConfig, WebConfig};
+use crate::config::AppConfig;
 use crate::database::DatabaseManager;
 use crate::services::{TelegramService, XrayService};
 use std::sync::Arc;

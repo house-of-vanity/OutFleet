@@ -107,7 +107,8 @@ impl UriGeneratorService {
         })
     }
 
-    /// Apply variable substitution to JSON values
+    /// Apply variable substitution to JSON values (for testing)
+    #[cfg(test)]
     pub fn apply_variable_substitution(
         &self,
         template: &Value,
@@ -132,6 +133,7 @@ impl UriGeneratorService {
         serde_json::from_str(&result)
             .map_err(|e| UriGeneratorError::VariableSubstitution(e.to_string()))
     }
+
 }
 
 impl Default for UriGeneratorService {

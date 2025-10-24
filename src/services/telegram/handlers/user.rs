@@ -6,7 +6,7 @@ use teloxide::{
 
 use super::super::localization::{Language, LocalizationService};
 use super::types::{get_main_keyboard, get_new_user_keyboard, get_user_language};
-use crate::database::entities::user_request::{CreateUserRequestDto, RequestStatus};
+use crate::database::entities::user_request::CreateUserRequestDto;
 use crate::database::repository::{UserRepository, UserRequestRepository};
 use crate::database::DatabaseManager;
 

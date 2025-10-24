@@ -101,7 +101,7 @@ pub async fn get_user_configs(
 /// Get all URIs for all users of a specific inbound
 pub async fn get_inbound_configs(
     State(app_state): State<AppState>,
-    Path((server_id, inbound_id)): Path<(Uuid, Uuid)>,
+    Path((_server_id, inbound_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<Vec<ClientConfigResponse>>, StatusCode> {
     let repo = InboundUsersRepository::new(app_state.db.connection().clone());
     let uri_service = UriGeneratorService::new();

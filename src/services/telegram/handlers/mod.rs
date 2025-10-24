@@ -17,7 +17,7 @@ pub async fn handle_command(
     msg: Message,
     cmd: Command,
     db: DatabaseManager,
-    app_config: AppConfig,
+    _app_config: AppConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let chat_id = msg.chat.id;
     let from = &msg.from.ok_or("No user info")?;

@@ -76,7 +76,6 @@ impl ServerInboundRepository {
         &self,
         server_id: Uuid,
     ) -> Result<Vec<server_inbound::ServerInboundResponse>> {
-        use crate::database::entities::{certificate, inbound_template};
 
         let inbounds = ServerInbound::find()
             .filter(server_inbound::Column::ServerId.eq(server_id))
@@ -193,7 +192,7 @@ impl ServerInboundRepository {
         Ok(inbound.update(&self.db).await?)
     }
 
-    pub async fn find_by_user_id(&self, user_id: Uuid) -> Result<Vec<server_inbound::Model>> {
+    pub async fn find_by_user_id(&self, _user_id: Uuid) -> Result<Vec<server_inbound::Model>> {
         // This would need a join with user_access table
         // For now, returning empty vec as placeholder
         // TODO: Implement proper join query
