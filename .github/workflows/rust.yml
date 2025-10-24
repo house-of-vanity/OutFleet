@@ -6,61 +6,9 @@ on:
       - 'RUST'
 
 jobs:
-  test-build:
-    runs-on: self-hosted
-    outputs:
-      rust-version: ${{ steps.vars.outputs.rust_version }}
-      sha-short: ${{ steps.vars.outputs.sha_short }}
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Rust toolchain cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-      
-      - name: Extract version from Cargo.toml
-        id: extract_version
-        run: |
-          VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-          echo "cargo_version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Extracted version: $VERSION"
-      
-      - name: Set outputs
-        id: vars
-        run: |
-          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "rust_version=rs-${{ steps.extract_version.outputs.cargo_version }}" >> $GITHUB_OUTPUT
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Test build (linux/amd64 only)
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          platforms: linux/amd64
-          push: false
-          cache-from: |
-            type=registry,ref=ultradesu/outfleet:deps-cache
-            type=registry,ref=ultradesu/outfleet:builder-cache
-          build-args: |
-            GIT_COMMIT=${{ github.sha }}
-            GIT_COMMIT_SHORT=${{ steps.vars.outputs.sha_short }}
-            BUILD_DATE=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
-            BRANCH_NAME=${GITHUB_REF#refs/heads/}
-            CARGO_VERSION=${{ steps.extract_version.outputs.cargo_version }}
   docker:
-    runs-on: ubuntu-latest
-    needs: self-hosted
+    runs-on: self-hosted
+    needs: test-build
     steps:
       - uses: actions/checkout@v4
       
