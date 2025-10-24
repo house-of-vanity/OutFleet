@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub enum SyncEvent {
-    InboundChanged(Uuid), // server_id
+    InboundChanged(Uuid),    // server_id
     UserAccessChanged(Uuid), // server_id
 }
 

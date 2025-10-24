@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{Set, ActiveModelTrait};
+use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -7,16 +7,16 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    
+
     /// Telegram bot token (encrypted in production)
     pub bot_token: String,
-    
+
     /// Whether the bot is active
     pub is_active: bool,
-    
+
     /// When the config was created
     pub created_at: DateTimeUtc,
-    
+
     /// Last time config was updated
     pub updated_at: DateTimeUtc,
 }
@@ -40,7 +40,9 @@ impl ActiveModelBehavior for ActiveModel {
         mut self,
         _db: &'life0 C,
         insert: bool,
-    ) -> core::pin::Pin<Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>>
+    ) -> core::pin::Pin<
+        Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>,
+    >
     where
         'life0: 'async_trait,
         C: 'async_trait + ConnectionTrait,
@@ -52,15 +54,15 @@ impl ActiveModelBehavior for ActiveModel {
             } else if self.id.is_not_set() {
                 self.id = Set(Uuid::new_v4());
             }
-            
+
             if self.created_at.is_not_set() {
                 self.created_at = Set(chrono::Utc::now());
             }
-            
+
             if self.updated_at.is_not_set() {
                 self.updated_at = Set(chrono::Utc::now());
             }
-            
+
             Ok(self)
         })
     }

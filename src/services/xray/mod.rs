@@ -1,16 +1,16 @@
 use anyhow::Result;
 use serde_json::Value;
-use uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::{Duration, Instant, timeout};
+use tokio::time::{timeout, Duration, Instant};
 use tracing::{error, warn};
+use uuid::Uuid;
 
 pub mod client;
 pub mod config;
-pub mod stats;
 pub mod inbounds;
+pub mod stats;
 pub mod users;
 
 pub use client::XrayClient;
@@ -30,7 +30,7 @@ impl CachedConnection {
             created_at: Instant::now(),
         }
     }
-    
+
     fn is_expired(&self, ttl: Duration) -> bool {
         self.created_at.elapsed() > ttl
     }
@@ -51,7 +51,7 @@ impl XrayService {
             connection_ttl: Duration::from_secs(300), // 5 minutes TTL
         }
     }
-    
+
     /// Get or create cached client for endpoint
     async fn get_or_create_client(&self, endpoint: &str) -> Result<XrayClient> {
         // Check cache first
@@ -63,20 +63,19 @@ impl XrayService {
                 }
             }
         }
-        
+
         // Create new connection
         let client = XrayClient::connect(endpoint).await?;
         let cached_connection = CachedConnection::new(client.clone());
-        
+
         // Update cache
         {
             let mut cache = self.connection_cache.write().await;
             cache.insert(endpoint.to_string(), cached_connection);
         }
-        
+
         Ok(client)
     }
-
 
     /// Test connection to Xray server with timeout
     pub async fn test_connection(&self, _server_id: Uuid, endpoint: &str) -> Result<bool> {
@@ -85,12 +84,12 @@ impl XrayService {
             Ok(Ok(_client)) => {
                 // Connection successful
                 Ok(true)
-            },
+            }
             Ok(Err(e)) => {
                 // Connection failed with error
                 warn!("Failed to connect to Xray at {}: {}", endpoint, e);
                 Ok(false)
-            },
+            }
             Err(_) => {
                 // Operation timed out
                 warn!("Connection test to Xray at {} timed out", endpoint);
@@ -100,7 +99,12 @@ impl XrayService {
     }
 
     /// Apply full configuration to Xray server
-    pub async fn apply_config(&self, _server_id: Uuid, endpoint: &str, config: &XrayConfig) -> Result<()> {
+    pub async fn apply_config(
+        &self,
+        _server_id: Uuid,
+        endpoint: &str,
+        config: &XrayConfig,
+    ) -> Result<()> {
         let client = self.get_or_create_client(endpoint).await?;
         client.restart_with_config(config).await
     }
@@ -124,8 +128,9 @@ impl XrayService {
             "settings": base_settings,
             "streamSettings": stream_settings
         });
-        
-        self.add_inbound(_server_id, endpoint, &inbound_config).await
+
+        self.add_inbound(_server_id, endpoint, &inbound_config)
+            .await
     }
 
     /// Create inbound from template with TLS certificate
@@ -149,26 +154,51 @@ impl XrayService {
             "settings": base_settings,
             "streamSettings": stream_settings
         });
-        
-        self.add_inbound_with_certificate(_server_id, endpoint, &inbound_config, cert_pem, key_pem).await
+
+        self.add_inbound_with_certificate(_server_id, endpoint, &inbound_config, cert_pem, key_pem)
+            .await
     }
 
     /// Add inbound to running Xray instance
-    pub async fn add_inbound(&self, _server_id: Uuid, endpoint: &str, inbound: &Value) -> Result<()> {
+    pub async fn add_inbound(
+        &self,
+        _server_id: Uuid,
+        endpoint: &str,
+        inbound: &Value,
+    ) -> Result<()> {
         let client = self.get_or_create_client(endpoint).await?;
         client.add_inbound(inbound).await
     }
 
     /// Add inbound with certificate to running Xray instance
-    pub async fn add_inbound_with_certificate(&self, _server_id: Uuid, endpoint: &str, inbound: &Value, cert_pem: Option<&str>, key_pem: Option<&str>) -> Result<()> {
+    pub async fn add_inbound_with_certificate(
+        &self,
+        _server_id: Uuid,
+        endpoint: &str,
+        inbound: &Value,
+        cert_pem: Option<&str>,
+        key_pem: Option<&str>,
+    ) -> Result<()> {
         let client = self.get_or_create_client(endpoint).await?;
-        client.add_inbound_with_certificate(inbound, cert_pem, key_pem).await
+        client
+            .add_inbound_with_certificate(inbound, cert_pem, key_pem)
+            .await
     }
 
     /// Add inbound with users and certificate to running Xray instance
-    pub async fn add_inbound_with_users_and_certificate(&self, _server_id: Uuid, endpoint: &str, inbound: &Value, users: &[Value], cert_pem: Option<&str>, key_pem: Option<&str>) -> Result<()> {
+    pub async fn add_inbound_with_users_and_certificate(
+        &self,
+        _server_id: Uuid,
+        endpoint: &str,
+        inbound: &Value,
+        users: &[Value],
+        cert_pem: Option<&str>,
+        key_pem: Option<&str>,
+    ) -> Result<()> {
         let client = self.get_or_create_client(endpoint).await?;
-        client.add_inbound_with_users_and_certificate(inbound, users, cert_pem, key_pem).await
+        client
+            .add_inbound_with_users_and_certificate(inbound, users, cert_pem, key_pem)
+            .await
     }
 
     /// Remove inbound from running Xray instance
@@ -178,15 +208,20 @@ impl XrayService {
     }
 
     /// Add user to inbound by recreating the inbound with updated user list
-    pub async fn add_user(&self, _server_id: Uuid, endpoint: &str, inbound_tag: &str, user: &Value) -> Result<()> {
-        
+    pub async fn add_user(
+        &self,
+        _server_id: Uuid,
+        endpoint: &str,
+        inbound_tag: &str,
+        user: &Value,
+    ) -> Result<()> {
         // TODO: Implement inbound recreation approach:
         // 1. Get current inbound configuration from database
-        // 2. Get existing users from database  
+        // 2. Get existing users from database
         // 3. Remove old inbound from xray
         // 4. Create new inbound with all users (existing + new)
         // For now, return error to indicate this needs to be implemented
-        
+
         Err(anyhow::anyhow!("User addition requires inbound recreation - not yet implemented. Use web interface to recreate inbound with users."))
     }
 
@@ -204,7 +239,6 @@ impl XrayService {
         cert_pem: Option<&str>,
         key_pem: Option<&str>,
     ) -> Result<()> {
-        
         // Build inbound configuration with users
         let mut inbound_config = serde_json::json!({
             "tag": tag,
@@ -213,37 +247,53 @@ impl XrayService {
             "settings": base_settings,
             "streamSettings": stream_settings
         });
-        
+
         // Add users to settings based on protocol
         if !users.is_empty() {
             let mut settings = inbound_config["settings"].clone();
             match protocol {
                 "vless" | "vmess" => {
                     settings["clients"] = serde_json::Value::Array(users.to_vec());
-                },
+                }
                 "trojan" => {
                     settings["clients"] = serde_json::Value::Array(users.to_vec());
-                },
+                }
                 "shadowsocks" => {
                     // For shadowsocks, users are handled differently
                     if let Some(user) = users.first() {
                         settings["password"] = user["password"].clone();
                     }
-                },
+                }
                 _ => {
-                    return Err(anyhow::anyhow!("Unsupported protocol for users: {}", protocol));
+                    return Err(anyhow::anyhow!(
+                        "Unsupported protocol for users: {}",
+                        protocol
+                    ));
                 }
             }
             inbound_config["settings"] = settings;
         }
-        
-        
+
         // Use the new method with users support
-        self.add_inbound_with_users_and_certificate(_server_id, endpoint, &inbound_config, users, cert_pem, key_pem).await
+        self.add_inbound_with_users_and_certificate(
+            _server_id,
+            endpoint,
+            &inbound_config,
+            users,
+            cert_pem,
+            key_pem,
+        )
+        .await
     }
 
     /// Remove user from inbound
-    pub async fn remove_user(&self, _server_id: Uuid, endpoint: &str, inbound_tag: &str, email: &str) -> Result<()> {
+    pub async fn remove_user(
+        &self,
+        _server_id: Uuid,
+        endpoint: &str,
+        inbound_tag: &str,
+        email: &str,
+    ) -> Result<()> {
         let client = self.get_or_create_client(endpoint).await?;
         client.remove_user(inbound_tag, email).await
     }
@@ -255,11 +305,17 @@ impl XrayService {
     }
 
     /// Query specific statistics
-    pub async fn query_stats(&self, _server_id: Uuid, endpoint: &str, pattern: &str, reset: bool) -> Result<Value> {
+    pub async fn query_stats(
+        &self,
+        _server_id: Uuid,
+        endpoint: &str,
+        pattern: &str,
+        reset: bool,
+    ) -> Result<Value> {
         let client = self.get_or_create_client(endpoint).await?;
         client.query_stats(pattern, reset).await
     }
-    
+
     /// Sync entire server with batch operations using single client
     pub async fn sync_server_inbounds_optimized(
         &self,
@@ -269,21 +325,25 @@ impl XrayService {
     ) -> Result<()> {
         // Get single client for all operations
         let client = self.get_or_create_client(endpoint).await?;
-        
+
         // Perform all operations with the same client
         for (tag, desired) in desired_inbounds {
             // Always try to remove inbound first (ignore errors if it doesn't exist)
             let _ = client.remove_inbound(tag).await;
-            
+
             // Create inbound with users
-            let users_json: Vec<Value> = desired.users.iter().map(|user| {
-                serde_json::json!({
-                    "id": user.id,
-                    "email": user.email,
-                    "level": user.level
+            let users_json: Vec<Value> = desired
+                .users
+                .iter()
+                .map(|user| {
+                    serde_json::json!({
+                        "id": user.id,
+                        "email": user.email,
+                        "level": user.level
+                    })
                 })
-            }).collect();
-            
+                .collect();
+
             // Build inbound config
             let inbound_config = serde_json::json!({
                 "tag": desired.tag,
@@ -292,20 +352,23 @@ impl XrayService {
                 "settings": desired.settings,
                 "streamSettings": desired.stream_settings
             });
-            
-            match client.add_inbound_with_users_and_certificate(
-                &inbound_config,
-                &users_json,
-                desired.cert_pem.as_deref(),
-                desired.key_pem.as_deref(),
-            ).await {
+
+            match client
+                .add_inbound_with_users_and_certificate(
+                    &inbound_config,
+                    &users_json,
+                    desired.cert_pem.as_deref(),
+                    desired.key_pem.as_deref(),
+                )
+                .await
+            {
                 Err(e) => {
                     error!("Failed to create inbound {}: {}", tag, e);
                 }
                 _ => {}
             }
         }
-        
+
         Ok(())
     }
 }

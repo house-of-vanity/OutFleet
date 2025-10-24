@@ -11,23 +11,29 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(TelegramConfig::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(TelegramConfig::Id)
-                        .uuid()
-                        .not_null()
-                        .primary_key())
-                    .col(ColumnDef::new(TelegramConfig::BotToken)
-                        .string()
-                        .not_null())
-                    .col(ColumnDef::new(TelegramConfig::IsActive)
-                        .boolean()
-                        .not_null()
-                        .default(false))
-                    .col(ColumnDef::new(TelegramConfig::CreatedAt)
-                        .timestamp_with_time_zone()
-                        .not_null())
-                    .col(ColumnDef::new(TelegramConfig::UpdatedAt)
-                        .timestamp_with_time_zone()
-                        .not_null())
+                    .col(
+                        ColumnDef::new(TelegramConfig::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(TelegramConfig::BotToken).string().not_null())
+                    .col(
+                        ColumnDef::new(TelegramConfig::IsActive)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(TelegramConfig::CreatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(TelegramConfig::UpdatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null(),
+                    )
                     .to_owned(),
             )
             .await

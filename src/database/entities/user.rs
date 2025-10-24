@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{Set, ActiveModelTrait};
+use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -7,23 +7,23 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    
+
     /// User display name
     pub name: String,
-    
+
     /// Optional comment/description about the user
     #[sea_orm(column_type = "Text")]
     pub comment: Option<String>,
-    
+
     /// Optional Telegram user ID for bot integration
     pub telegram_id: Option<i64>,
-    
+
     /// Whether the user is a Telegram admin
     pub is_telegram_admin: bool,
-    
+
     /// When the user was registered/created
     pub created_at: DateTimeUtc,
-    
+
     /// Last time user record was updated
     pub updated_at: DateTimeUtc,
 }
@@ -48,7 +48,9 @@ impl ActiveModelBehavior for ActiveModel {
         mut self,
         _db: &'life0 C,
         insert: bool,
-    ) -> core::pin::Pin<Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>>
+    ) -> core::pin::Pin<
+        Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>,
+    >
     where
         'life0: 'async_trait,
         C: 'async_trait + ConnectionTrait,
@@ -98,7 +100,7 @@ impl Model {
     /// Update this model with data from UpdateUserDto
     pub fn apply_update(self, dto: UpdateUserDto) -> ActiveModel {
         let mut active_model: ActiveModel = self.into();
-        
+
         if let Some(name) = dto.name {
             active_model.name = Set(name);
         }
@@ -114,7 +116,7 @@ impl Model {
         if let Some(is_admin) = dto.is_telegram_admin {
             active_model.is_telegram_admin = Set(is_admin);
         }
-        
+
         active_model
     }
 
@@ -147,9 +149,12 @@ mod tests {
         };
 
         let active_model: ActiveModel = dto.into();
-        
+
         assert_eq!(active_model.name.unwrap(), "Test User");
-        assert_eq!(active_model.comment.unwrap(), Some("Test comment".to_string()));
+        assert_eq!(
+            active_model.comment.unwrap(),
+            Some("Test comment".to_string())
+        );
         assert_eq!(active_model.telegram_id.unwrap(), Some(123456789));
     }
 

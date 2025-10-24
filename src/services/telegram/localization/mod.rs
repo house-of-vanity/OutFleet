@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Language {
@@ -37,20 +37,20 @@ pub struct Translations {
     pub back: String,
     pub approve: String,
     pub decline: String,
-    
+
     // Request handling
     pub already_pending: String,
     pub already_approved: String,
     pub already_declined: String,
     pub request_submitted: String,
     pub request_submit_failed: String,
-    
+
     // Approval/Decline messages
     pub request_approved: String,
     pub request_declined: String,
     pub request_approved_notification: String,
     pub request_declined_notification: String,
-    
+
     // Admin messages
     pub new_access_request: String,
     pub no_pending_requests: String,
@@ -59,22 +59,22 @@ pub struct Translations {
     pub request_approved_admin: String,
     pub request_declined_admin: String,
     pub user_creation_failed: String,
-    
+
     // Support
     pub support_info: String,
-    
+
     // Stats
     pub statistics: String,
     pub total_users: String,
     pub total_servers: String,
     pub total_inbounds: String,
     pub pending_requests: String,
-    
+
     // Broadcast
     pub broadcast_complete: String,
     pub sent: String,
     pub failed: String,
-    
+
     // Configs
     pub configs_coming_soon: String,
     pub your_configurations: String,
@@ -83,7 +83,28 @@ pub struct Translations {
     pub config_copied: String,
     pub config_not_found: String,
     pub server_configs_title: String,
-    
+
+    // Subscription
+    pub subscription_link: String,
+
+    // User Management
+    pub manage_users: String,
+    pub user_list: String,
+    pub user_details: String,
+    pub manage_access: String,
+    pub remove_access: String,
+    pub grant_access: String,
+    pub user_info: String,
+    pub no_users_found: String,
+    pub page_info: String,
+    pub next_page: String,
+    pub prev_page: String,
+    pub back_to_users: String,
+    pub back_to_menu: String,
+    pub access_updated: String,
+    pub access_removed: String,
+    pub access_granted: String,
+
     // Errors
     pub error_occurred: String,
     pub admin_not_found: String,
@@ -98,20 +119,22 @@ pub struct LocalizationService {
 impl LocalizationService {
     pub fn new() -> Self {
         let mut translations = HashMap::new();
-        
+
         // Load English translations
         translations.insert(Language::English, Self::load_english());
-        
+
         // Load Russian translations
         translations.insert(Language::Russian, Self::load_russian());
-        
+
         Self { translations }
     }
 
     pub fn get(&self, lang: Language, key: &str) -> String {
-        let translations = self.translations.get(&lang)
+        let translations = self
+            .translations
+            .get(&lang)
             .unwrap_or_else(|| self.translations.get(&Language::English).unwrap());
-        
+
         match key {
             "welcome_new_user" => translations.welcome_new_user.clone(),
             "welcome_back" => translations.welcome_back.clone(),
@@ -157,6 +180,23 @@ impl LocalizationService {
             "config_copied" => translations.config_copied.clone(),
             "config_not_found" => translations.config_not_found.clone(),
             "server_configs_title" => translations.server_configs_title.clone(),
+            "subscription_link" => translations.subscription_link.clone(),
+            "manage_users" => translations.manage_users.clone(),
+            "user_list" => translations.user_list.clone(),
+            "user_details" => translations.user_details.clone(),
+            "manage_access" => translations.manage_access.clone(),
+            "remove_access" => translations.remove_access.clone(),
+            "grant_access" => translations.grant_access.clone(),
+            "user_info" => translations.user_info.clone(),
+            "no_users_found" => translations.no_users_found.clone(),
+            "page_info" => translations.page_info.clone(),
+            "next_page" => translations.next_page.clone(),
+            "prev_page" => translations.prev_page.clone(),
+            "back_to_users" => translations.back_to_users.clone(),
+            "back_to_menu" => translations.back_to_menu.clone(),
+            "access_updated" => translations.access_updated.clone(),
+            "access_removed" => translations.access_removed.clone(),
+            "access_granted" => translations.access_granted.clone(),
             "error_occurred" => translations.error_occurred.clone(),
             "admin_not_found" => translations.admin_not_found.clone(),
             "request_not_found" => translations.request_not_found.clone(),
@@ -183,7 +223,7 @@ impl LocalizationService {
             get_vpn_access: "🚀 Get VPN Access".to_string(),
             my_configs: "📋 My Configs".to_string(),
             support: "💬 Support".to_string(),
-            user_requests: "👥 User Requests".to_string(),
+            user_requests: "❔ User Requests".to_string(),
             back: "🔙 Back".to_string(),
             approve: "✅ Approve".to_string(),
             decline: "❌ Decline".to_string(),
@@ -201,13 +241,13 @@ impl LocalizationService {
             
             new_access_request: "🔔 <b>New Access Request</b>\n\n👤 Name: {first_name} {last_name}\n🆔 Username: @{username}\n\nUse /requests to review".to_string(),
             no_pending_requests: "No pending access requests".to_string(),
-            access_request_details: "📋 <b>Access Request</b>\n\n👤 Name: {full_name}\n🆔 Telegram: {telegram_link}\n📅 Requested: {date}\n\nMessage: {message}".to_string(),
+            access_request_details: "❔ <b>Access Request</b>\n\n👤 Name: {full_name}\n🆔 Telegram: {telegram_link}\n📅 Requested: {date}\n\nMessage: {message}".to_string(),
             unauthorized: "❌ You are not authorized to use this command".to_string(),
             request_approved_admin: "✅ Request approved".to_string(),
             request_declined_admin: "❌ Request declined".to_string(),
             user_creation_failed: "❌ Failed to create user account: {error}\n\nPlease try again or contact technical support.".to_string(),
             
-            support_info: "💬 <b>Support Information</b>\n\nIf you need help, please contact the administrators.\n\nYou can also check the documentation at:\nhttps://github.com/OutFleet".to_string(),
+            support_info: "💬 <b>Support Information</b>\n\n📱 <b>How to connect:</b>\n1. Download v2raytun app for Android or iOS from:\n   https://v2raytun.com/\n\n2. Add your subscription link from \"🔗 Subscription Link\" menu\n   OR\n   Add individual server links from \"📋 My Configs\"\n\n3. Connect and enjoy secure VPN!\n\n❓ If you need help, please contact the administrators.".to_string(),
             
             statistics: "📊 <b>Statistics</b>\n\n👥 Total Users: {users}\n🖥️ Total Servers: {servers}\n📡 Total Inbounds: {inbounds}\n⏳ Pending Requests: {pending}".to_string(),
             total_users: "👥 Total Users".to_string(),
@@ -227,6 +267,25 @@ impl LocalizationService {
             config_not_found: "❌ Configuration not found".to_string(),
             server_configs_title: "🖥️ <b>{server_name}</b> - Connection Links".to_string(),
             
+            subscription_link: "🔗 Subscription Link".to_string(),
+            
+            manage_users: "👥 Manage Users".to_string(),
+            user_list: "👥 User List".to_string(),
+            user_details: "👤 User Details".to_string(),
+            manage_access: "🔧 Manage Access".to_string(),
+            remove_access: "❌ Remove Access".to_string(),
+            grant_access: "✅ Grant Access".to_string(),
+            user_info: "User Information".to_string(),
+            no_users_found: "No users found".to_string(),
+            page_info: "Page {page} of {total}".to_string(),
+            next_page: "Next →".to_string(),
+            prev_page: "← Previous".to_string(),
+            back_to_users: "👥 Back to Users".to_string(),
+            back_to_menu: "🏠 Main Menu".to_string(),
+            access_updated: "✅ Access updated successfully".to_string(),
+            access_removed: "❌ Access removed successfully".to_string(),
+            access_granted: "✅ Access granted successfully".to_string(),
+            
             error_occurred: "An error occurred".to_string(),
             admin_not_found: "Admin not found".to_string(),
             request_not_found: "Request not found".to_string(),
@@ -244,7 +303,7 @@ impl LocalizationService {
             get_vpn_access: "🚀 Получить доступ к VPN".to_string(),
             my_configs: "📋 Мои конфигурации".to_string(),
             support: "💬 Поддержка".to_string(),
-            user_requests: "👥 Запросы пользователей".to_string(),
+            user_requests: "❔ Запросы пользователей".to_string(),
             back: "🔙 Назад".to_string(),
             approve: "✅ Одобрить".to_string(),
             decline: "❌ Отклонить".to_string(),
@@ -262,13 +321,13 @@ impl LocalizationService {
             
             new_access_request: "🔔 <b>Новый запрос на доступ</b>\n\n👤 Имя: {first_name} {last_name}\n🆔 Имя пользователя: @{username}\n\nИспользуйте /requests для просмотра".to_string(),
             no_pending_requests: "Нет ожидающих запросов на доступ".to_string(),
-            access_request_details: "📋 <b>Запрос на доступ</b>\n\n👤 Имя: {full_name}\n🆔 Telegram: {telegram_link}\n📅 Запрошено: {date}\n\nСообщение: {message}".to_string(),
+            access_request_details: "❔ <b>Запрос на доступ</b>\n\n👤 Имя: {full_name}\n🆔 Telegram: {telegram_link}\n📅 Запрошено: {date}\n\nСообщение: {message}".to_string(),
             unauthorized: "❌ У вас нет прав для использования этой команды".to_string(),
             request_approved_admin: "✅ Запрос одобрен".to_string(),
             request_declined_admin: "❌ Запрос отклонен".to_string(),
             user_creation_failed: "❌ Не удалось создать аккаунт пользователя: {error}\n\nПожалуйста, попробуйте еще раз или обратитесь в техническую поддержку.".to_string(),
             
-            support_info: "💬 <b>Информация о поддержке</b>\n\nЕсли вам нужна помощь, пожалуйста, свяжитесь с администраторами.\n\nВы также можете ознакомиться с документацией по адресу:\nhttps://github.com/OutFleet".to_string(),
+            support_info: "💬 <b>Информация о поддержке</b>\n\n📱 <b>Как подключиться:</b>\n1. Скачайте приложение v2raytun для Android или iOS с сайта:\n   https://v2raytun.com/\n\n2. Добавьте ссылку подписки из меню \"🔗 Ссылка подписки\"\n   ИЛИ\n   Добавьте отдельные ссылки серверов из \"📋 Мои конфигурации\"\n\n3. Подключайтесь и наслаждайтесь безопасным VPN!\n\n❓ Если нужна помощь, обратитесь к администраторам.".to_string(),
             
             statistics: "📊 <b>Статистика</b>\n\n👥 Всего пользователей: {users}\n🖥️ Всего серверов: {servers}\n📡 Всего входящих подключений: {inbounds}\n⏳ Ожидающих запросов: {pending}".to_string(),
             total_users: "👥 Всего пользователей".to_string(),
@@ -287,6 +346,25 @@ impl LocalizationService {
             config_copied: "✅ Конфигурация скопирована в буфер обмена".to_string(),
             config_not_found: "❌ Конфигурация не найдена".to_string(),
             server_configs_title: "🖥️ <b>{server_name}</b> - Ссылки для подключения".to_string(),
+            
+            subscription_link: "🔗 Ссылка подписки".to_string(),
+            
+            manage_users: "👥 Управление пользователями".to_string(),
+            user_list: "👥 Список пользователей".to_string(),
+            user_details: "👤 Данные пользователя".to_string(),
+            manage_access: "🔧 Управление доступом".to_string(),
+            remove_access: "❌ Убрать доступ".to_string(),
+            grant_access: "✅ Предоставить доступ".to_string(),
+            user_info: "Информация о пользователе".to_string(),
+            no_users_found: "Пользователи не найдены".to_string(),
+            page_info: "Страница {page} из {total}".to_string(),
+            next_page: "Далее →".to_string(),
+            prev_page: "← Назад".to_string(),
+            back_to_users: "👥 К пользователям".to_string(),
+            back_to_menu: "🏠 Главное меню".to_string(),
+            access_updated: "✅ Доступ успешно обновлен".to_string(),
+            access_removed: "❌ Доступ успешно убран".to_string(),
+            access_granted: "✅ Доступ успешно предоставлен".to_string(),
             
             error_occurred: "Произошла ошибка".to_string(),
             admin_not_found: "Администратор не найден".to_string(),

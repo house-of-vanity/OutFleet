@@ -74,10 +74,11 @@ impl CloudflareClient {
 
     async fn get_zone_id(&self, domain: &str) -> Result<String, AcmeError> {
         info!("Getting Cloudflare zone ID for domain: {}", domain);
-        
+
         let url = format!("https://api.cloudflare.com/client/v4/zones?name={}", domain);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&url)
             .header("Authorization", format!("Bearer {}", self.api_token))
             .header("Content-Type", "application/json")
@@ -87,7 +88,10 @@ impl CloudflareClient {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(AcmeError::CloudflareApi(format!("HTTP {}: {}", status, body)));
+            return Err(AcmeError::CloudflareApi(format!(
+                "HTTP {}: {}",
+                status, body
+            )));
         }
 
         let zones: CloudflareZonesResponse = response.json().await?;
@@ -95,17 +99,28 @@ impl CloudflareClient {
         if !zones.success {
             let errors = zones.errors.unwrap_or_default();
             let error_messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
-            return Err(AcmeError::CloudflareApi(format!("API errors: {}", error_messages.join(", "))));
+            return Err(AcmeError::CloudflareApi(format!(
+                "API errors: {}",
+                error_messages.join(", ")
+            )));
         }
 
-        zones.result
+        zones
+            .result
             .into_iter()
             .find(|z| z.name == domain)
             .map(|z| z.id)
-            .ok_or_else(|| AcmeError::CloudflareApi(format!("Zone not found for domain: {}", domain)))
+            .ok_or_else(|| {
+                AcmeError::CloudflareApi(format!("Zone not found for domain: {}", domain))
+            })
     }
 
-    pub async fn create_txt_record(&self, domain: &str, record_name: &str, content: &str) -> Result<String, AcmeError> {
+    pub async fn create_txt_record(
+        &self,
+        domain: &str,
+        record_name: &str,
+        content: &str,
+    ) -> Result<String, AcmeError> {
         let zone_id = self.get_zone_id(domain).await?;
         info!("Creating TXT record {} in zone {}", record_name, domain);
 
@@ -116,9 +131,13 @@ impl CloudflareClient {
             ttl: 120, // 2 minutes TTL for quick propagation
         };
 
-        let url = format!("https://api.cloudflare.com/client/v4/zones/{}/dns_records", zone_id);
+        let url = format!(
+            "https://api.cloudflare.com/client/v4/zones/{}/dns_records",
+            zone_id
+        );
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.api_token))
             .header("Content-Type", "application/json")
@@ -129,7 +148,10 @@ impl CloudflareClient {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(AcmeError::CloudflareApi(format!("Failed to create DNS record ({}): {}", status, body)));
+            return Err(AcmeError::CloudflareApi(format!(
+                "Failed to create DNS record ({}): {}",
+                status, body
+            )));
         }
 
         let result: CreateDnsRecordResponse = response.json().await?;
@@ -137,7 +159,10 @@ impl CloudflareClient {
         if !result.success {
             let errors = result.errors.unwrap_or_default();
             let error_messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
-            return Err(AcmeError::CloudflareApi(format!("Failed to create record: {}", error_messages.join(", "))));
+            return Err(AcmeError::CloudflareApi(format!(
+                "Failed to create record: {}",
+                error_messages.join(", ")
+            )));
         }
 
         debug!("Created DNS record with ID: {}", result.result.id);
@@ -148,9 +173,13 @@ impl CloudflareClient {
         let zone_id = self.get_zone_id(domain).await?;
         info!("Deleting TXT record {} from zone {}", record_id, domain);
 
-        let url = format!("https://api.cloudflare.com/client/v4/zones/{}/dns_records/{}", zone_id, record_id);
+        let url = format!(
+            "https://api.cloudflare.com/client/v4/zones/{}/dns_records/{}",
+            zone_id, record_id
+        );
 
-        let response = self.client
+        let response = self
+            .client
             .delete(&url)
             .header("Authorization", format!("Bearer {}", self.api_token))
             .send()
@@ -159,22 +188,30 @@ impl CloudflareClient {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(AcmeError::CloudflareApi(format!("Failed to delete DNS record ({}): {}", status, body)));
+            return Err(AcmeError::CloudflareApi(format!(
+                "Failed to delete DNS record ({}): {}",
+                status, body
+            )));
         }
 
         info!("Successfully deleted DNS record");
         Ok(())
     }
 
-    pub async fn find_txt_record(&self, domain: &str, record_name: &str) -> Result<Option<String>, AcmeError> {
+    pub async fn find_txt_record(
+        &self,
+        domain: &str,
+        record_name: &str,
+    ) -> Result<Option<String>, AcmeError> {
         let zone_id = self.get_zone_id(domain).await?;
-        
+
         let url = format!(
             "https://api.cloudflare.com/client/v4/zones/{}/dns_records?type=TXT&name={}",
             zone_id, record_name
         );
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("Authorization", format!("Bearer {}", self.api_token))
             .send()
@@ -183,7 +220,10 @@ impl CloudflareClient {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(AcmeError::CloudflareApi(format!("Failed to list DNS records ({}): {}", status, body)));
+            return Err(AcmeError::CloudflareApi(format!(
+                "Failed to list DNS records ({}): {}",
+                status, body
+            )));
         }
 
         let records: CloudflareDnsRecordsResponse = response.json().await?;
@@ -191,7 +231,10 @@ impl CloudflareClient {
         if !records.success {
             let errors = records.errors.unwrap_or_default();
             let error_messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
-            return Err(AcmeError::CloudflareApi(format!("Failed to list records: {}", error_messages.join(", "))));
+            return Err(AcmeError::CloudflareApi(format!(
+                "Failed to list records: {}",
+                error_messages.join(", ")
+            )));
         }
 
         Ok(records.result.first().map(|r| r.id.clone()))

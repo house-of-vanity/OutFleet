@@ -1,9 +1,11 @@
 use anyhow::Result;
-use sea_orm::{DatabaseConnection, EntityTrait, ActiveModelTrait, Set, QueryFilter, ColumnTrait, QueryOrder};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
+};
 use uuid::Uuid;
 
 use crate::database::entities::telegram_config::{
-    self, Model, CreateTelegramConfigDto, UpdateTelegramConfigDto
+    self, CreateTelegramConfigDto, Model, UpdateTelegramConfigDto,
 };
 
 pub struct TelegramConfigRepository {
@@ -88,7 +90,7 @@ impl TelegramConfigRepository {
     /// Activate a configuration (deactivates all others)
     pub async fn activate(&self, id: Uuid) -> Result<Option<Model>> {
         self.deactivate_all_except(id).await?;
-        
+
         let model = telegram_config::Entity::find_by_id(id)
             .one(&self.db)
             .await?;

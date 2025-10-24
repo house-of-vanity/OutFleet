@@ -1,14 +1,16 @@
 use axum::{
-    extract::{State, Path, Json},
+    extract::{Json, Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::database::entities::telegram_config::{
+    CreateTelegramConfigDto, UpdateTelegramConfigDto,
+};
+use crate::database::repository::{TelegramConfigRepository, UserRepository};
 use crate::web::AppState;
-use crate::database::repository::{UserRepository, TelegramConfigRepository};
-use crate::database::entities::telegram_config::{CreateTelegramConfigDto, UpdateTelegramConfigDto};
 
 /// Response for Telegram config
 #[derive(Debug, Serialize)]
@@ -27,11 +29,9 @@ pub struct BotInfo {
 }
 
 /// Get current Telegram configuration
-pub async fn get_telegram_config(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn get_telegram_config(State(state): State<AppState>) -> impl IntoResponse {
     let repo = TelegramConfigRepository::new(state.db.connection());
-    
+
     match repo.get_latest().await {
         Ok(Some(config)) => {
             let mut response = TelegramConfigResponse {
@@ -51,9 +51,7 @@ pub async fn get_telegram_config(
 
             Json(response).into_response()
         }
-        Ok(None) => {
-            StatusCode::NOT_FOUND.into_response()
-        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => {
             tracing::error!("Failed to get telegram config: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -67,7 +65,7 @@ pub async fn create_telegram_config(
     Json(dto): Json<CreateTelegramConfigDto>,
 ) -> impl IntoResponse {
     let repo = TelegramConfigRepository::new(state.db.connection());
-    
+
     match repo.create(dto).await {
         Ok(config) => {
             // Initialize telegram service with new config if active
@@ -76,7 +74,7 @@ pub async fn create_telegram_config(
                     let _ = telegram_service.update_config(config.id).await;
                 }
             }
-            
+
             (StatusCode::CREATED, Json(config)).into_response()
         }
         Err(e) => {
@@ -93,19 +91,17 @@ pub async fn update_telegram_config(
     Json(dto): Json<UpdateTelegramConfigDto>,
 ) -> impl IntoResponse {
     let repo = TelegramConfigRepository::new(state.db.connection());
-    
+
     match repo.update(id, dto).await {
         Ok(Some(config)) => {
             // Update telegram service
             if let Some(telegram_service) = &state.telegram_service {
                 let _ = telegram_service.update_config(config.id).await;
             }
-            
+
             Json(config).into_response()
         }
-        Ok(None) => {
-            StatusCode::NOT_FOUND.into_response()
-        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => {
             tracing::error!("Failed to update telegram config: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -119,7 +115,7 @@ pub async fn delete_telegram_config(
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
     let repo = TelegramConfigRepository::new(state.db.connection());
-    
+
     // Stop bot if this config is active
     if let Ok(Some(config)) = repo.find_by_id(id).await {
         if config.is_active {
@@ -128,7 +124,7 @@ pub async fn delete_telegram_config(
             }
         }
     }
-    
+
     match repo.delete(id).await {
         Ok(true) => StatusCode::NO_CONTENT.into_response(),
         Ok(false) => StatusCode::NOT_FOUND.into_response(),
@@ -149,7 +145,7 @@ pub struct BotStatusResponse {
 async fn get_bot_status(state: &AppState) -> Result<BotStatusResponse, String> {
     if let Some(telegram_service) = &state.telegram_service {
         let status = telegram_service.get_status().await;
-        
+
         let bot_info = if status.is_running {
             // In production, you would get this from the bot API
             Some(BotInfo {
@@ -159,7 +155,7 @@ async fn get_bot_status(state: &AppState) -> Result<BotStatusResponse, String> {
         } else {
             None
         };
-        
+
         Ok(BotStatusResponse {
             is_running: status.is_running,
             bot_info,
@@ -172,9 +168,7 @@ async fn get_bot_status(state: &AppState) -> Result<BotStatusResponse, String> {
     }
 }
 
-pub async fn get_telegram_status(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn get_telegram_status(State(state): State<AppState>) -> impl IntoResponse {
     match get_bot_status(&state).await {
         Ok(status) => Json(status).into_response(),
         Err(e) => {
@@ -192,11 +186,9 @@ pub struct TelegramAdmin {
     pub telegram_id: Option<i64>,
 }
 
-pub async fn get_telegram_admins(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn get_telegram_admins(State(state): State<AppState>) -> impl IntoResponse {
     let repo = UserRepository::new(state.db.connection());
-    
+
     match repo.get_telegram_admins().await {
         Ok(admins) => {
             let response: Vec<TelegramAdmin> = admins
@@ -207,7 +199,7 @@ pub async fn get_telegram_admins(
                     telegram_id: u.telegram_id,
                 })
                 .collect();
-            
+
             Json(response).into_response()
         }
         Err(e) => {
@@ -223,24 +215,24 @@ pub async fn add_telegram_admin(
     Path(user_id): Path<Uuid>,
 ) -> impl IntoResponse {
     let repo = UserRepository::new(state.db.connection());
-    
+
     match repo.set_telegram_admin(user_id, true).await {
         Ok(Some(user)) => {
             // Notify via Telegram if bot is running
             if let Some(telegram_service) = &state.telegram_service {
                 if let Some(telegram_id) = user.telegram_id {
-                    let _ = telegram_service.send_message(
-                        telegram_id,
-                        "✅ You have been granted admin privileges!".to_string()
-                    ).await;
+                    let _ = telegram_service
+                        .send_message(
+                            telegram_id,
+                            "✅ You have been granted admin privileges!".to_string(),
+                        )
+                        .await;
                 }
             }
-            
+
             Json(user).into_response()
         }
-        Ok(None) => {
-            StatusCode::NOT_FOUND.into_response()
-        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => {
             tracing::error!("Failed to add telegram admin: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -254,24 +246,24 @@ pub async fn remove_telegram_admin(
     Path(user_id): Path<Uuid>,
 ) -> impl IntoResponse {
     let repo = UserRepository::new(state.db.connection());
-    
+
     match repo.set_telegram_admin(user_id, false).await {
         Ok(Some(user)) => {
             // Notify via Telegram if bot is running
             if let Some(telegram_service) = &state.telegram_service {
                 if let Some(telegram_id) = user.telegram_id {
-                    let _ = telegram_service.send_message(
-                        telegram_id,
-                        "❌ Your admin privileges have been revoked.".to_string()
-                    ).await;
+                    let _ = telegram_service
+                        .send_message(
+                            telegram_id,
+                            "❌ Your admin privileges have been revoked.".to_string(),
+                        )
+                        .await;
                 }
             }
-            
+
             Json(user).into_response()
         }
-        Ok(None) => {
-            StatusCode::NOT_FOUND.into_response()
-        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => {
             tracing::error!("Failed to remove telegram admin: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()

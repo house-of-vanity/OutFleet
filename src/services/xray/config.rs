@@ -171,25 +171,26 @@ impl XrayConfig {
             dns: None,
             routing: Some(RoutingConfig {
                 domain_strategy: Some("IPIfNonMatch".to_string()),
-                rules: vec![
-                    RoutingRule {
-                        rule_type: "field".to_string(),
-                        domain: None,
-                        ip: Some(vec!["geoip:private".to_string()]),
-                        port: None,
-                        outbound_tag: "direct".to_string(),
-                    }
-                ],
+                rules: vec![RoutingRule {
+                    rule_type: "field".to_string(),
+                    domain: None,
+                    ip: Some(vec!["geoip:private".to_string()]),
+                    port: None,
+                    outbound_tag: "direct".to_string(),
+                }],
             }),
             policy: Some(PolicyConfig {
                 levels: {
                     let mut levels = HashMap::new();
-                    levels.insert("0".to_string(), PolicyLevel {
-                        handshake_timeout: Some(4),
-                        conn_idle: Some(300),
-                        uplink_only: Some(2),
-                        downlink_only: Some(5),
-                    });
+                    levels.insert(
+                        "0".to_string(),
+                        PolicyLevel {
+                            handshake_timeout: Some(4),
+                            conn_idle: Some(300),
+                            uplink_only: Some(2),
+                            downlink_only: Some(5),
+                        },
+                    );
                     levels
                 },
                 system: Some(SystemPolicy {

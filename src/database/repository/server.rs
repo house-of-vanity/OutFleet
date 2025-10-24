@@ -1,6 +1,6 @@
-use sea_orm::*;
-use crate::database::entities::{server, prelude::*};
+use crate::database::entities::{prelude::*, server};
 use anyhow::Result;
+use sea_orm::*;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -18,7 +18,7 @@ impl ServerRepository {
         let server = server::ActiveModel::from(server_data);
 
         let result = Server::insert(server).exec(&self.db).await?;
-        
+
         Server::find_by_id(result.last_insert_id)
             .one(&self.db)
             .await?
@@ -54,7 +54,11 @@ impl ServerRepository {
             .await?)
     }
 
-    pub async fn update(&self, id: Uuid, server_data: server::UpdateServerDto) -> Result<server::Model> {
+    pub async fn update(
+        &self,
+        id: Uuid,
+        server_data: server::UpdateServerDto,
+    ) -> Result<server::Model> {
         let server = Server::find_by_id(id)
             .one(&self.db)
             .await?
@@ -71,9 +75,11 @@ impl ServerRepository {
     }
 
     pub async fn get_grpc_endpoint(&self, id: Uuid) -> Result<String> {
-        let server = self.find_by_id(id).await?
+        let server = self
+            .find_by_id(id)
+            .await?
             .ok_or_else(|| anyhow::anyhow!("Server not found"))?;
-        
+
         Ok(server.get_grpc_endpoint())
     }
 

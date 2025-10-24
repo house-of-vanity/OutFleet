@@ -14,7 +14,7 @@ impl MigrationTrait for Migration {
                     .add_column(
                         ColumnDef::new(UserRequests::Language)
                             .string()
-                            .default("en") // Default to English
+                            .default("en"), // Default to English
                     )
                     .to_owned(),
             )

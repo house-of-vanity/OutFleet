@@ -1,9 +1,9 @@
-use teloxide::{Bot, prelude::*};
+use teloxide::{prelude::*, Bot};
 use tokio::sync::oneshot;
 
-use crate::database::DatabaseManager;
-use crate::config::AppConfig;
 use super::handlers::{self, Command};
+use crate::config::AppConfig;
+use crate::database::DatabaseManager;
 
 /// Run the bot polling loop
 pub async fn run_polling(
@@ -20,16 +20,11 @@ pub async fn run_polling(
                 .branch(
                     dptree::entry()
                         .filter_command::<Command>()
-                        .endpoint(handlers::handle_command)
+                        .endpoint(handlers::handle_command),
                 )
-                .branch(
-                    dptree::endpoint(handlers::handle_message)
-                )
+                .branch(dptree::endpoint(handlers::handle_message)),
         )
-        .branch(
-            Update::filter_callback_query()
-                .endpoint(handlers::handle_callback_query)
-        );
+        .branch(Update::filter_callback_query().endpoint(handlers::handle_callback_query));
 
     let mut dispatcher = Dispatcher::builder(bot.clone(), handler)
         .dependencies(dptree::deps![db, app_config])

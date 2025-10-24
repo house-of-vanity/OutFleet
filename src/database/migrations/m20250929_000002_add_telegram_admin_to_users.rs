@@ -14,7 +14,7 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(Users::IsTelegramAdmin)
                             .boolean()
                             .not_null()
-                            .default(false)
+                            .default(false),
                     )
                     .to_owned(),
             )

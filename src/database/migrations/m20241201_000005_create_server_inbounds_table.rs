@@ -17,16 +17,8 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
-                    .col(
-                        ColumnDef::new(ServerInbounds::ServerId)
-                            .uuid()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(ServerInbounds::TemplateId)
-                            .uuid()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(ServerInbounds::ServerId).uuid().not_null())
+                    .col(ColumnDef::new(ServerInbounds::TemplateId).uuid().not_null())
                     .col(
                         ColumnDef::new(ServerInbounds::Tag)
                             .string_len(255)
@@ -37,11 +29,7 @@ impl MigrationTrait for Migration {
                             .integer()
                             .null(),
                     )
-                    .col(
-                        ColumnDef::new(ServerInbounds::CertificateId)
-                            .uuid()
-                            .null(),
-                    )
+                    .col(ColumnDef::new(ServerInbounds::CertificateId).uuid().null())
                     .col(
                         ColumnDef::new(ServerInbounds::VariableValues)
                             .json()

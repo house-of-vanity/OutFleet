@@ -27,11 +27,7 @@ impl MigrationTrait for Migration {
                             .string_len(50)
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(DnsProviders::ApiToken)
-                            .text()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(DnsProviders::ApiToken).text().not_null())
                     .col(
                         ColumnDef::new(DnsProviders::IsActive)
                             .boolean()

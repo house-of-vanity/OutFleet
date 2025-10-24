@@ -1,21 +1,21 @@
-pub mod user;
 pub mod certificate;
 pub mod dns_provider;
 pub mod inbound_template;
+pub mod inbound_users;
 pub mod server;
 pub mod server_inbound;
-pub mod user_access;
-pub mod inbound_users;
 pub mod telegram_config;
+pub mod user;
+pub mod user_access;
 pub mod user_request;
 
-pub use user::UserRepository;
 pub use certificate::CertificateRepository;
 pub use dns_provider::DnsProviderRepository;
 pub use inbound_template::InboundTemplateRepository;
+pub use inbound_users::InboundUsersRepository;
 pub use server::ServerRepository;
 pub use server_inbound::ServerInboundRepository;
-pub use user_access::UserAccessRepository;
-pub use inbound_users::InboundUsersRepository;
 pub use telegram_config::TelegramConfigRepository;
+pub use user::UserRepository;
+pub use user_access::UserAccessRepository;
 pub use user_request::UserRequestRepository;

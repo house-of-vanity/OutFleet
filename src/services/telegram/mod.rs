@@ -1,17 +1,17 @@
 use anyhow::Result;
 use std::sync::Arc;
-use teloxide::{Bot, prelude::*};
+use teloxide::{prelude::*, Bot};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::database::DatabaseManager;
-use crate::database::repository::TelegramConfigRepository;
-use crate::database::entities::telegram_config::Model as TelegramConfig;
 use crate::config::AppConfig;
+use crate::database::entities::telegram_config::Model as TelegramConfig;
+use crate::database::repository::TelegramConfigRepository;
+use crate::database::DatabaseManager;
 
 pub mod bot;
-pub mod handlers;
 pub mod error;
+pub mod handlers;
 pub mod localization;
 
 pub use error::TelegramError;
@@ -40,12 +40,12 @@ impl TelegramService {
     /// Initialize and start the bot if active configuration exists
     pub async fn initialize(&self) -> Result<()> {
         let repo = TelegramConfigRepository::new(self.db.connection());
-        
+
         // Get active configuration
         if let Some(config) = repo.get_active().await? {
             self.start_with_config(config).await?;
         }
-        
+
         Ok(())
     }
 
@@ -56,7 +56,7 @@ impl TelegramService {
 
         // Create new bot instance
         let bot = Bot::new(&config.bot_token);
-        
+
         // Verify token by calling getMe
         match bot.get_me().await {
             Ok(me) => {
@@ -87,7 +87,7 @@ impl TelegramService {
 
         let db = self.db.clone();
         let app_config = self.app_config.clone();
-        
+
         // Spawn polling task
         tokio::spawn(async move {
             bot::run_polling(bot, db, app_config, rx).await;
@@ -114,7 +114,7 @@ impl TelegramService {
     /// Update configuration and restart if needed
     pub async fn update_config(&self, config_id: Uuid) -> Result<()> {
         let repo = TelegramConfigRepository::new(self.db.connection());
-        
+
         if let Some(config) = repo.find_by_id(config_id).await? {
             if config.is_active {
                 self.start_with_config(config).await?;
@@ -122,7 +122,7 @@ impl TelegramService {
                 self.stop().await?;
             }
         }
-        
+
         Ok(())
     }
 
@@ -130,7 +130,7 @@ impl TelegramService {
     pub async fn get_status(&self) -> BotStatus {
         let bot_guard = self.bot.read().await;
         let config_guard = self.config.read().await;
-        
+
         BotStatus {
             is_running: bot_guard.is_some(),
             config: config_guard.clone(),
@@ -140,7 +140,7 @@ impl TelegramService {
     /// Send message to user
     pub async fn send_message(&self, chat_id: i64, text: String) -> Result<()> {
         let bot_guard = self.bot.read().await;
-        
+
         if let Some(bot) = bot_guard.as_ref() {
             bot.send_message(ChatId(chat_id), text).await?;
             Ok(())
@@ -148,11 +148,16 @@ impl TelegramService {
             Err(anyhow::anyhow!("Bot is not running"))
         }
     }
-    
+
     /// Send message to user with inline keyboard
-    pub async fn send_message_with_keyboard(&self, chat_id: i64, text: String, keyboard: teloxide::types::InlineKeyboardMarkup) -> Result<()> {
+    pub async fn send_message_with_keyboard(
+        &self,
+        chat_id: i64,
+        text: String,
+        keyboard: teloxide::types::InlineKeyboardMarkup,
+    ) -> Result<()> {
         let bot_guard = self.bot.read().await;
-        
+
         if let Some(bot) = bot_guard.as_ref() {
             bot.send_message(ChatId(chat_id), text)
                 .parse_mode(teloxide::types::ParseMode::Html)
@@ -167,11 +172,11 @@ impl TelegramService {
     /// Send message to all admins
     pub async fn broadcast_to_admins(&self, text: String) -> Result<()> {
         let bot_guard = self.bot.read().await;
-        
+
         if let Some(bot) = bot_guard.as_ref() {
             let user_repo = crate::database::repository::UserRepository::new(self.db.connection());
             let admins = user_repo.get_telegram_admins().await?;
-            
+
             for admin in admins {
                 if let Some(telegram_id) = admin.telegram_id {
                     if let Err(e) = bot.send_message(ChatId(telegram_id), text.clone()).await {
@@ -179,7 +184,7 @@ impl TelegramService {
                     }
                 }
             }
-            
+
             Ok(())
         } else {
             Err(anyhow::anyhow!("Bot is not running"))

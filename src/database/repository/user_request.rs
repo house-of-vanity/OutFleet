@@ -1,9 +1,12 @@
-use anyhow::Result;
-use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, DatabaseConnection, QueryOrder, PaginatorTrait, QuerySelect};
-use uuid::Uuid;
 use crate::database::entities::user_request::{
-    self, Model, ActiveModel, CreateUserRequestDto, UpdateUserRequestDto, RequestStatus
+    self, ActiveModel, CreateUserRequestDto, Model, RequestStatus, UpdateUserRequestDto,
 };
+use anyhow::Result;
+use sea_orm::{
+    ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect,
+};
+use uuid::Uuid;
 
 pub struct UserRequestRepository {
     db: DatabaseConnection,
@@ -18,10 +21,10 @@ impl UserRequestRepository {
         let paginator = user_request::Entity::find()
             .order_by_desc(user_request::Column::CreatedAt)
             .paginate(&self.db, per_page);
-        
+
         let total = paginator.num_items().await?;
         let items = paginator.fetch_page(page - 1).await?;
-        
+
         Ok((items, total))
     }
 
@@ -30,17 +33,15 @@ impl UserRequestRepository {
             .filter(user_request::Column::Status.eq("pending"))
             .order_by_desc(user_request::Column::CreatedAt)
             .paginate(&self.db, per_page);
-        
+
         let total = paginator.num_items().await?;
         let items = paginator.fetch_page(page - 1).await?;
-        
+
         Ok((items, total))
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> Result<Option<Model>> {
-        let request = user_request::Entity::find_by_id(id)
-            .one(&self.db)
-            .await?;
+        let request = user_request::Entity::find_by_id(id).one(&self.db).await?;
         Ok(request)
     }
 
@@ -73,6 +74,25 @@ impl UserRequestRepository {
         Ok(request)
     }
 
+    /// Count total requests
+    pub async fn count_all(&self) -> Result<i64> {
+        let count = user_request::Entity::find().count(&self.db).await?;
+
+        Ok(count as i64)
+    }
+
+    /// Find requests with pagination
+    pub async fn find_paginated(&self, offset: u64, limit: u64) -> Result<Vec<Model>> {
+        let requests = user_request::Entity::find()
+            .order_by_desc(user_request::Column::CreatedAt)
+            .offset(offset)
+            .limit(limit)
+            .all(&self.db)
+            .await?;
+
+        Ok(requests)
+    }
+
     pub async fn create(&self, dto: CreateUserRequestDto) -> Result<Model> {
         use sea_orm::ActiveModelTrait;
         let active_model: ActiveModel = dto.into();
@@ -80,11 +100,14 @@ impl UserRequestRepository {
         Ok(request)
     }
 
-    pub async fn update(&self, id: Uuid, dto: UpdateUserRequestDto, processed_by: Uuid) -> Result<Option<Model>> {
-        let model = user_request::Entity::find_by_id(id)
-            .one(&self.db)
-            .await?;
-        
+    pub async fn update(
+        &self,
+        id: Uuid,
+        dto: UpdateUserRequestDto,
+        processed_by: Uuid,
+    ) -> Result<Option<Model>> {
+        let model = user_request::Entity::find_by_id(id).one(&self.db).await?;
+
         match model {
             Some(model) => {
                 use sea_orm::ActiveModelTrait;
@@ -96,7 +119,12 @@ impl UserRequestRepository {
         }
     }
 
-    pub async fn approve(&self, id: Uuid, response_message: Option<String>, processed_by: Uuid) -> Result<Option<Model>> {
+    pub async fn approve(
+        &self,
+        id: Uuid,
+        response_message: Option<String>,
+        processed_by: Uuid,
+    ) -> Result<Option<Model>> {
         let dto = UpdateUserRequestDto {
             status: Some(RequestStatus::Approved.as_str().to_string()),
             response_message,
@@ -105,7 +133,12 @@ impl UserRequestRepository {
         self.update(id, dto, processed_by).await
     }
 
-    pub async fn decline(&self, id: Uuid, response_message: Option<String>, processed_by: Uuid) -> Result<Option<Model>> {
+    pub async fn decline(
+        &self,
+        id: Uuid,
+        response_message: Option<String>,
+        processed_by: Uuid,
+    ) -> Result<Option<Model>> {
         let dto = UpdateUserRequestDto {
             status: Some(RequestStatus::Declined.as_str().to_string()),
             response_message,

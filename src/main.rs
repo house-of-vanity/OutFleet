@@ -7,9 +7,9 @@ mod database;
 mod services;
 mod web;
 
-use config::{AppConfig, args::parse_args};
+use config::{args::parse_args, AppConfig};
 use database::DatabaseManager;
-use services::{TaskScheduler, XrayService, TelegramService};
+use services::{TaskScheduler, TelegramService, XrayService};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -24,7 +24,6 @@ async fn main() -> Result<()> {
     // Initialize logging early with basic configuration
     init_logging(&args.log_level.as_deref().unwrap_or("info"))?;
 
-
     // Handle special flags
     if args.print_default_config {
         print_default_config()?;
@@ -33,9 +32,7 @@ async fn main() -> Result<()> {
 
     // Load configuration
     let config = match AppConfig::load() {
-        Ok(config) => {
-            config
-        }
+        Ok(config) => config,
         Err(e) => {
             tracing::error!("Failed to load configuration: {}", e);
             if args.validate_config {
@@ -58,12 +55,9 @@ async fn main() -> Result<()> {
         config::env::EnvVars::print_env_info();
     }
 
-
     // Initialize database connection
     let db = match DatabaseManager::new(&config.database).await {
-        Ok(db) => {
-            db
-        }
+        Ok(db) => db,
         Err(e) => {
             tracing::error!("Failed to initialize database: {}", e);
             return Err(e);
@@ -82,7 +76,7 @@ async fn main() -> Result<()> {
 
     // Initialize xray service
     let xray_service = XrayService::new();
-    
+
     // Initialize and start task scheduler with dependencies
     let mut task_scheduler = TaskScheduler::new().await?;
     task_scheduler.start(db.clone(), xray_service).await?;
@@ -97,7 +91,7 @@ async fn main() -> Result<()> {
     }
 
     // Start web server with task scheduler
-    
+
     tokio::select! {
         result = web::start_server(db, config.clone(), Some(telegram_service.clone())) => {
             match result {
@@ -123,12 +117,12 @@ fn init_logging(level: &str) -> Result<()> {
         .with(filter)
         .with(
             tracing_subscriber::fmt::layer()
-                .with_target(true)  // Show module names
+                .with_target(true) // Show module names
                 .with_thread_ids(false)
                 .with_thread_names(false)
                 .with_file(false)
                 .with_line_number(false)
-                .compact()
+                .compact(),
         )
         .try_init()?;
 
@@ -138,11 +132,11 @@ fn init_logging(level: &str) -> Result<()> {
 fn print_default_config() -> Result<()> {
     let default_config = AppConfig::default();
     let toml_content = toml::to_string_pretty(&default_config)?;
-    
+
     println!("# Default configuration for Xray Admin Panel");
     println!("# Save this to config.toml and modify as needed\n");
     println!("{}", toml_content);
-    
+
     Ok(())
 }
 

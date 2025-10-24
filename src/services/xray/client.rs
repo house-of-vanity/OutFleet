@@ -1,12 +1,12 @@
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use serde_json::Value;
-use xray_core::Client;
 use std::sync::Arc;
 use tokio::time::{timeout, Duration};
+use xray_core::Client;
 
 // Import submodules from the same directory
-use super::stats::StatsClient;
 use super::inbounds::InboundClient;
+use super::stats::StatsClient;
 use super::users::UserClient;
 
 /// Xray gRPC client wrapper
@@ -22,20 +22,17 @@ impl XrayClient {
     pub async fn connect(endpoint: &str) -> Result<Self> {
         // Apply a 5-second timeout to the connection attempt
         let connect_future = Client::from_url(endpoint);
-        
+
         match timeout(Duration::from_secs(5), connect_future).await {
-            Ok(Ok(client)) => {
-                Ok(Self {
-                    endpoint: endpoint.to_string(),
-                    client: Arc::new(client),
-                })
-            },
-            Ok(Err(e)) => {
-                Err(anyhow!("Failed to connect to Xray at {}: {}", endpoint, e))
-            },
-            Err(_) => {
-                Err(anyhow!("Connection to Xray at {} timed out after 5 seconds", endpoint))
-            }
+            Ok(Ok(client)) => Ok(Self {
+                endpoint: endpoint.to_string(),
+                client: Arc::new(client),
+            }),
+            Ok(Err(e)) => Err(anyhow!("Failed to connect to Xray at {}: {}", endpoint, e)),
+            Err(_) => Err(anyhow!(
+                "Connection to Xray at {} timed out after 5 seconds",
+                endpoint
+            )),
         }
     }
 
@@ -52,7 +49,10 @@ impl XrayClient {
     }
 
     /// Restart Xray with new configuration
-    pub async fn restart_with_config(&self, config: &crate::services::xray::XrayConfig) -> Result<()> {
+    pub async fn restart_with_config(
+        &self,
+        config: &crate::services::xray::XrayConfig,
+    ) -> Result<()> {
         let inbound_client = InboundClient::new(self.endpoint.clone(), &*self.client);
         inbound_client.restart_with_config(config).await
     }
@@ -64,15 +64,30 @@ impl XrayClient {
     }
 
     /// Add inbound configuration with TLS certificate
-    pub async fn add_inbound_with_certificate(&self, inbound: &Value, cert_pem: Option<&str>, key_pem: Option<&str>) -> Result<()> {
+    pub async fn add_inbound_with_certificate(
+        &self,
+        inbound: &Value,
+        cert_pem: Option<&str>,
+        key_pem: Option<&str>,
+    ) -> Result<()> {
         let inbound_client = InboundClient::new(self.endpoint.clone(), &*self.client);
-        inbound_client.add_inbound_with_certificate(inbound, None, cert_pem, key_pem).await
+        inbound_client
+            .add_inbound_with_certificate(inbound, None, cert_pem, key_pem)
+            .await
     }
 
     /// Add inbound configuration with users and TLS certificate
-    pub async fn add_inbound_with_users_and_certificate(&self, inbound: &Value, users: &[Value], cert_pem: Option<&str>, key_pem: Option<&str>) -> Result<()> {
+    pub async fn add_inbound_with_users_and_certificate(
+        &self,
+        inbound: &Value,
+        users: &[Value],
+        cert_pem: Option<&str>,
+        key_pem: Option<&str>,
+    ) -> Result<()> {
         let inbound_client = InboundClient::new(self.endpoint.clone(), &*self.client);
-        inbound_client.add_inbound_with_certificate(inbound, Some(users), cert_pem, key_pem).await
+        inbound_client
+            .add_inbound_with_certificate(inbound, Some(users), cert_pem, key_pem)
+            .await
     }
 
     /// Remove inbound by tag

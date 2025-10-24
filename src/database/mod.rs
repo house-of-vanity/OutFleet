@@ -1,5 +1,7 @@
 use anyhow::Result;
-use sea_orm::{Database, DatabaseConnection, ConnectOptions, Statement, DatabaseBackend, ConnectionTrait};
+use sea_orm::{
+    ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, Statement,
+};
 use sea_orm_migration::MigratorTrait;
 use std::time::Duration;
 use tracing::{info, warn};
@@ -22,10 +24,10 @@ impl DatabaseManager {
     /// Create a new database connection
     pub async fn new(config: &DatabaseConfig) -> Result<Self> {
         info!("Connecting to database...");
-        
+
         // URL-encode the connection string to handle special characters in passwords
         let encoded_url = Self::encode_database_url(&config.url)?;
-        
+
         let mut opt = ConnectOptions::new(&encoded_url);
         opt.max_connections(config.max_connections)
             .min_connections(1)
@@ -37,16 +39,16 @@ impl DatabaseManager {
             .sqlx_logging_level(log::LevelFilter::Debug);
 
         let connection = Database::connect(opt).await?;
-        
+
         info!("Database connection established successfully");
-        
+
         let manager = Self { connection };
-        
+
         // Run migrations if auto_migrate is enabled
         if config.auto_migrate {
             manager.migrate().await?;
         }
-        
+
         Ok(manager)
     }
 
@@ -58,7 +60,7 @@ impl DatabaseManager {
     /// Run database migrations
     pub async fn migrate(&self) -> Result<()> {
         info!("Running database migrations...");
-        
+
         match Migrator::up(&self.connection, None).await {
             Ok(_) => {
                 info!("Database migrations completed successfully");
@@ -99,21 +101,22 @@ impl DatabaseManager {
                     let scheme = &url[..scheme_end + 3];
                     let user_pass = &url[scheme_end + 3..at_pos];
                     let host_db = &url[at_pos..];
-                    
+
                     if let Some(user_colon) = user_pass.find(':') {
                         let user = &user_pass[..user_colon];
                         let password = &user_pass[user_colon + 1..];
-                        
+
                         // URL-encode the password part only
                         let encoded_password = urlencoding::encode(password);
-                        let encoded_url = format!("{}{}:{}{}", scheme, user, encoded_password, host_db);
-                        
+                        let encoded_url =
+                            format!("{}{}:{}{}", scheme, user, encoded_password, host_db);
+
                         return Ok(encoded_url);
                     }
                 }
             }
         }
-        
+
         // If parsing fails, return original URL
         Ok(url.to_string())
     }
@@ -132,7 +135,10 @@ mod tests {
 
         let normal_url = "postgresql://user:password@localhost:5432/db";
         let encoded_normal = DatabaseManager::encode_database_url(normal_url).unwrap();
-        assert_eq!(encoded_normal, "postgresql://user:password@localhost:5432/db");
+        assert_eq!(
+            encoded_normal,
+            "postgresql://user:password@localhost:5432/db"
+        );
     }
 
     #[tokio::test]

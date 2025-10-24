@@ -36,22 +36,18 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(InboundUsers::UserId)
                             .uuid()
                             .not_null()
-                            .default(Expr::val("00000000-0000-0000-0000-000000000000"))
+                            .default(Expr::val("00000000-0000-0000-0000-000000000000")),
                     )
                     .to_owned(),
             )
             .await?;
 
-        // Add password column  
+        // Add password column
         manager
             .alter_table(
                 Table::alter()
                     .table(InboundUsers::Table)
-                    .add_column(
-                        ColumnDef::new(InboundUsers::Password)
-                            .string()
-                            .null()
-                    )
+                    .add_column(ColumnDef::new(InboundUsers::Password).string().null())
                     .to_owned(),
             )
             .await?;
@@ -83,7 +79,7 @@ impl MigrationTrait for Migration {
                     .from(InboundUsers::Table, InboundUsers::UserId)
                     .to(Users::Table, Users::Id)
                     .on_delete(ForeignKeyAction::Cascade)
-                    .to_owned()
+                    .to_owned(),
             )
             .await?;
 
@@ -153,7 +149,7 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(InboundUsers::Username)
                             .string()
                             .not_null()
-                            .default("")
+                            .default(""),
                     )
                     .to_owned(),
             )
@@ -167,7 +163,7 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(InboundUsers::Email)
                             .string()
                             .not_null()
-                            .default("")
+                            .default(""),
                     )
                     .to_owned(),
             )

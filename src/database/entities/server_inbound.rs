@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{Set, ActiveModelTrait};
+use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -8,23 +8,23 @@ use serde_json::Value;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    
+
     pub server_id: Uuid,
-    
+
     pub template_id: Uuid,
-    
+
     pub tag: String,
-    
+
     pub port_override: Option<i32>,
-    
+
     pub certificate_id: Option<Uuid>,
-    
+
     pub variable_values: Value,
-    
+
     pub is_active: bool,
-    
+
     pub created_at: DateTimeUtc,
-    
+
     pub updated_at: DateTimeUtc,
 }
 
@@ -82,7 +82,9 @@ impl ActiveModelBehavior for ActiveModel {
         mut self,
         _db: &'life0 C,
         insert: bool,
-    ) -> core::pin::Pin<Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>>
+    ) -> core::pin::Pin<
+        Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>,
+    >
     where
         'life0: 'async_trait,
         C: 'async_trait + ConnectionTrait,
@@ -95,7 +97,6 @@ impl ActiveModelBehavior for ActiveModel {
             Ok(self)
         })
     }
-
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,7 +146,7 @@ impl From<Model> for ServerInboundResponse {
             is_active: inbound.is_active,
             created_at: inbound.created_at,
             updated_at: inbound.updated_at,
-            template_name: None, // Will be filled by repository if needed
+            template_name: None,    // Will be filled by repository if needed
             certificate_name: None, // Will be filled by repository if needed
         }
     }
@@ -154,7 +155,7 @@ impl From<Model> for ServerInboundResponse {
 impl Model {
     pub fn apply_update(self, dto: UpdateServerInboundDto) -> ActiveModel {
         let mut active_model: ActiveModel = self.into();
-        
+
         if let Some(tag) = dto.tag {
             active_model.tag = Set(tag);
         }
@@ -170,7 +171,7 @@ impl Model {
         if let Some(is_active) = dto.is_active {
             active_model.is_active = Set(is_active);
         }
-        
+
         active_model
     }
 

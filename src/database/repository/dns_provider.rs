@@ -1,9 +1,12 @@
 use anyhow::Result;
-use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, ColumnTrait, QueryFilter, Set, PaginatorTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
+    Set,
+};
 use uuid::Uuid;
 
 use crate::database::entities::dns_provider::{
-    Entity, Model, ActiveModel, CreateDnsProviderDto, UpdateDnsProviderDto, Column, DnsProviderType
+    ActiveModel, Column, CreateDnsProviderDto, DnsProviderType, Entity, Model, UpdateDnsProviderDto,
 };
 
 pub struct DnsProviderRepository {
@@ -89,7 +92,7 @@ impl DnsProviderRepository {
         let mut active_model: ActiveModel = provider.into();
         active_model.is_active = Set(true);
         active_model.updated_at = Set(chrono::Utc::now());
-        
+
         let updated_provider = active_model.update(&self.db).await?;
         Ok(Some(updated_provider))
     }
@@ -103,7 +106,7 @@ impl DnsProviderRepository {
         let mut active_model: ActiveModel = provider.into();
         active_model.is_active = Set(false);
         active_model.updated_at = Set(chrono::Utc::now());
-        
+
         let updated_provider = active_model.update(&self.db).await?;
         Ok(Some(updated_provider))
     }
@@ -111,17 +114,20 @@ impl DnsProviderRepository {
     /// Check if a provider name already exists
     pub async fn name_exists(&self, name: &str, exclude_id: Option<Uuid>) -> Result<bool> {
         let mut query = Entity::find().filter(Column::Name.eq(name));
-        
+
         if let Some(id) = exclude_id {
             query = query.filter(Column::Id.ne(id));
         }
-        
+
         let count = query.count(&self.db).await?;
         Ok(count > 0)
     }
 
     /// Get the first active provider of a specific type
-    pub async fn get_active_provider_by_type(&self, provider_type: DnsProviderType) -> Result<Option<Model>> {
+    pub async fn get_active_provider_by_type(
+        &self,
+        provider_type: DnsProviderType,
+    ) -> Result<Option<Model>> {
         let provider = Entity::find()
             .filter(Column::ProviderType.eq(provider_type.as_str()))
             .filter(Column::IsActive.eq(true))

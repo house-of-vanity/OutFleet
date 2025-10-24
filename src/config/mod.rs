@@ -147,7 +147,7 @@ impl AppConfig {
     /// 4. Default values (lowest)
     pub fn load() -> Result<Self> {
         let args = args::parse_args();
-        
+
         let mut builder = config::Config::builder()
             // Start with defaults
             .add_source(config::Config::try_from(&AppConfig::default())?);
@@ -163,7 +163,7 @@ impl AppConfig {
         builder = builder.add_source(
             config::Environment::with_prefix("XRAY_ADMIN")
                 .separator("__")
-                .try_parsing(true)
+                .try_parsing(true),
         );
 
         // Override with command line arguments
@@ -184,10 +184,10 @@ impl AppConfig {
         }
 
         let config: AppConfig = builder.build()?.try_deserialize()?;
-        
+
         // Validate configuration
         config.validate()?;
-        
+
         Ok(config)
     }
 
@@ -196,8 +196,18 @@ impl AppConfig {
         tracing::info!("  Database URL: {}", mask_sensitive(&self.database.url));
         tracing::info!("  Web server: {}:{}", self.web.host, self.web.port);
         tracing::info!("  Log level: {}", self.logging.level);
-        tracing::info!("  Telegram bot: {}", if self.telegram.bot_token.is_empty() { "disabled" } else { "enabled" });
-        tracing::info!("  Xray config path: {}", self.xray.config_template_path.display());
+        tracing::info!(
+            "  Telegram bot: {}",
+            if self.telegram.bot_token.is_empty() {
+                "disabled"
+            } else {
+                "enabled"
+            }
+        );
+        tracing::info!(
+            "  Xray config path: {}",
+            self.xray.config_template_path.display()
+        );
     }
 }
 
@@ -216,7 +226,7 @@ fn mask_sensitive(url: &str) -> String {
             }
         }
     }
-    
+
     // Fallback to URL parsing if simple approach fails
     if let Ok(parsed) = url::Url::parse(url) {
         if parsed.password().is_some() {

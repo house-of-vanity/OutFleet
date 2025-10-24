@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{Set, ActiveModelTrait};
+use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -7,29 +7,29 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    
+
     pub name: String,
-    
+
     #[sea_orm(column_name = "cert_type")]
     pub cert_type: String,
-    
+
     pub domain: String,
-    
+
     #[serde(skip_serializing)]
     pub cert_data: Vec<u8>,
-    
+
     #[serde(skip_serializing)]
     pub key_data: Vec<u8>,
-    
+
     #[serde(skip_serializing)]
     pub chain_data: Option<Vec<u8>>,
-    
+
     pub expires_at: DateTimeUtc,
-    
+
     pub auto_renew: bool,
-    
+
     pub created_at: DateTimeUtc,
-    
+
     pub updated_at: DateTimeUtc,
 }
 
@@ -67,7 +67,9 @@ impl ActiveModelBehavior for ActiveModel {
         mut self,
         _db: &'life0 C,
         insert: bool,
-    ) -> core::pin::Pin<Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>>
+    ) -> core::pin::Pin<
+        Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>,
+    >
     where
         'life0: 'async_trait,
         C: 'async_trait + ConnectionTrait,
@@ -180,7 +182,7 @@ impl From<Model> for CertificateDetailsResponse {
     fn from(cert: Model) -> Self {
         let certificate_pem = cert.certificate_pem();
         let has_private_key = !cert.key_data.is_empty();
-        
+
         Self {
             id: cert.id,
             name: cert.name,
@@ -220,14 +222,14 @@ impl Model {
 
     pub fn apply_update(self, dto: UpdateCertificateDto) -> ActiveModel {
         let mut active_model: ActiveModel = self.into();
-        
+
         if let Some(name) = dto.name {
             active_model.name = Set(name);
         }
         if let Some(auto_renew) = dto.auto_renew {
             active_model.auto_renew = Set(auto_renew);
         }
-        
+
         active_model
     }
 }

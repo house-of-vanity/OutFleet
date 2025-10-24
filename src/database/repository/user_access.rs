@@ -1,8 +1,10 @@
+use anyhow::Result;
 use sea_orm::*;
 use uuid::Uuid;
-use anyhow::Result;
 
-use crate::database::entities::user_access::{self, Entity as UserAccess, Model, ActiveModel, CreateUserAccessDto, UpdateUserAccessDto};
+use crate::database::entities::user_access::{
+    self, ActiveModel, CreateUserAccessDto, Entity as UserAccess, Model, UpdateUserAccessDto,
+};
 
 pub struct UserAccessRepository {
     db: DatabaseConnection,
@@ -35,7 +37,11 @@ impl UserAccessRepository {
     }
 
     /// Find user access by server and inbound
-    pub async fn find_by_server_inbound(&self, server_id: Uuid, server_inbound_id: Uuid) -> Result<Vec<Model>> {
+    pub async fn find_by_server_inbound(
+        &self,
+        server_id: Uuid,
+        server_inbound_id: Uuid,
+    ) -> Result<Vec<Model>> {
         let records = UserAccess::find()
             .filter(user_access::Column::ServerId.eq(server_id))
             .filter(user_access::Column::ServerInboundId.eq(server_inbound_id))
@@ -45,7 +51,12 @@ impl UserAccessRepository {
     }
 
     /// Find active user access for specific user, server and inbound
-    pub async fn find_active_access(&self, user_id: Uuid, server_id: Uuid, server_inbound_id: Uuid) -> Result<Option<Model>> {
+    pub async fn find_active_access(
+        &self,
+        user_id: Uuid,
+        server_id: Uuid,
+        server_inbound_id: Uuid,
+    ) -> Result<Option<Model>> {
         let record = UserAccess::find()
             .filter(user_access::Column::UserId.eq(user_id))
             .filter(user_access::Column::ServerId.eq(server_id))
@@ -83,18 +94,26 @@ impl UserAccessRepository {
 
     /// Enable user access (set is_active = true)
     pub async fn enable(&self, id: Uuid) -> Result<Option<Model>> {
-        self.update(id, UpdateUserAccessDto {
-            is_active: Some(true),
-            level: None,
-        }).await
+        self.update(
+            id,
+            UpdateUserAccessDto {
+                is_active: Some(true),
+                level: None,
+            },
+        )
+        .await
     }
 
     /// Disable user access (set is_active = false)
     pub async fn disable(&self, id: Uuid) -> Result<Option<Model>> {
-        self.update(id, UpdateUserAccessDto {
-            is_active: Some(false),
-            level: None,
-        }).await
+        self.update(
+            id,
+            UpdateUserAccessDto {
+                is_active: Some(false),
+                level: None,
+            },
+        )
+        .await
     }
 
     /// Get all active access for a user

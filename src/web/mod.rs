@@ -1,11 +1,5 @@
 use anyhow::Result;
-use axum::{
-    Router,
-    routing::get,
-    http::StatusCode,
-    response::Json,
-    serve,
-};
+use axum::{http::StatusCode, response::Json, routing::get, serve, Router};
 use serde_json::{json, Value};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -13,10 +7,10 @@ use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing::info;
 
-use std::sync::Arc;
-use crate::config::{WebConfig, AppConfig};
+use crate::config::{AppConfig, WebConfig};
 use crate::database::DatabaseManager;
-use crate::services::{XrayService, TelegramService};
+use crate::services::{TelegramService, XrayService};
+use std::sync::Arc;
 
 pub mod handlers;
 pub mod routes;
@@ -33,9 +27,13 @@ pub struct AppState {
 }
 
 /// Start the web server
-pub async fn start_server(db: DatabaseManager, config: AppConfig, telegram_service: Option<Arc<TelegramService>>) -> Result<()> {
+pub async fn start_server(
+    db: DatabaseManager,
+    config: AppConfig,
+    telegram_service: Option<Arc<TelegramService>>,
+) -> Result<()> {
     let xray_service = XrayService::new();
-    
+
     let app_state = AppState {
         db,
         config: config.clone(),

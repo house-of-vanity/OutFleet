@@ -90,7 +90,9 @@ impl Model {
             parts.push(last.clone());
         }
         if parts.is_empty() {
-            self.telegram_username.clone().unwrap_or_else(|| format!("User {}", self.telegram_id))
+            self.telegram_username
+                .clone()
+                .unwrap_or_else(|| format!("User {}", self.telegram_id))
         } else {
             parts.join(" ")
         }
@@ -130,7 +132,7 @@ pub struct UpdateUserRequestDto {
 impl From<CreateUserRequestDto> for ActiveModel {
     fn from(dto: CreateUserRequestDto) -> Self {
         use sea_orm::ActiveValue::*;
-        
+
         ActiveModel {
             id: Set(Uuid::new_v4()),
             user_id: Set(None),
@@ -153,19 +155,19 @@ impl From<CreateUserRequestDto> for ActiveModel {
 impl Model {
     pub fn apply_update(self, dto: UpdateUserRequestDto, processed_by: Uuid) -> ActiveModel {
         use sea_orm::ActiveValue::*;
-        
+
         let mut active: ActiveModel = self.into();
-        
+
         if let Some(status) = dto.status {
             active.status = Set(status);
             active.processed_by_user_id = Set(Some(processed_by));
             active.processed_at = Set(Some(chrono::Utc::now().into()));
         }
-        
+
         if let Some(response) = dto.response_message {
             active.response_message = Set(Some(response));
         }
-        
+
         active.updated_at = Set(chrono::Utc::now().into());
         active
     }

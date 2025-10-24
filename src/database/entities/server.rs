@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{Set, ActiveModelTrait};
+use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -7,24 +7,24 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    
+
     pub name: String,
-    
+
     pub hostname: String,
-    
+
     pub grpc_hostname: String,
-    
+
     pub grpc_port: i32,
-    
+
     #[serde(skip_serializing)]
     pub api_credentials: Option<String>,
-    
+
     pub status: String,
-    
+
     pub default_certificate_id: Option<Uuid>,
-    
+
     pub created_at: DateTimeUtc,
-    
+
     pub updated_at: DateTimeUtc,
 }
 
@@ -67,7 +67,9 @@ impl ActiveModelBehavior for ActiveModel {
         mut self,
         _db: &'life0 C,
         insert: bool,
-    ) -> core::pin::Pin<Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>>
+    ) -> core::pin::Pin<
+        Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>,
+    >
     where
         'life0: 'async_trait,
         C: 'async_trait + ConnectionTrait,
@@ -185,7 +187,7 @@ impl From<Model> for ServerResponse {
 impl Model {
     pub fn apply_update(self, dto: UpdateServerDto) -> ActiveModel {
         let mut active_model: ActiveModel = self.into();
-        
+
         if let Some(name) = dto.name {
             active_model.name = Set(name);
         }
@@ -207,16 +209,23 @@ impl Model {
         if let Some(default_certificate_id) = dto.default_certificate_id {
             active_model.default_certificate_id = Set(Some(default_certificate_id));
         }
-        
+
         active_model
     }
 
     pub fn get_grpc_endpoint(&self) -> String {
         let hostname = if self.grpc_hostname.is_empty() {
-            tracing::debug!("Using public hostname '{}' for gRPC (grpc_hostname is empty)", self.hostname);
+            tracing::debug!(
+                "Using public hostname '{}' for gRPC (grpc_hostname is empty)",
+                self.hostname
+            );
             &self.hostname
         } else {
-            tracing::debug!("Using dedicated gRPC hostname '{}' (different from public hostname '{}')", self.grpc_hostname, self.hostname);
+            tracing::debug!(
+                "Using dedicated gRPC hostname '{}' (different from public hostname '{}')",
+                self.grpc_hostname,
+                self.hostname
+            );
             &self.grpc_hostname
         };
         let endpoint = format!("{}:{}", hostname, self.grpc_port);

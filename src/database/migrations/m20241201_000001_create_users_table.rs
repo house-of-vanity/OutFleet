@@ -12,27 +12,10 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(Users::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(Users::Id)
-                            .uuid()
-                            .not_null()
-                            .primary_key(),
-                    )
-                    .col(
-                        ColumnDef::new(Users::Name)
-                            .string_len(255)
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(Users::Comment)
-                            .text()
-                            .null(),
-                    )
-                    .col(
-                        ColumnDef::new(Users::TelegramId)
-                            .big_integer()
-                            .null(),
-                    )
+                    .col(ColumnDef::new(Users::Id).uuid().not_null().primary_key())
+                    .col(ColumnDef::new(Users::Name).string_len(255).not_null())
+                    .col(ColumnDef::new(Users::Comment).text().null())
+                    .col(ColumnDef::new(Users::TelegramId).big_integer().null())
                     .col(
                         ColumnDef::new(Users::CreatedAt)
                             .timestamp_with_time_zone()
@@ -108,12 +91,7 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
-            .drop_index(
-                Index::drop()
-                    .if_exists()
-                    .name("idx_users_name")
-                    .to_owned(),
-            )
+            .drop_index(Index::drop().if_exists().name("idx_users_name").to_owned())
             .await?;
 
         // Drop table

@@ -22,21 +22,9 @@ impl MigrationTrait for Migration {
                             .uuid()
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(InboundUsers::Username)
-                            .string()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(InboundUsers::Email)
-                            .string()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(InboundUsers::XrayUserId)
-                            .string()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(InboundUsers::Username).string().not_null())
+                    .col(ColumnDef::new(InboundUsers::Email).string().not_null())
+                    .col(ColumnDef::new(InboundUsers::XrayUserId).string().not_null())
                     .col(
                         ColumnDef::new(InboundUsers::Level)
                             .integer()

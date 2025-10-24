@@ -1,6 +1,6 @@
-use sea_orm::*;
 use crate::database::entities::{inbound_template, prelude::*};
 use anyhow::Result;
+use sea_orm::*;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -14,11 +14,14 @@ impl InboundTemplateRepository {
         Self { db }
     }
 
-    pub async fn create(&self, template_data: inbound_template::CreateInboundTemplateDto) -> Result<inbound_template::Model> {
+    pub async fn create(
+        &self,
+        template_data: inbound_template::CreateInboundTemplateDto,
+    ) -> Result<inbound_template::Model> {
         let template = inbound_template::ActiveModel::from(template_data);
 
         let result = InboundTemplate::insert(template).exec(&self.db).await?;
-        
+
         InboundTemplate::find_by_id(result.last_insert_id)
             .one(&self.db)
             .await?
@@ -47,7 +50,11 @@ impl InboundTemplateRepository {
             .await?)
     }
 
-    pub async fn update(&self, id: Uuid, template_data: inbound_template::UpdateInboundTemplateDto) -> Result<inbound_template::Model> {
+    pub async fn update(
+        &self,
+        id: Uuid,
+        template_data: inbound_template::UpdateInboundTemplateDto,
+    ) -> Result<inbound_template::Model> {
         let template = InboundTemplate::find_by_id(id)
             .one(&self.db)
             .await?

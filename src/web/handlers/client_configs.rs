@@ -34,18 +34,20 @@ pub async fn get_user_inbound_config(
 ) -> Result<Json<ClientConfigResponse>, StatusCode> {
     let repo = InboundUsersRepository::new(app_state.db.connection().clone());
     let uri_service = UriGeneratorService::new();
-    
+
     // Get client configuration data
-    let config_data = repo.get_client_config_data(user_id, inbound_id)
+    let config_data = repo
+        .get_client_config_data(user_id, inbound_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     let config_data = config_data.ok_or(StatusCode::NOT_FOUND)?;
-    
+
     // Generate URI
-    let client_config = uri_service.generate_client_config(user_id, &config_data)
+    let client_config = uri_service
+        .generate_client_config(user_id, &config_data)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     let response = ClientConfigResponse {
         user_id: client_config.user_id,
         server_name: client_config.server_name,
@@ -54,7 +56,7 @@ pub async fn get_user_inbound_config(
         uri: client_config.uri,
         qr_code: client_config.qr_code,
     };
-    
+
     Ok(Json(response))
 }
 
@@ -65,14 +67,15 @@ pub async fn get_user_configs(
 ) -> Result<Json<Vec<ClientConfigResponse>>, StatusCode> {
     let repo = InboundUsersRepository::new(app_state.db.connection().clone());
     let uri_service = UriGeneratorService::new();
-    
+
     // Get all client configuration data for user
-    let configs_data = repo.get_all_client_configs_for_user(user_id)
+    let configs_data = repo
+        .get_all_client_configs_for_user(user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     let mut responses = Vec::new();
-    
+
     for config_data in configs_data {
         match uri_service.generate_client_config(user_id, &config_data) {
             Ok(client_config) => {
@@ -84,14 +87,14 @@ pub async fn get_user_configs(
                     uri: client_config.uri,
                     qr_code: client_config.qr_code,
                 });
-            },
+            }
             Err(_) => {
                 // Log error but continue with other configs
                 continue;
             }
         }
     }
-    
+
     Ok(Json(responses))
 }
 
@@ -102,17 +105,21 @@ pub async fn get_inbound_configs(
 ) -> Result<Json<Vec<ClientConfigResponse>>, StatusCode> {
     let repo = InboundUsersRepository::new(app_state.db.connection().clone());
     let uri_service = UriGeneratorService::new();
-    
+
     // Get all users for this inbound
-    let inbound_users = repo.find_active_by_inbound_id(inbound_id)
+    let inbound_users = repo
+        .find_active_by_inbound_id(inbound_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     let mut responses = Vec::new();
-    
+
     for inbound_user in inbound_users {
         // Get client configuration data for each user
-        if let Ok(Some(config_data)) = repo.get_client_config_data(inbound_user.user_id, inbound_id).await {
+        if let Ok(Some(config_data)) = repo
+            .get_client_config_data(inbound_user.user_id, inbound_id)
+            .await
+        {
             match uri_service.generate_client_config(inbound_user.user_id, &config_data) {
                 Ok(client_config) => {
                     responses.push(ClientConfigResponse {
@@ -123,7 +130,7 @@ pub async fn get_inbound_configs(
                         uri: client_config.uri,
                         qr_code: client_config.qr_code,
                     });
-                },
+                }
                 Err(_) => {
                     // Log error but continue with other configs
                     continue;
@@ -131,6 +138,6 @@ pub async fn get_inbound_configs(
             }
         }
     }
-    
+
     Ok(Json(responses))
 }

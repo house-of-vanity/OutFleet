@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
 
-use crate::services::acme::{CloudflareClient, AcmeError};
+use crate::services::acme::{AcmeError, CloudflareClient};
 
 pub struct AcmeClient {
     cloudflare: CloudflareClient,
@@ -21,7 +21,7 @@ impl AcmeClient {
         directory_url: String,
     ) -> Result<Self, AcmeError> {
         info!("Creating ACME client for directory: {}", directory_url);
-        
+
         let cloudflare = CloudflareClient::new(cloudflare_token)?;
 
         // Create Let's Encrypt account
@@ -47,17 +47,24 @@ impl AcmeClient {
         })
     }
 
-    pub async fn get_certificate(&mut self, domain: &str, base_domain: &str) -> Result<(String, String), AcmeError> {
+    pub async fn get_certificate(
+        &mut self,
+        domain: &str,
+        base_domain: &str,
+    ) -> Result<(String, String), AcmeError> {
         info!("Starting certificate request for domain: {}", domain);
 
         // Validate domain
         if domain.is_empty() || base_domain.is_empty() {
-            return Err(AcmeError::InvalidDomain("Domain cannot be empty".to_string()));
+            return Err(AcmeError::InvalidDomain(
+                "Domain cannot be empty".to_string(),
+            ));
         }
 
         // Create a new order
         let identifiers = vec![Identifier::Dns(domain.to_string())];
-        let mut order = self.account
+        let mut order = self
+            .account
             .new_order(&NewOrder::new(&identifiers))
             .await
             .map_err(|e| AcmeError::OrderCreation(e.to_string()))?;
@@ -66,13 +73,12 @@ impl AcmeClient {
 
         // Process authorizations
         let mut authorizations = order.authorizations();
-        
+
         while let Some(authz_result) = authorizations.next().await {
-            let mut authz = authz_result
-                .map_err(|e| AcmeError::Challenge(e.to_string()))?;
-            
+            let mut authz = authz_result.map_err(|e| AcmeError::Challenge(e.to_string()))?;
+
             let identifier = format!("{:?}", authz.identifier());
-            
+
             if authz.status == AuthorizationStatus::Valid {
                 info!("Authorization already valid for: {:?}", identifier);
                 continue;
@@ -93,7 +99,8 @@ impl AcmeClient {
 
                 // Create DNS record
                 let challenge_domain = format!("_acme-challenge.{}", domain);
-                let record_id = self.cloudflare
+                let record_id = self
+                    .cloudflare
                     .create_txt_record(base_domain, &challenge_domain, &challenge_value)
                     .await?;
 
@@ -105,9 +112,11 @@ impl AcmeClient {
 
                 // Submit challenge
                 info!("Submitting challenge...");
-                challenge.set_ready().await
+                challenge
+                    .set_ready()
+                    .await
                     .map_err(|e| AcmeError::Challenge(e.to_string()))?;
-                
+
                 (challenge_value, record_id)
             };
 
@@ -129,7 +138,9 @@ impl AcmeClient {
                 return Err(AcmeError::Challenge("Order processing timeout".to_string()));
             }
 
-            order.refresh().await
+            order
+                .refresh()
+                .await
                 .map_err(|e| AcmeError::OrderCreation(e.to_string()))?;
 
             match order.state().status {
@@ -154,55 +165,73 @@ impl AcmeClient {
         // Generate CSR
         info!("Generating certificate signing request...");
         let mut params = CertificateParams::new(vec![domain.to_string()]);
-        
+
         params.distinguished_name = DistinguishedName::new();
-        
+
         let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)
             .map_err(|e| AcmeError::CertificateGeneration(e.to_string()))?;
-        
+
         // Set the key pair for CSR generation
         params.key_pair = Some(key_pair);
-        
+
         // Generate CSR using rcgen certificate
         let cert = rcgen::Certificate::from_params(params)
             .map_err(|e| AcmeError::CertificateGeneration(e.to_string()))?;
-        let csr_der = cert.serialize_request_der()
+        let csr_der = cert
+            .serialize_request_der()
             .map_err(|e| AcmeError::CertificateGeneration(e.to_string()))?;
 
         // Finalize order with CSR
         info!("Finalizing order with CSR...");
-        order.finalize_csr(&csr_der).await
+        order
+            .finalize_csr(&csr_der)
+            .await
             .map_err(|e| AcmeError::CertificateGeneration(e.to_string()))?;
-        
+
         // Wait for certificate to be ready
         info!("Waiting for certificate to be generated...");
         let start = Instant::now();
         let timeout = Duration::from_secs(300); // 5 minutes
-        
+
         let cert_chain_pem = loop {
             if start.elapsed() > timeout {
-                return Err(AcmeError::CertificateGeneration("Certificate generation timeout".to_string()));
+                return Err(AcmeError::CertificateGeneration(
+                    "Certificate generation timeout".to_string(),
+                ));
             }
 
-            order.refresh().await
+            order
+                .refresh()
+                .await
                 .map_err(|e| AcmeError::CertificateGeneration(e.to_string()))?;
 
             match order.state().status {
                 OrderStatus::Valid => {
                     info!("Certificate is ready!");
-                    break order.certificate().await
+                    break order
+                        .certificate()
+                        .await
                         .map_err(|e| AcmeError::CertificateGeneration(e.to_string()))?
-                        .ok_or_else(|| AcmeError::CertificateGeneration("Certificate not available".to_string()))?;
+                        .ok_or_else(|| {
+                            AcmeError::CertificateGeneration(
+                                "Certificate not available".to_string(),
+                            )
+                        })?;
                 }
                 OrderStatus::Invalid => {
-                    return Err(AcmeError::CertificateGeneration("Order became invalid during certificate generation".to_string()));
+                    return Err(AcmeError::CertificateGeneration(
+                        "Order became invalid during certificate generation".to_string(),
+                    ));
                 }
                 OrderStatus::Processing => {
                     debug!("Certificate still being processed, waiting...");
                     sleep(Duration::from_secs(3)).await;
                 }
                 _ => {
-                    debug!("Waiting for certificate, order status: {:?}", order.state().status);
+                    debug!(
+                        "Waiting for certificate, order status: {:?}",
+                        order.state().status
+                    );
                     sleep(Duration::from_secs(3)).await;
                 }
             }
@@ -214,12 +243,16 @@ impl AcmeClient {
         Ok((cert_chain_pem, private_key_pem))
     }
 
-    async fn wait_for_dns_propagation(&self, record_name: &str, expected_value: &str) -> Result<(), AcmeError> {
+    async fn wait_for_dns_propagation(
+        &self,
+        record_name: &str,
+        expected_value: &str,
+    ) -> Result<(), AcmeError> {
         info!("Checking DNS propagation for: {}", record_name);
-        
+
         let start = Instant::now();
         let timeout = Duration::from_secs(120); // 2 minutes
-        
+
         while start.elapsed() < timeout {
             match self.check_dns_txt_record(record_name, expected_value).await {
                 Ok(true) => {
@@ -233,17 +266,21 @@ impl AcmeClient {
                     debug!("DNS check failed: {:?}", e);
                 }
             }
-            
+
             sleep(Duration::from_secs(10)).await;
         }
-        
+
         warn!("DNS propagation timeout, but continuing anyway");
         Ok(())
     }
 
-    async fn check_dns_txt_record(&self, record_name: &str, expected_value: &str) -> Result<bool, AcmeError> {
+    async fn check_dns_txt_record(
+        &self,
+        record_name: &str,
+        expected_value: &str,
+    ) -> Result<bool, AcmeError> {
         use std::process::Command;
-        
+
         let output = Command::new("dig")
             .args(&["+short", "TXT", record_name])
             .output()
@@ -268,7 +305,11 @@ impl AcmeClient {
     }
 
     async fn cleanup_dns_record(&self, base_domain: &str, record_id: &str) {
-        if let Err(e) = self.cloudflare.delete_txt_record(base_domain, record_id).await {
+        if let Err(e) = self
+            .cloudflare
+            .delete_txt_record(base_domain, record_id)
+            .await
+        {
             warn!("Failed to cleanup DNS record {}: {:?}", record_id, e);
         }
     }
@@ -277,9 +318,11 @@ impl AcmeClient {
     pub fn get_base_domain(domain: &str) -> Result<String, AcmeError> {
         let parts: Vec<&str> = domain.split('.').collect();
         if parts.len() < 2 {
-            return Err(AcmeError::InvalidDomain("Domain must have at least 2 parts".to_string()));
+            return Err(AcmeError::InvalidDomain(
+                "Domain must have at least 2 parts".to_string(),
+            ));
         }
-        
+
         // Take the last two parts for base domain
         let base_domain = format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]);
         Ok(base_domain)

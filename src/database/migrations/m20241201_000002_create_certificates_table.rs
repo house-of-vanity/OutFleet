@@ -32,21 +32,9 @@ impl MigrationTrait for Migration {
                             .string_len(255)
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(Certificates::CertData)
-                            .blob()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(Certificates::KeyData)
-                            .blob()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(Certificates::ChainData)
-                            .blob()
-                            .null(),
-                    )
+                    .col(ColumnDef::new(Certificates::CertData).blob().not_null())
+                    .col(ColumnDef::new(Certificates::KeyData).blob().not_null())
+                    .col(ColumnDef::new(Certificates::ChainData).blob().null())
                     .col(
                         ColumnDef::new(Certificates::ExpiresAt)
                             .timestamp_with_time_zone()

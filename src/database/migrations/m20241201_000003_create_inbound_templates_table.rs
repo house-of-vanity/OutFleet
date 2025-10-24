@@ -22,11 +22,7 @@ impl MigrationTrait for Migration {
                             .string_len(255)
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(InboundTemplates::Description)
-                            .text()
-                            .null(),
-                    )
+                    .col(ColumnDef::new(InboundTemplates::Description).text().null())
                     .col(
                         ColumnDef::new(InboundTemplates::Protocol)
                             .string_len(50)

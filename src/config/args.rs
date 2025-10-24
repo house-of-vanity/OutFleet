@@ -51,10 +51,14 @@ mod tests {
     fn test_args_parsing() {
         let args = Args::try_parse_from(&[
             "xray-admin",
-            "--config", "test.toml",
-            "--port", "9090",
-            "--log-level", "debug"
-        ]).unwrap();
+            "--config",
+            "test.toml",
+            "--port",
+            "9090",
+            "--log-level",
+            "debug",
+        ])
+        .unwrap();
 
         assert_eq!(args.config, Some(PathBuf::from("test.toml")));
         assert_eq!(args.port, Some(9090));

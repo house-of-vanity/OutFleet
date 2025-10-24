@@ -1,6 +1,6 @@
-use sea_orm::*;
 use crate::database::entities::{certificate, prelude::*};
 use anyhow::Result;
+use sea_orm::*;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -13,11 +13,14 @@ impl CertificateRepository {
         Self { db }
     }
 
-    pub async fn create(&self, cert_data: certificate::CreateCertificateDto) -> Result<certificate::Model> {
+    pub async fn create(
+        &self,
+        cert_data: certificate::CreateCertificateDto,
+    ) -> Result<certificate::Model> {
         let cert = certificate::ActiveModel::from(cert_data);
 
         let result = Certificate::insert(cert).exec(&self.db).await?;
-        
+
         Certificate::find_by_id(result.last_insert_id)
             .one(&self.db)
             .await?
@@ -48,7 +51,11 @@ impl CertificateRepository {
             .await?)
     }
 
-    pub async fn update(&self, id: Uuid, cert_data: certificate::UpdateCertificateDto) -> Result<certificate::Model> {
+    pub async fn update(
+        &self,
+        id: Uuid,
+        cert_data: certificate::UpdateCertificateDto,
+    ) -> Result<certificate::Model> {
         let cert = Certificate::find_by_id(id)
             .one(&self.db)
             .await?
@@ -66,7 +73,7 @@ impl CertificateRepository {
 
     pub async fn find_expiring_soon(&self, days: i64) -> Result<Vec<certificate::Model>> {
         let threshold = chrono::Utc::now() + chrono::Duration::days(days);
-        
+
         Ok(Certificate::find()
             .filter(certificate::Column::ExpiresAt.lt(threshold))
             .all(&self.db)
@@ -75,11 +82,11 @@ impl CertificateRepository {
 
     /// Update certificate data (cert and key) and expiration date
     pub async fn update_certificate_data(
-        &self, 
-        id: Uuid, 
-        cert_pem: &str, 
+        &self,
+        id: Uuid,
+        cert_pem: &str,
         key_pem: &str,
-        expires_at: chrono::DateTime<chrono::Utc>
+        expires_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<certificate::Model> {
         let mut cert: certificate::ActiveModel = Certificate::find_by_id(id)
             .one(&self.db)

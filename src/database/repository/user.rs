@@ -1,9 +1,14 @@
 use anyhow::Result;
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QueryOrder, PaginatorTrait, QuerySelect};
+use sea_orm::{
+    ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect,
+};
 use uuid::Uuid;
 
-use sea_orm::{Set, ActiveModelTrait};
-use crate::database::entities::user::{Entity as User, Column, Model, ActiveModel, CreateUserDto, UpdateUserDto};
+use crate::database::entities::user::{
+    ActiveModel, Column, CreateUserDto, Entity as User, Model, UpdateUserDto,
+};
+use sea_orm::{ActiveModelTrait, Set};
 
 pub struct UserRepository {
     db: DatabaseConnection,
@@ -46,7 +51,12 @@ impl UserRepository {
     }
 
     /// Search users by name (with pagination for backward compatibility)
-    pub async fn search_by_name(&self, query: &str, page: u64, per_page: u64) -> Result<Vec<Model>> {
+    pub async fn search_by_name(
+        &self,
+        query: &str,
+        page: u64,
+        per_page: u64,
+    ) -> Result<Vec<Model>> {
         let users = User::find()
             .filter(Column::Name.contains(query))
             .order_by_desc(Column::CreatedAt)
@@ -60,22 +70,22 @@ impl UserRepository {
     /// Universal search - searches by name, telegram_id, or user_id
     pub async fn search(&self, query: &str) -> Result<Vec<Model>> {
         use sea_orm::Condition;
-        
+
         let mut condition = Condition::any();
-        
+
         // Search by name (case-insensitive partial match)
         condition = condition.add(Column::Name.contains(query));
-        
+
         // Try to parse as telegram_id (i64)
         if let Ok(telegram_id) = query.parse::<i64>() {
             condition = condition.add(Column::TelegramId.eq(telegram_id));
         }
-        
+
         // Try to parse as UUID (user_id)
         if let Ok(user_id) = Uuid::parse_str(query) {
             condition = condition.add(Column::Id.eq(user_id));
         }
-        
+
         let users = User::find()
             .filter(condition)
             .order_by_desc(Column::CreatedAt)
@@ -89,7 +99,9 @@ impl UserRepository {
     /// Create a new user
     pub async fn create(&self, dto: CreateUserDto) -> Result<Model> {
         let active_model: ActiveModel = dto.into();
-        let user = User::insert(active_model).exec_with_returning(&self.db).await?;
+        let user = User::insert(active_model)
+            .exec_with_returning(&self.db)
+            .await?;
         Ok(user)
     }
 
@@ -126,14 +138,13 @@ impl UserRepository {
         Ok(count > 0)
     }
 
-
     /// Set user as Telegram admin
     pub async fn set_telegram_admin(&self, user_id: Uuid, is_admin: bool) -> Result<Option<Model>> {
         if let Some(user) = self.get_by_id(user_id).await? {
             let mut active_model: ActiveModel = user.into();
             active_model.is_telegram_admin = Set(is_admin);
             active_model.updated_at = Set(chrono::Utc::now());
-            
+
             let updated = active_model.update(&self.db).await?;
             Ok(Some(updated))
         } else {
@@ -168,29 +179,46 @@ impl UserRepository {
             .await?;
         Ok(admins)
     }
-    
+
     /// Get the first admin user (for system operations)
     pub async fn get_first_admin(&self) -> Result<Option<Model>> {
         let admin = User::find()
             .filter(Column::IsTelegramAdmin.eq(true))
             .one(&self.db)
             .await?;
-        
+
         Ok(admin)
+    }
+
+    /// Count total users
+    pub async fn count_all(&self) -> Result<i64> {
+        let count = User::find().count(&self.db).await?;
+
+        Ok(count as i64)
+    }
+
+    /// Find users with pagination
+    pub async fn find_paginated(&self, offset: u64, limit: u64) -> Result<Vec<Model>> {
+        let users = User::find()
+            .order_by_desc(Column::CreatedAt)
+            .offset(offset)
+            .limit(limit)
+            .all(&self.db)
+            .await?;
+
+        Ok(users)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::DatabaseManager;
     use crate::config::DatabaseConfig;
+    use crate::database::DatabaseManager;
 
     async fn setup_test_db() -> Result<UserRepository> {
         let config = DatabaseConfig {
-            url: std::env::var("DATABASE_URL").unwrap_or_else(|_| 
-                "sqlite::memory:".to_string()
-            ),
+            url: std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite::memory:".to_string()),
             max_connections: 5,
             connection_timeout: 30,
             auto_migrate: true,

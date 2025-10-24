@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::database::entities::user::{CreateUserDto, UpdateUserDto, Model as UserModel};
+use crate::database::entities::user::{CreateUserDto, Model as UserModel, UpdateUserDto};
 use crate::database::repository::UserRepository;
 use crate::web::AppState;
 
@@ -45,8 +45,12 @@ pub struct UserResponse {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-fn default_page() -> u64 { 1 }
-fn default_per_page() -> u64 { 20 }
+fn default_page() -> u64 {
+    1
+}
+fn default_per_page() -> u64 {
+    20
+}
 
 impl From<UserModel> for UserResponse {
     fn from(user: UserModel) -> Self {
@@ -67,12 +71,14 @@ pub async fn get_users(
     Query(query): Query<PaginationQuery>,
 ) -> Result<Json<UsersResponse>, StatusCode> {
     let repo = UserRepository::new(app_state.db.connection().clone());
-    
-    let users = repo.get_all(query.page, query.per_page)
+
+    let users = repo
+        .get_all(query.page, query.per_page)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
-    let total = repo.count()
+
+    let total = repo
+        .count()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -92,7 +98,7 @@ pub async fn search_users(
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<Vec<UserResponse>>, StatusCode> {
     let repo = UserRepository::new(app_state.db.connection().clone());
-    
+
     let users = if let Some(search_query) = query.q {
         // Search by name, telegram_id, or UUID
         repo.search(&search_query)
@@ -113,8 +119,9 @@ pub async fn get_user(
     Path(id): Path<Uuid>,
 ) -> Result<Json<UserResponse>, StatusCode> {
     let repo = UserRepository::new(app_state.db.connection().clone());
-    
-    let user = repo.get_by_id(id)
+
+    let user = repo
+        .get_by_id(id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -130,19 +137,21 @@ pub async fn create_user(
     JsonExtractor(dto): JsonExtractor<CreateUserDto>,
 ) -> Result<Json<UserResponse>, StatusCode> {
     let repo = UserRepository::new(app_state.db.connection().clone());
-    
+
     // Check if telegram ID is already in use
     if let Some(telegram_id) = dto.telegram_id {
-        let exists = repo.telegram_id_exists(telegram_id)
+        let exists = repo
+            .telegram_id_exists(telegram_id)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        
+
         if exists {
             return Err(StatusCode::CONFLICT);
         }
     }
 
-    let user = repo.create(dto)
+    let user = repo
+        .create(dto)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -156,18 +165,22 @@ pub async fn update_user(
     JsonExtractor(dto): JsonExtractor<UpdateUserDto>,
 ) -> Result<Json<UserResponse>, StatusCode> {
     let repo = UserRepository::new(app_state.db.connection().clone());
-    
+
     // Check if telegram ID is already in use by another user
     if let Some(telegram_id) = dto.telegram_id {
-        if let Some(existing_user) = repo.get_by_telegram_id(telegram_id).await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)? {
+        if let Some(existing_user) = repo
+            .get_by_telegram_id(telegram_id)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        {
             if existing_user.id != id {
                 return Err(StatusCode::CONFLICT);
             }
         }
     }
 
-    let user = repo.update(id, dto)
+    let user = repo
+        .update(id, dto)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -183,8 +196,9 @@ pub async fn delete_user(
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, StatusCode> {
     let repo = UserRepository::new(app_state.db.connection().clone());
-    
-    let deleted = repo.delete(id)
+
+    let deleted = repo
+        .delete(id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -203,19 +217,19 @@ pub async fn get_user_access(
 ) -> Result<Json<Vec<serde_json::Value>>, StatusCode> {
     use crate::database::repository::InboundUsersRepository;
     use crate::services::UriGeneratorService;
-    
+
     let inbound_users_repo = InboundUsersRepository::new(app_state.db.connection().clone());
-    
+
     let access_list = inbound_users_repo
         .find_by_user_id(user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     let mut response: Vec<serde_json::Value> = Vec::new();
-    
+
     if query.include_uris {
         let uri_service = UriGeneratorService::new();
-        
+
         for access in access_list {
             let mut access_json = serde_json::json!({
                 "id": access.id,
@@ -225,37 +239,43 @@ pub async fn get_user_access(
                 "level": access.level,
                 "is_active": access.is_active,
             });
-            
+
             // Try to get client config and generate URI
             if access.is_active {
                 if let Ok(Some(config_data)) = inbound_users_repo
                     .get_client_config_data(user_id, access.server_inbound_id)
-                    .await {
-                    
-                    if let Ok(client_config) = uri_service.generate_client_config(user_id, &config_data) {
+                    .await
+                {
+                    if let Ok(client_config) =
+                        uri_service.generate_client_config(user_id, &config_data)
+                    {
                         access_json["uri"] = serde_json::Value::String(client_config.uri);
                         access_json["protocol"] = serde_json::Value::String(client_config.protocol);
-                        access_json["server_name"] = serde_json::Value::String(client_config.server_name);
-                        access_json["inbound_tag"] = serde_json::Value::String(client_config.inbound_tag);
+                        access_json["server_name"] =
+                            serde_json::Value::String(client_config.server_name);
+                        access_json["inbound_tag"] =
+                            serde_json::Value::String(client_config.inbound_tag);
                     }
                 }
             }
-            
+
             response.push(access_json);
         }
     } else {
         response = access_list
             .into_iter()
-            .map(|access| serde_json::json!({
-                "id": access.id,
-                "user_id": access.user_id,
-                "server_inbound_id": access.server_inbound_id,
-                "xray_user_id": access.xray_user_id,
-                "level": access.level,
-                "is_active": access.is_active,
-            }))
+            .map(|access| {
+                serde_json::json!({
+                    "id": access.id,
+                    "user_id": access.user_id,
+                    "server_inbound_id": access.server_inbound_id,
+                    "xray_user_id": access.xray_user_id,
+                    "level": access.level,
+                    "is_active": access.is_active,
+                })
+            })
             .collect();
     }
-    
+
     Ok(Json(response))
 }

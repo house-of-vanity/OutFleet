@@ -43,21 +43,24 @@ impl EnvVars {
     /// Get database URL from environment
     #[allow(dead_code)]
     pub fn database_url() -> Option<String> {
-        env::var("DATABASE_URL").ok()
+        env::var("DATABASE_URL")
+            .ok()
             .or_else(|| env::var("XRAY_ADMIN__DATABASE__URL").ok())
     }
 
     /// Get telegram bot token from environment
     #[allow(dead_code)]
     pub fn telegram_token() -> Option<String> {
-        env::var("TELEGRAM_BOT_TOKEN").ok()
+        env::var("TELEGRAM_BOT_TOKEN")
+            .ok()
             .or_else(|| env::var("XRAY_ADMIN__TELEGRAM__BOT_TOKEN").ok())
     }
 
     /// Get JWT secret from environment
     #[allow(dead_code)]
     pub fn jwt_secret() -> Option<String> {
-        env::var("JWT_SECRET").ok()
+        env::var("JWT_SECRET")
+            .ok()
             .or_else(|| env::var("XRAY_ADMIN__WEB__JWT_SECRET").ok())
     }
 
@@ -66,14 +69,29 @@ impl EnvVars {
         tracing::debug!("Environment information:");
         tracing::debug!("  RUST_ENV: {:?}", env::var("RUST_ENV"));
         tracing::debug!("  ENVIRONMENT: {:?}", env::var("ENVIRONMENT"));
-        tracing::debug!("  DATABASE_URL: {}", 
-            if env::var("DATABASE_URL").is_ok() { "set" } else { "not set" }
+        tracing::debug!(
+            "  DATABASE_URL: {}",
+            if env::var("DATABASE_URL").is_ok() {
+                "set"
+            } else {
+                "not set"
+            }
         );
-        tracing::debug!("  TELEGRAM_BOT_TOKEN: {}", 
-            if env::var("TELEGRAM_BOT_TOKEN").is_ok() { "set" } else { "not set" }
+        tracing::debug!(
+            "  TELEGRAM_BOT_TOKEN: {}",
+            if env::var("TELEGRAM_BOT_TOKEN").is_ok() {
+                "set"
+            } else {
+                "not set"
+            }
         );
-        tracing::debug!("  JWT_SECRET: {}", 
-            if env::var("JWT_SECRET").is_ok() { "set" } else { "not set" }
+        tracing::debug!(
+            "  JWT_SECRET: {}",
+            if env::var("JWT_SECRET").is_ok() {
+                "set"
+            } else {
+                "not set"
+            }
         );
     }
 }

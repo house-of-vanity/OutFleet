@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{Set, ActiveModelTrait};
+use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -8,24 +8,24 @@ use uuid::Uuid;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    
+
     /// Reference to the actual user
     pub user_id: Uuid,
-    
+
     pub server_inbound_id: Uuid,
-    
+
     /// Generated xray user ID (UUID for protocols like vmess/vless)
     pub xray_user_id: String,
-    
+
     /// Generated password for protocols like trojan/shadowsocks  
     pub password: Option<String>,
-    
+
     pub level: i32,
-    
+
     pub is_active: bool,
-    
+
     pub created_at: DateTimeUtc,
-    
+
     pub updated_at: DateTimeUtc,
 }
 
@@ -71,7 +71,9 @@ impl ActiveModelBehavior for ActiveModel {
         mut self,
         _db: &'life0 C,
         insert: bool,
-    ) -> core::pin::Pin<Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>>
+    ) -> core::pin::Pin<
+        Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>,
+    >
     where
         'life0: 'async_trait,
         C: 'async_trait + ConnectionTrait,
@@ -99,12 +101,12 @@ impl CreateInboundUserDto {
     pub fn generate_xray_user_id(&self) -> String {
         Uuid::new_v4().to_string()
     }
-    
+
     /// Generate random password (for trojan/shadowsocks)
     pub fn generate_password(&self) -> String {
-        use rand::prelude::*;
         use rand::distributions::Alphanumeric;
-        
+        use rand::prelude::*;
+
         thread_rng()
             .sample_iter(&Alphanumeric)
             .take(24)
@@ -123,7 +125,7 @@ pub struct UpdateInboundUserDto {
 impl From<CreateInboundUserDto> for ActiveModel {
     fn from(dto: CreateInboundUserDto) -> Self {
         let xray_user_id = dto.generate_xray_user_id();
-        
+
         Self {
             user_id: Set(dto.user_id),
             server_inbound_id: Set(dto.server_inbound_id),
@@ -140,17 +142,17 @@ impl Model {
     /// Update this model with data from UpdateInboundUserDto
     pub fn apply_update(self, dto: UpdateInboundUserDto) -> ActiveModel {
         let mut active_model: ActiveModel = self.into();
-        
+
         if let Some(level) = dto.level {
             active_model.level = Set(level);
         }
         if let Some(is_active) = dto.is_active {
             active_model.is_active = Set(is_active);
         }
-        
+
         active_model
     }
-    
+
     /// Generate email for xray client based on user information
     pub fn generate_client_email(&self, username: &str) -> String {
         format!("{}@OutFleet", username)

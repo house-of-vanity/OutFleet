@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{Set, ActiveModelTrait};
+use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -7,31 +7,31 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    
+
     /// User ID this access is for
     pub user_id: Uuid,
-    
+
     /// Server ID this access applies to
     pub server_id: Uuid,
-    
+
     /// Server inbound ID this access applies to
     pub server_inbound_id: Uuid,
-    
+
     /// User's unique identifier in xray (UUID for VLESS/VMess, password for Trojan)
     pub xray_user_id: String,
-    
+
     /// User's email in xray
     pub xray_email: String,
-    
+
     /// User level in xray (0-255)
     pub level: i32,
-    
+
     /// Whether this access is currently active
     pub is_active: bool,
-    
+
     /// When this access was created
     pub created_at: DateTimeUtc,
-    
+
     /// Last time this access was updated
     pub updated_at: DateTimeUtc,
 }
@@ -46,7 +46,7 @@ pub enum Relation {
     User,
     #[sea_orm(
         belongs_to = "super::server::Entity",
-        from = "Column::ServerId", 
+        from = "Column::ServerId",
         to = "super::server::Column::Id"
     )]
     Server,
@@ -90,7 +90,9 @@ impl ActiveModelBehavior for ActiveModel {
         mut self,
         _db: &'life0 C,
         insert: bool,
-    ) -> core::pin::Pin<Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>>
+    ) -> core::pin::Pin<
+        Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>,
+    >
     where
         'life0: 'async_trait,
         C: 'async_trait + ConnectionTrait,
@@ -103,7 +105,6 @@ impl ActiveModelBehavior for ActiveModel {
             Ok(self)
         })
     }
-
 }
 
 /// User access creation data transfer object
@@ -143,14 +144,14 @@ impl Model {
     /// Update this model with data from UpdateUserAccessDto
     pub fn apply_update(self, dto: UpdateUserAccessDto) -> ActiveModel {
         let mut active_model: ActiveModel = self.into();
-        
+
         if let Some(is_active) = dto.is_active {
             active_model.is_active = Set(is_active);
         }
         if let Some(level) = dto.level {
             active_model.level = Set(level);
         }
-        
+
         active_model
     }
 }

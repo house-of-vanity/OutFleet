@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{Set, ActiveModelTrait};
+use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -8,18 +8,18 @@ use uuid::Uuid;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    
+
     pub name: String,
-    
+
     pub provider_type: String, // "cloudflare", "route53", etc.
-    
+
     #[serde(skip_serializing)]
     pub api_token: String, // Encrypted storage in production
-    
+
     pub is_active: bool,
-    
+
     pub created_at: DateTimeUtc,
-    
+
     pub updated_at: DateTimeUtc,
 }
 
@@ -40,7 +40,9 @@ impl ActiveModelBehavior for ActiveModel {
         mut self,
         _db: &'life0 C,
         insert: bool,
-    ) -> core::pin::Pin<Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>>
+    ) -> core::pin::Pin<
+        Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>,
+    >
     where
         'life0: 'async_trait,
         C: 'async_trait + ConnectionTrait,
@@ -100,7 +102,7 @@ impl Model {
     /// Update this model with data from UpdateDnsProviderDto
     pub fn apply_update(self, dto: UpdateDnsProviderDto) -> ActiveModel {
         let mut active_model: ActiveModel = self.into();
-        
+
         if let Some(name) = dto.name {
             active_model.name = Set(name);
         }
@@ -110,11 +112,11 @@ impl Model {
         if let Some(is_active) = dto.is_active {
             active_model.is_active = Set(is_active);
         }
-        
+
         active_model.updated_at = Set(chrono::Utc::now());
         active_model
     }
-    
+
     /// Convert to response DTO (without exposing API token)
     pub fn to_response_dto(&self) -> DnsProviderResponseDto {
         DnsProviderResponseDto {
@@ -142,14 +144,14 @@ impl DnsProviderType {
             DnsProviderType::Cloudflare => "cloudflare",
         }
     }
-    
+
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "cloudflare" => Some(DnsProviderType::Cloudflare),
             _ => None,
         }
     }
-    
+
     pub fn all() -> Vec<Self> {
         vec![DnsProviderType::Cloudflare]
     }

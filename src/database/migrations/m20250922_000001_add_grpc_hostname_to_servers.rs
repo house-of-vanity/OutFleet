@@ -22,7 +22,7 @@ impl MigrationTrait for Migration {
 
         // Update existing servers: set grpc_hostname to hostname value
         let db = manager.get_connection();
-        
+
         // Use raw SQL to copy hostname to grpc_hostname for existing records
         // Handle both empty strings and default empty values
         db.execute_unprepared("UPDATE servers SET grpc_hostname = hostname WHERE grpc_hostname = '' OR grpc_hostname IS NULL")

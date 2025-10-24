@@ -1,8 +1,8 @@
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use serde_json::Value;
 use xray_core::{
-    tonic::Request,
     app::stats::command::{GetStatsRequest, QueryStatsRequest},
+    tonic::Request,
     Client,
 };
 
@@ -19,7 +19,7 @@ impl<'a> StatsClient<'a> {
     /// Get server statistics
     pub async fn get_stats(&self) -> Result<Value> {
         tracing::info!("Getting stats from Xray server at {}", self.endpoint);
-        
+
         let request = Request::new(GetStatsRequest {
             name: "".to_string(),
             reset: false,
@@ -44,8 +44,13 @@ impl<'a> StatsClient<'a> {
 
     /// Query specific statistics with pattern
     pub async fn query_stats(&self, pattern: &str, reset: bool) -> Result<Value> {
-        tracing::info!("Querying stats with pattern '{}', reset: {} from {}", pattern, reset, self.endpoint);
-        
+        tracing::info!(
+            "Querying stats with pattern '{}', reset: {} from {}",
+            pattern,
+            reset,
+            self.endpoint
+        );
+
         let request = Request::new(QueryStatsRequest {
             pattern: pattern.to_string(),
             reset,

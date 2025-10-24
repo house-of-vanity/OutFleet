@@ -1,8 +1,4 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::Json,
-};
+use axum::{extract::State, http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -45,42 +41,58 @@ pub async fn get_tasks_status(
     // Get task status from the scheduler
     // For now, we'll return a mock response since we need to expose the scheduler
     // In a real implementation, you'd store a reference to the TaskScheduler in AppState
-    
+
     let mut tasks = HashMap::new();
     let mut running_count = 0;
     let mut success_count = 0;
     let mut error_count = 0;
     let mut idle_count = 0;
-    
+
     // Mock data for demonstration - in real implementation, get from TaskScheduler
     let xray_sync_task = TaskStatusResponse {
         name: "Xray Synchronization".to_string(),
         description: "Synchronizes database state with xray servers".to_string(),
         schedule: "0 */5 * * * * (every 5 minutes)".to_string(),
         status: "Success".to_string(),
-        last_run: Some(chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string()),
-        next_run: Some((chrono::Utc::now() + chrono::Duration::minutes(5)).format("%Y-%m-%d %H:%M:%S UTC").to_string()),
+        last_run: Some(
+            chrono::Utc::now()
+                .format("%Y-%m-%d %H:%M:%S UTC")
+                .to_string(),
+        ),
+        next_run: Some(
+            (chrono::Utc::now() + chrono::Duration::minutes(5))
+                .format("%Y-%m-%d %H:%M:%S UTC")
+                .to_string(),
+        ),
         total_runs: 120,
         success_count: 118,
         error_count: 2,
         last_error: None,
         last_duration_ms: Some(1234),
     };
-    
+
     let cert_renewal_task = TaskStatusResponse {
         name: "Certificate Renewal".to_string(),
         description: "Renews Let's Encrypt certificates that expire within 15 days".to_string(),
         schedule: "0 0 2 * * * (daily at 2 AM)".to_string(),
         status: "Idle".to_string(),
-        last_run: Some((chrono::Utc::now() - chrono::Duration::hours(8)).format("%Y-%m-%d %H:%M:%S UTC").to_string()),
-        next_run: Some((chrono::Utc::now() + chrono::Duration::hours(16)).format("%Y-%m-%d %H:%M:%S UTC").to_string()),
+        last_run: Some(
+            (chrono::Utc::now() - chrono::Duration::hours(8))
+                .format("%Y-%m-%d %H:%M:%S UTC")
+                .to_string(),
+        ),
+        next_run: Some(
+            (chrono::Utc::now() + chrono::Duration::hours(16))
+                .format("%Y-%m-%d %H:%M:%S UTC")
+                .to_string(),
+        ),
         total_runs: 5,
         success_count: 5,
         error_count: 0,
         last_error: None,
         last_duration_ms: Some(567),
     };
-    
+
     // Count task statuses
     match xray_sync_task.status.as_str() {
         "Running" => running_count += 1,
@@ -89,7 +101,7 @@ pub async fn get_tasks_status(
         "Idle" => idle_count += 1,
         _ => idle_count += 1,
     }
-    
+
     match cert_renewal_task.status.as_str() {
         "Running" => running_count += 1,
         "Success" => success_count += 1,
@@ -97,10 +109,10 @@ pub async fn get_tasks_status(
         "Idle" => idle_count += 1,
         _ => idle_count += 1,
     }
-    
+
     tasks.insert("xray_sync".to_string(), xray_sync_task);
     tasks.insert("cert_renewal".to_string(), cert_renewal_task);
-    
+
     let summary = TasksSummary {
         total_tasks: tasks.len(),
         running_tasks: running_count,
@@ -108,9 +120,9 @@ pub async fn get_tasks_status(
         failed_tasks: error_count,
         idle_tasks: idle_count,
     };
-    
+
     let response = TasksStatusResponse { tasks, summary };
-    
+
     Ok(Json(response))
 }
 
@@ -122,14 +134,10 @@ pub async fn trigger_task(
     // In a real implementation, you'd trigger the actual task
     // For now, return a success response
     match task_id.as_str() {
-        "xray_sync" | "cert_renewal" => {
-            Ok(Json(serde_json::json!({
-                "success": true,
-                "message": format!("Task '{}' has been triggered", task_id)
-            })))
-        }
-        _ => {
-            Err(StatusCode::NOT_FOUND)
-        }
+        "xray_sync" | "cert_renewal" => Ok(Json(serde_json::json!({
+            "success": true,
+            "message": format!("Task '{}' has been triggered", task_id)
+        }))),
+        _ => Err(StatusCode::NOT_FOUND),
     }
 }

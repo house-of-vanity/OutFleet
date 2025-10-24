@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{Set, ActiveModelTrait};
+use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -8,29 +8,29 @@ use serde_json::Value;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    
+
     pub name: String,
-    
+
     pub description: Option<String>,
-    
+
     pub protocol: String,
-    
+
     pub default_port: i32,
-    
+
     pub base_settings: Value,
-    
+
     pub stream_settings: Value,
-    
+
     pub requires_tls: bool,
-    
+
     pub requires_domain: bool,
-    
+
     pub variables: Value,
-    
+
     pub is_active: bool,
-    
+
     pub created_at: DateTimeUtc,
-    
+
     pub updated_at: DateTimeUtc,
 }
 
@@ -60,7 +60,9 @@ impl ActiveModelBehavior for ActiveModel {
         mut self,
         _db: &'life0 C,
         insert: bool,
-    ) -> core::pin::Pin<Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>>
+    ) -> core::pin::Pin<
+        Box<dyn core::future::Future<Output = Result<Self, DbErr>> + Send + 'async_trait>,
+    >
     where
         'life0: 'async_trait,
         C: 'async_trait + ConnectionTrait,
@@ -187,9 +189,9 @@ impl From<Model> for InboundTemplateResponse {
 impl From<CreateInboundTemplateDto> for ActiveModel {
     fn from(dto: CreateInboundTemplateDto) -> Self {
         // Parse config_template as JSON or use default
-        let config_json: Value = serde_json::from_str(&dto.config_template)
-            .unwrap_or_else(|_| serde_json::json!({}));
-        
+        let config_json: Value =
+            serde_json::from_str(&dto.config_template).unwrap_or_else(|_| serde_json::json!({}));
+
         Self {
             name: Set(dto.name),
             description: Set(None),
@@ -212,17 +214,20 @@ impl Model {
     }
 
     #[allow(dead_code)]
-    pub fn apply_variables(&self, values: &serde_json::Map<String, Value>) -> Result<(Value, Value), String> {
+    pub fn apply_variables(
+        &self,
+        values: &serde_json::Map<String, Value>,
+    ) -> Result<(Value, Value), String> {
         let base_settings = self.base_settings.clone();
         let stream_settings = self.stream_settings.clone();
-        
+
         // Replace variables in JSON using simple string replacement
         let base_str = base_settings.to_string();
         let stream_str = stream_settings.to_string();
-        
+
         let mut result_base = base_str;
         let mut result_stream = stream_str;
-        
+
         for (key, value) in values {
             let placeholder = format!("${{{}}}", key);
             let replacement = match value {
@@ -233,18 +238,18 @@ impl Model {
             result_base = result_base.replace(&placeholder, &replacement);
             result_stream = result_stream.replace(&placeholder, &replacement);
         }
-        
+
         let final_base: Value = serde_json::from_str(&result_base)
             .map_err(|e| format!("Invalid base settings after variable substitution: {}", e))?;
         let final_stream: Value = serde_json::from_str(&result_stream)
             .map_err(|e| format!("Invalid stream settings after variable substitution: {}", e))?;
-        
+
         Ok((final_base, final_stream))
     }
 
     pub fn apply_update(self, dto: UpdateInboundTemplateDto) -> ActiveModel {
         let mut active_model: ActiveModel = self.into();
-        
+
         if let Some(name) = dto.name {
             active_model.name = Set(name);
         }
@@ -267,12 +272,13 @@ impl Model {
             active_model.requires_domain = Set(requires_domain);
         }
         if let Some(variables) = dto.variables {
-            active_model.variables = Set(serde_json::to_value(variables).unwrap_or(Value::Array(vec![])));
+            active_model.variables =
+                Set(serde_json::to_value(variables).unwrap_or(Value::Array(vec![])));
         }
         if let Some(is_active) = dto.is_active {
             active_model.is_active = Set(is_active);
         }
-        
+
         active_model
     }
 }

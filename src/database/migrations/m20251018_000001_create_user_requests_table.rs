@@ -20,9 +20,7 @@ impl MigrationTrait for Migration {
                             .default(Expr::cust("gen_random_uuid()")),
                     )
                     .col(
-                        ColumnDef::new(UserRequests::UserId)
-                            .uuid()
-                            .null(), // Can be null if user doesn't exist yet
+                        ColumnDef::new(UserRequests::UserId).uuid().null(), // Can be null if user doesn't exist yet
                     )
                     .col(
                         ColumnDef::new(UserRequests::TelegramId)
@@ -51,16 +49,8 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default("pending"), // pending, approved, declined
                     )
-                    .col(
-                        ColumnDef::new(UserRequests::RequestMessage)
-                            .text()
-                            .null(),
-                    )
-                    .col(
-                        ColumnDef::new(UserRequests::ResponseMessage)
-                            .text()
-                            .null(),
-                    )
+                    .col(ColumnDef::new(UserRequests::RequestMessage).text().null())
+                    .col(ColumnDef::new(UserRequests::ResponseMessage).text().null())
                     .col(
                         ColumnDef::new(UserRequests::ProcessedByUserId)
                             .uuid()

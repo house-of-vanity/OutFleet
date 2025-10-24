@@ -17,41 +17,17 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
-                    .col(
-                        ColumnDef::new(UserAccess::UserId)
-                            .uuid()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(UserAccess::ServerId)
-                            .uuid()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(UserAccess::UserId).uuid().not_null())
+                    .col(ColumnDef::new(UserAccess::ServerId).uuid().not_null())
                     .col(
                         ColumnDef::new(UserAccess::ServerInboundId)
                             .uuid()
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(UserAccess::XrayUserId)
-                            .string()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(UserAccess::XrayEmail)
-                            .string()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(UserAccess::Level)
-                            .integer()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(UserAccess::IsActive)
-                            .boolean()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(UserAccess::XrayUserId).string().not_null())
+                    .col(ColumnDef::new(UserAccess::XrayEmail).string().not_null())
+                    .col(ColumnDef::new(UserAccess::Level).integer().not_null())
+                    .col(ColumnDef::new(UserAccess::IsActive).boolean().not_null())
                     .col(
                         ColumnDef::new(UserAccess::CreatedAt)
                             .timestamp_with_time_zone()

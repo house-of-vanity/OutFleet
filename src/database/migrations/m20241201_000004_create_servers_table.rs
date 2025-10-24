@@ -11,44 +11,23 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(Servers::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(Servers::Id)
-                            .uuid()
-                            .not_null()
-                            .primary_key(),
-                    )
-                    .col(
-                        ColumnDef::new(Servers::Name)
-                            .string_len(255)
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(Servers::Hostname)
-                            .string_len(255)
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Servers::Id).uuid().not_null().primary_key())
+                    .col(ColumnDef::new(Servers::Name).string_len(255).not_null())
+                    .col(ColumnDef::new(Servers::Hostname).string_len(255).not_null())
                     .col(
                         ColumnDef::new(Servers::GrpcPort)
                             .integer()
                             .default(2053)
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(Servers::ApiCredentials)
-                            .text()
-                            .null(),
-                    )
+                    .col(ColumnDef::new(Servers::ApiCredentials).text().null())
                     .col(
                         ColumnDef::new(Servers::Status)
                             .string_len(50)
                             .default("unknown")
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(Servers::DefaultCertificateId)
-                            .uuid()
-                            .null(),
-                    )
+                    .col(ColumnDef::new(Servers::DefaultCertificateId).uuid().null())
                     .col(
                         ColumnDef::new(Servers::CreatedAt)
                             .timestamp_with_time_zone()
