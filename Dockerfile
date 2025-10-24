@@ -1,5 +1,5 @@
 # Cargo dependencies stage
-FROM rust:1.75-slim as deps
+FROM rust:1.90-slim AS deps
 
 WORKDIR /app
 
@@ -23,7 +23,7 @@ RUN cargo build --release && \
     rm -rf src target/release/deps/xray_admin* target/release/xray-admin*
 
 # Build stage
-FROM deps as builder
+FROM deps AS builder
 
 # Build arguments
 ARG GIT_COMMIT="development"
@@ -47,7 +47,7 @@ COPY static ./static
 RUN cargo build --release
 
 # Runtime stage - minimal Debian image
-FROM debian:bookworm-slim as runtime
+FROM debian:bookworm-slim AS runtime
 
 # Build arguments (needed for runtime stage)
 ARG GIT_COMMIT="development"
