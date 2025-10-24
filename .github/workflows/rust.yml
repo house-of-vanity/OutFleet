@@ -7,7 +7,7 @@ on:
 
 jobs:
   test-build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     outputs:
       rust-version: ${{ steps.vars.outputs.rust_version }}
       sha-short: ${{ steps.vars.outputs.sha_short }}
@@ -60,7 +60,7 @@ jobs:
             CARGO_VERSION=${{ steps.extract_version.outputs.cargo_version }}
 
   docker:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: test-build
     steps:
       - uses: actions/checkout@v4
