@@ -161,7 +161,7 @@ pub async fn get_server_stats(
 
     let endpoint = server.get_grpc_endpoint();
 
-    match app_state.xray_service.get_stats(id, &endpoint).await {
+    match app_state.xray_service.get_stats(&endpoint).await {
         Ok(stats) => Ok(Json(stats)),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
@@ -649,7 +649,7 @@ pub async fn remove_user_from_inbound(
     // Remove user from xray server
     match app_state
         .xray_service
-        .remove_user(server_id, &server.get_grpc_endpoint(), &inbound_tag, &email)
+        .remove_user_with_server_id(server_id, &server.get_grpc_endpoint(), &inbound_tag, &email)
         .await
     {
         Ok(_) => {

@@ -146,6 +146,7 @@ mod tests {
             name: "Test User".to_string(),
             comment: Some("Test comment".to_string()),
             telegram_id: Some(123456789),
+            is_telegram_admin: false,
         };
 
         let active_model: ActiveModel = dto.into();
@@ -165,6 +166,7 @@ mod tests {
             name: "John Doe".to_string(),
             comment: Some("Admin user".to_string()),
             telegram_id: None,
+            is_telegram_admin: false,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         };
@@ -186,6 +188,7 @@ mod tests {
             name: "User".to_string(),
             comment: None,
             telegram_id: Some(123456789),
+            is_telegram_admin: false,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         };

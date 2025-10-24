@@ -227,18 +227,18 @@ impl LocalizationService {
             back: "🔙 Back".to_string(),
             approve: "✅ Approve".to_string(),
             decline: "❌ Decline".to_string(),
-            
+
             already_pending: "⏳ You already have a pending access request. Please wait for admin review.".to_string(),
             already_approved: "✅ Your access request has already been approved. Use /start to access the main menu.".to_string(),
             already_declined: "❌ Your previous access request was declined. Please contact administrators if you believe this is a mistake.".to_string(),
             request_submitted: "✅ Your access request has been submitted!\n\nAn administrator will review your request soon. You'll receive a notification once it's processed.".to_string(),
             request_submit_failed: "❌ Failed to submit request: {error}".to_string(),
-            
+
             request_approved: "✅ Request approved".to_string(),
             request_declined: "❌ Request declined".to_string(),
             request_approved_notification: "🎉 <b>Your access request has been approved!</b>\n\nWelcome to OutFleet VPN! Your account has been created.\n\nUser ID: <code>{user_id}</code>\n\nYou can now use /start to access the main menu.".to_string(),
             request_declined_notification: "❌ Your access request has been declined.\n\nIf you believe this is a mistake, please contact the administrators.".to_string(),
-            
+
             new_access_request: "🔔 <b>New Access Request</b>\n\n👤 Name: {first_name} {last_name}\n🆔 Username: @{username}\n\nUse /requests to review".to_string(),
             no_pending_requests: "No pending access requests".to_string(),
             access_request_details: "❔ <b>Access Request</b>\n\n👤 Name: {full_name}\n🆔 Telegram: {telegram_link}\n📅 Requested: {date}\n\nMessage: {message}".to_string(),
@@ -246,19 +246,18 @@ impl LocalizationService {
             request_approved_admin: "✅ Request approved".to_string(),
             request_declined_admin: "❌ Request declined".to_string(),
             user_creation_failed: "❌ Failed to create user account: {error}\n\nPlease try again or contact technical support.".to_string(),
-            
+
             support_info: "💬 <b>Support Information</b>\n\n📱 <b>How to connect:</b>\n1. Download v2raytun app for Android or iOS from:\n   https://v2raytun.com/\n\n2. Add your subscription link from \"🔗 Subscription Link\" menu\n   OR\n   Add individual server links from \"📋 My Configs\"\n\n3. Connect and enjoy secure VPN!\n\n❓ If you need help, please contact the administrators.".to_string(),
-            
             statistics: "📊 <b>Statistics</b>\n\n👥 Total Users: {users}\n🖥️ Total Servers: {servers}\n📡 Total Inbounds: {inbounds}\n⏳ Pending Requests: {pending}".to_string(),
             total_users: "👥 Total Users".to_string(),
             total_servers: "🖥️ Total Servers".to_string(),
             total_inbounds: "📡 Total Inbounds".to_string(),
             pending_requests: "⏳ Pending Requests".to_string(),
-            
+
             broadcast_complete: "✅ Broadcast complete\nSent: {sent}\nFailed: {failed}".to_string(),
             sent: "Sent".to_string(),
             failed: "Failed".to_string(),
-            
+
             configs_coming_soon: "📋 Your configurations will be shown here (coming soon)".to_string(),
             your_configurations: "📋 <b>Your Configurations</b>".to_string(),
             no_configs_available: "📋 No configurations available\n\nYou don't have access to any VPN configurations yet. Please contact an administrator to get access.".to_string(),
@@ -266,9 +265,8 @@ impl LocalizationService {
             config_copied: "✅ Configuration copied to clipboard".to_string(),
             config_not_found: "❌ Configuration not found".to_string(),
             server_configs_title: "🖥️ <b>{server_name}</b> - Connection Links".to_string(),
-            
+
             subscription_link: "🔗 Subscription Link".to_string(),
-            
             manage_users: "👥 Manage Users".to_string(),
             user_list: "👥 User List".to_string(),
             user_details: "👤 User Details".to_string(),
@@ -285,7 +283,7 @@ impl LocalizationService {
             access_updated: "✅ Access updated successfully".to_string(),
             access_removed: "❌ Access removed successfully".to_string(),
             access_granted: "✅ Access granted successfully".to_string(),
-            
+
             error_occurred: "An error occurred".to_string(),
             admin_not_found: "Admin not found".to_string(),
             request_not_found: "Request not found".to_string(),
@@ -307,18 +305,18 @@ impl LocalizationService {
             back: "🔙 Назад".to_string(),
             approve: "✅ Одобрить".to_string(),
             decline: "❌ Отклонить".to_string(),
-            
+
             already_pending: "⏳ У вас уже есть ожидающий рассмотрения запрос на доступ. Пожалуйста, дождитесь проверки администратором.".to_string(),
             already_approved: "✅ Ваш запрос на доступ уже был одобрен. Используйте /start для доступа к главному меню.".to_string(),
             already_declined: "❌ Ваш предыдущий запрос на доступ был отклонен. Пожалуйста, свяжитесь с администраторами, если считаете, что это ошибка.".to_string(),
             request_submitted: "✅ Ваш запрос на доступ отправлен!\n\nАдминистратор скоро рассмотрит ваш запрос. Вы получите уведомление после обработки.".to_string(),
             request_submit_failed: "❌ Не удалось отправить запрос: {error}".to_string(),
-            
+
             request_approved: "✅ Запрос одобрен".to_string(),
             request_declined: "❌ Запрос отклонен".to_string(),
             request_approved_notification: "🎉 <b>Ваш запрос на доступ одобрен!</b>\n\nДобро пожаловать в OutFleet VPN! Ваш аккаунт создан.\n\nID пользователя: <code>{user_id}</code>\n\nТеперь вы можете использовать /start для доступа к главному меню.".to_string(),
             request_declined_notification: "❌ Ваш запрос на доступ отклонен.\n\nЕсли вы считаете, что это ошибка, пожалуйста, свяжитесь с администраторами.".to_string(),
-            
+
             new_access_request: "🔔 <b>Новый запрос на доступ</b>\n\n👤 Имя: {first_name} {last_name}\n🆔 Имя пользователя: @{username}\n\nИспользуйте /requests для просмотра".to_string(),
             no_pending_requests: "Нет ожидающих запросов на доступ".to_string(),
             access_request_details: "❔ <b>Запрос на доступ</b>\n\n👤 Имя: {full_name}\n🆔 Telegram: {telegram_link}\n📅 Запрошено: {date}\n\nСообщение: {message}".to_string(),
@@ -326,19 +324,19 @@ impl LocalizationService {
             request_approved_admin: "✅ Запрос одобрен".to_string(),
             request_declined_admin: "❌ Запрос отклонен".to_string(),
             user_creation_failed: "❌ Не удалось создать аккаунт пользователя: {error}\n\nПожалуйста, попробуйте еще раз или обратитесь в техническую поддержку.".to_string(),
-            
+
             support_info: "💬 <b>Информация о поддержке</b>\n\n📱 <b>Как подключиться:</b>\n1. Скачайте приложение v2raytun для Android или iOS с сайта:\n   https://v2raytun.com/\n\n2. Добавьте ссылку подписки из меню \"🔗 Ссылка подписки\"\n   ИЛИ\n   Добавьте отдельные ссылки серверов из \"📋 Мои конфигурации\"\n\n3. Подключайтесь и наслаждайтесь безопасным VPN!\n\n❓ Если нужна помощь, обратитесь к администраторам.".to_string(),
-            
+
             statistics: "📊 <b>Статистика</b>\n\n👥 Всего пользователей: {users}\n🖥️ Всего серверов: {servers}\n📡 Всего входящих подключений: {inbounds}\n⏳ Ожидающих запросов: {pending}".to_string(),
             total_users: "👥 Всего пользователей".to_string(),
             total_servers: "🖥️ Всего серверов".to_string(),
             total_inbounds: "📡 Всего входящих подключений".to_string(),
             pending_requests: "⏳ Ожидающих запросов".to_string(),
-            
+
             broadcast_complete: "✅ Рассылка завершена\nОтправлено: {sent}\nНе удалось: {failed}".to_string(),
             sent: "Отправлено".to_string(),
             failed: "Не удалось".to_string(),
-            
+
             configs_coming_soon: "📋 Ваши конфигурации будут показаны здесь (скоро)".to_string(),
             your_configurations: "📋 <b>Ваши конфигурации</b>".to_string(),
             no_configs_available: "📋 Нет доступных конфигураций\n\nУ вас пока нет доступа к конфигурациям VPN. Пожалуйста, обратитесь к администратору для получения доступа.".to_string(),
@@ -346,9 +344,9 @@ impl LocalizationService {
             config_copied: "✅ Конфигурация скопирована в буфер обмена".to_string(),
             config_not_found: "❌ Конфигурация не найдена".to_string(),
             server_configs_title: "🖥️ <b>{server_name}</b> - Ссылки для подключения".to_string(),
-            
+
             subscription_link: "🔗 Ссылка подписки".to_string(),
-            
+
             manage_users: "👥 Управление пользователями".to_string(),
             user_list: "👥 Список пользователей".to_string(),
             user_details: "👤 Данные пользователя".to_string(),
@@ -365,7 +363,7 @@ impl LocalizationService {
             access_updated: "✅ Доступ успешно обновлен".to_string(),
             access_removed: "❌ Доступ успешно убран".to_string(),
             access_granted: "✅ Доступ успешно предоставлен".to_string(),
-            
+
             error_occurred: "Произошла ошибка".to_string(),
             admin_not_found: "Администратор не найден".to_string(),
             request_not_found: "Запрос не найден".to_string(),

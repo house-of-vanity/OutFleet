@@ -257,6 +257,7 @@ mod tests {
             name: Some("Updated User".to_string()),
             comment: None,
             telegram_id: None,
+            is_telegram_admin: None,
         };
 
         let updated_user = repo.update(created_user.id, update_dto).await.unwrap();

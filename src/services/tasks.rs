@@ -76,7 +76,16 @@ impl TaskScheduler {
                         if let Err(e) =
                             sync_single_server_by_id(&xray_service, &db, server_id).await
                         {
-                            error!("Failed to sync server {} from event: {}", server_id, e);
+                            // Get server name for better logging
+                            let server_repo = ServerRepository::new(db.connection().clone());
+                            let server_name = match server_repo.find_by_id(server_id).await {
+                                Ok(Some(server)) => server.name,
+                                _ => server_id.to_string(),
+                            };
+                            error!(
+                                "Failed to sync server '{}' ({}) from event: {}",
+                                server_name, server_id, e
+                            );
                         }
                     }
                 }
@@ -413,25 +422,42 @@ async fn get_desired_inbounds_from_db(
         let (cert_pem, key_pem) = if let Some(cert_id) = inbound.certificate_id {
             match load_certificate_from_db(db, inbound.certificate_id).await {
                 Ok((cert, key)) => {
+                    // Get certificate name for better logging
+                    let cert_repo = CertificateRepository::new(db.connection().clone());
+                    let cert_name = match cert_repo.find_by_id(cert_id).await {
+                        Ok(Some(cert)) => cert.name,
+                        _ => cert_id.to_string(),
+                    };
                     info!(
-                        "Loaded certificate {} for inbound {}, has_cert={}, has_key={}",
+                        "Loaded certificate '{}' ({}) for inbound '{}' on server '{}', has_cert={}, has_key={}",
+                        cert_name,
                         cert_id,
                         inbound.tag,
+                        server.name,
                         cert.is_some(),
                         key.is_some()
                     );
                     (cert, key)
                 }
                 Err(e) => {
+                    // Get certificate name for better logging
+                    let cert_repo = CertificateRepository::new(db.connection().clone());
+                    let cert_name = match cert_repo.find_by_id(cert_id).await {
+                        Ok(Some(cert)) => cert.name,
+                        _ => cert_id.to_string(),
+                    };
                     warn!(
-                        "Failed to load certificate {} for inbound {}: {}",
-                        cert_id, inbound.tag, e
+                        "Failed to load certificate '{}' ({}) for inbound '{}' on server '{}': {}",
+                        cert_name, cert_id, inbound.tag, server.name, e
                     );
                     (None, None)
                 }
             }
         } else {
-            debug!("No certificate configured for inbound {}", inbound.tag);
+            debug!(
+                "No certificate configured for inbound '{}' on server '{}'",
+                inbound.tag, server.name
+            );
             (None, None)
         };
 
@@ -491,7 +517,13 @@ async fn load_certificate_from_db(
     let cert_repo = CertificateRepository::new(db.connection().clone());
 
     match cert_repo.find_by_id(cert_id).await? {
-        Some(cert) => Ok((Some(cert.certificate_pem()), Some(cert.private_key_pem()))),
+        Some(cert) => {
+            debug!(
+                "Loaded certificate '{}' ({}) successfully",
+                cert.name, cert.id
+            );
+            Ok((Some(cert.certificate_pem()), Some(cert.private_key_pem())))
+        }
         None => {
             warn!("Certificate {} not found", cert_id);
             Ok((None, None))
@@ -694,9 +726,15 @@ async fn trigger_cert_renewal_sync(db: &DatabaseManager, cert_id: Uuid) -> Resul
 
     // Trigger sync for each server
     for server_id in server_ids {
+        // Get server name for better logging
+        let server_repo = ServerRepository::new(db.connection().clone());
+        let server_name = match server_repo.find_by_id(server_id).await {
+            Ok(Some(server)) => server.name,
+            _ => server_id.to_string(),
+        };
         info!(
-            "Triggering sync for server {} after certificate renewal",
-            server_id
+            "Triggering sync for server '{}' ({}) after certificate renewal",
+            server_name, server_id
         );
         send_sync_event(SyncEvent::InboundChanged(server_id));
     }

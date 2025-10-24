@@ -151,7 +151,8 @@ pub async fn handle_callback_query(
                         handle_view_request(bot.clone(), &q, &request_id, &db).await?;
                     }
                     CallbackData::ShowServerConfigs(encoded_server_name) => {
-                        handle_show_server_configs(bot.clone(), &q, &encoded_server_name, &db).await?;
+                        handle_show_server_configs(bot.clone(), &q, &encoded_server_name, &db)
+                            .await?;
                     }
                     CallbackData::SelectServerAccess(request_id) => {
                         // The request_id is now the full UUID from the mapping
@@ -162,7 +163,14 @@ pub async fn handle_callback_query(
                         // Both IDs are now full UUIDs from the mapping
                         let short_request_id = types::generate_short_request_id(&request_id);
                         let short_server_id = types::generate_short_server_id(&server_id);
-                        handle_toggle_server(bot.clone(), &q, &short_request_id, &short_server_id, &db).await?;
+                        handle_toggle_server(
+                            bot.clone(),
+                            &q,
+                            &short_request_id,
+                            &short_server_id,
+                            &db,
+                        )
+                        .await?;
                     }
                     CallbackData::ApplyServerAccess(request_id) => {
                         // The request_id is now the full UUID from the mapping
@@ -192,7 +200,8 @@ pub async fn handle_callback_query(
                         handle_user_manage_access(bot.clone(), &q, &db, &user_id).await?;
                     }
                     CallbackData::UserToggleServer(user_id, server_id) => {
-                        handle_user_toggle_server(bot.clone(), &q, &db, &user_id, &server_id).await?;
+                        handle_user_toggle_server(bot.clone(), &q, &db, &user_id, &server_id)
+                            .await?;
                     }
                     CallbackData::UserApplyAccess(user_id) => {
                         handle_user_apply_access(bot.clone(), &q, &db, &user_id).await?;
@@ -210,25 +219,35 @@ pub async fn handle_callback_query(
             }
         }
         Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
-    }.await;
+    }
+    .await;
 
     // If any error occurred, send main menu and answer callback query
     if let Err(e) = result {
-        tracing::warn!("Error handling callback query '{}': {}", q.data.as_deref().unwrap_or("None"), e);
-        
+        tracing::warn!(
+            "Error handling callback query '{}': {}",
+            q.data.as_deref().unwrap_or("None"),
+            e
+        );
+
         // Answer the callback query first to remove loading state
         let _ = bot.answer_callback_query(q.id.clone()).await;
-        
+
         // Try to send main menu
         if let Some(message) = q.message {
             let chat_id = message.chat().id;
             let from = &q.from;
             let telegram_id = from.id.0 as i64;
             let user_repo = crate::database::repository::UserRepository::new(db.connection());
-            
+
             // Try to send main menu - if this fails too, just log it
-            if let Err(menu_error) = handle_start(bot, chat_id, telegram_id, from, &user_repo, &db).await {
-                tracing::error!("Failed to send main menu after callback error: {}", menu_error);
+            if let Err(menu_error) =
+                handle_start(bot, chat_id, telegram_id, from, &user_repo, &db).await
+            {
+                tracing::error!(
+                    "Failed to send main menu after callback error: {}",
+                    menu_error
+                );
             }
         }
     }

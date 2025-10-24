@@ -70,3 +70,8 @@ teloxide = { version = "0.13", features = ["macros"] }
 
 [dev-dependencies]
 tempfile = "3.0"
+tokio-test = "0.4"
+wiremock = "0.6"
+axum-test = "14.0"
+serial_test = "3.0"
+mockall = "0.12"
