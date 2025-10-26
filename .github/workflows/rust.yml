@@ -5,13 +5,24 @@ on:
     branches:
       - 'RUST'
 
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ultradesu/outfleet
+
 jobs:
-  docker:
-    runs-on: self-hosted
-    needs: test-build
+  build:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract version from Cargo.toml
+        id: extract_version
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "cargo_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
       - name: Set build variables
         id: vars
         run: |
@@ -19,39 +30,25 @@ jobs:
           echo "sha_full=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
           echo "build_date=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
           echo "branch_name=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
-      
-      - name: Extract version from Cargo.toml
-        id: extract_version
-        run: |
-          VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-          echo "cargo_version=$VERSION" >> $GITHUB_OUTPUT
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      
-      - name: Login to Docker Hub
+
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
-      - name: Build and push
+
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          file: ./Dockerfile
+          platforms: linux/amd64
           push: true
-          cache-from: |
-            type=registry,ref=ultradesu/outfleet:deps-cache
-            type=registry,ref=ultradesu/outfleet:builder-cache  
-            type=registry,ref=ultradesu/outfleet:rust-buildcache
-          cache-to: |
-            type=registry,ref=ultradesu/outfleet:deps-cache,mode=max
-            type=registry,ref=ultradesu/outfleet:builder-cache,mode=max
-            type=registry,ref=ultradesu/outfleet:rust-buildcache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             GIT_COMMIT=${{ steps.vars.outputs.sha_full }}
             GIT_COMMIT_SHORT=${{ steps.vars.outputs.sha_short }}
@@ -59,6 +56,6 @@ jobs:
             BRANCH_NAME=${{ steps.vars.outputs.branch_name }}
             CARGO_VERSION=${{ steps.extract_version.outputs.cargo_version }}
           tags: |
-            ultradesu/outfleet:rs-${{ steps.extract_version.outputs.cargo_version }}
-            ultradesu/outfleet:rs-${{ steps.extract_version.outputs.cargo_version }}-${{ steps.vars.outputs.sha_short }}
-            ultradesu/outfleet:rust-latest
+            ${{ env.IMAGE_NAME }}:rs-${{ steps.extract_version.outputs.cargo_version }}
+            ${{ env.IMAGE_NAME }}:rs-${{ steps.extract_version.outputs.cargo_version }}-${{ steps.vars.outputs.sha_short }}
+            ${{ env.IMAGE_NAME }}:rust-latest
