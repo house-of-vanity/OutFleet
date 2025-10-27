@@ -1,24 +1,14 @@
-# Use standard Rust image and install cargo-chef
-FROM rust:1.80-bookworm AS chef
+# Build stage with Rust
+FROM rust:1.80-bookworm AS builder
+
 WORKDIR /app
 
-# Install cargo-chef
-RUN cargo install cargo-chef --version 0.1.62
-
-# Install system dependencies needed for building
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
-
-# Recipe preparation stage
-FROM chef AS planner
-COPY . .
-RUN cargo chef prepare --recipe-path recipe.json
-
-# Dependency building stage  
-FROM chef AS builder
 
 # Build arguments
 ARG GIT_COMMIT="development"
@@ -34,15 +24,26 @@ ENV BUILD_DATE=${BUILD_DATE}
 ENV BRANCH_NAME=${BRANCH_NAME}
 ENV CARGO_VERSION=${CARGO_VERSION}
 
-# Copy recipe and build dependencies (cached layer)
-COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+# Copy dependency files first for caching
+COPY Cargo.toml Cargo.lock ./
 
-# Copy source and build application
-COPY . .
+# Create dummy source files to build dependencies
+RUN mkdir -p src && \
+    echo "fn main() {}" > src/main.rs && \
+    echo "pub fn lib() {}" > src/lib.rs
+
+# Build dependencies (this layer will be cached)
+RUN cargo build --release && \
+    rm -rf src target/release/deps/xray_admin* target/release/xray-admin*
+
+# Copy actual source code
+COPY src ./src
+COPY static ./static
+
+# Build the application
 RUN cargo build --release --locked
 
-# Runtime stage - minimal Ubuntu image for glibc compatibility
+# Runtime stage - Ubuntu for glibc compatibility
 FROM ubuntu:24.04 AS runtime
 
 # Build arguments (needed for runtime stage)
