@@ -1,6 +1,9 @@
-# Use cargo-chef for dependency caching
-FROM lukemathwalker/cargo-chef:0.1.68-rust-1.90-slim AS chef
+# Use standard Rust image and install cargo-chef
+FROM rust:1.82-bookworm AS chef
 WORKDIR /app
+
+# Install cargo-chef
+RUN cargo install cargo-chef --version 0.1.67
 
 # Install system dependencies needed for building
 RUN apt-get update && apt-get install -y \
